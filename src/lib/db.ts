@@ -70,10 +70,10 @@ export async function createUser(phone: string): Promise<User | null> {
   try {
     const base = getBase()
     const tableName = getTableName()
+    // Note: Don't set checkbox to false, just omit it (Airtable quirk)
     const record = await base(tableName).create({
       Phone: phone,
-      Needs_Name: true,
-      Opted_Out: false
+      Needs_Name: true
     } as Airtable.FieldSet)
     
     return {

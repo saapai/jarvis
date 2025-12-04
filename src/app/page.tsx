@@ -35,6 +35,44 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Admin Commands - Announcements & Polls */}
+        <div className="p-6 rounded-2xl border border-[var(--accent-amber)]/30 bg-[var(--bg-secondary)]">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <span className="text-[var(--accent-amber)]">👑</span> admin commands
+          </h3>
+          
+          {/* Announcement Format */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">📢</span>
+              <span className="font-medium text-[var(--text-primary)]">send an announcement</span>
+            </div>
+            <div className="bg-[var(--bg-primary)] rounded-lg p-4 font-mono text-sm border border-[var(--border-subtle)]">
+              <p className="text-[var(--accent-cyan)]">announce</p>
+              <p className="text-[var(--text-secondary)] mt-1">announce meeting tonight at 7pm in the main room</p>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-2">
+              → sends to all subscribed users instantly
+            </p>
+          </div>
+          
+          {/* Poll Format */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">📊</span>
+              <span className="font-medium text-[var(--text-primary)]">create a poll</span>
+            </div>
+            <div className="bg-[var(--bg-primary)] rounded-lg p-4 font-mono text-sm border border-[var(--border-subtle)]">
+              <p className="text-[var(--accent-violet)]">poll</p>
+              <p className="text-[var(--text-secondary)] mt-1">poll active meeting tonight?</p>
+              <p className="text-[var(--text-secondary)]">poll who&apos;s coming to the event on friday?</p>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-2">
+              → users can reply yes/no/maybe with notes like &quot;yes but running late&quot;
+            </p>
+          </div>
+        </div>
+
         {/* Features Grid */}
         <div className="grid md:grid-cols-2 gap-4">
           <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:border-[var(--accent-cyan)] transition-colors">
@@ -57,7 +95,7 @@ export default function Home() {
             <div className="text-3xl mb-3">🤖</div>
             <h3 className="font-semibold mb-1">smart parsing</h3>
             <p className="text-sm text-[var(--text-secondary)]">
-              understands "ya but running 15 late" as yes + note
+              understands &quot;ya but running 15 late&quot; as yes + note
             </p>
           </div>
           
@@ -70,10 +108,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Commands */}
+        {/* User Commands */}
         <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <span className="text-[var(--accent-cyan)]">$</span> commands
+            <span className="text-[var(--accent-cyan)]">$</span> user commands
           </h3>
           <div className="space-y-2 font-mono text-sm">
             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--bg-elevated)]">
@@ -102,4 +140,3 @@ export default function Home() {
     </main>
   )
 }
-

@@ -58,7 +58,25 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   let user = await getUserByPhone(phone)
   
   if (!user) {
+    // New user - create them
     user = await createUser(phone)
+    
+    // If first message looks like a name, save it immediately
+    const looksLikeName = message.length < 50 && 
+      message.length > 1 &&
+      !/^(yes|no|maybe|\d+|stop|help|start|announce|poll|hi|hello|hey)/i.test(lower)
+    
+    if (looksLikeName) {
+      await updateUser(user!.id, { Name: message.trim(), Needs_Name: false })
+      if (isAdmin(phone)) {
+        return `hey ${message}! 👋 you're set up as an admin.
+
+📢 "announce [message]" - send to all
+📊 "poll [question]" - ask everyone`
+      }
+      return `hey ${message}! 👋 you're all set. you'll get announcements and polls from the team.`
+    }
+    
     return "hey! i'm jarvis, powered by enclave. what's your name?"
   }
   

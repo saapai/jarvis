@@ -96,7 +96,9 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
   try {
     const base = getBase()
     const tableName = getTableName()
+    console.log(`[DB] Updating record ${recordId} with:`, JSON.stringify(fields))
     await base(tableName).update(recordId, fields as Airtable.FieldSet)
+    console.log(`[DB] Update successful`)
     return true
   } catch (error) {
     console.error('updateUser error:', error)

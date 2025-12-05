@@ -61,6 +61,47 @@ function extractPhone(field: unknown): string {
   return String(field)
 }
 
+// Get the actual field name from Airtable (handles tab characters and variations)
+// This function tries to find the field in the record's fields object
+function getActualFieldName(recordFields: Record<string, unknown>, baseName: string): string | null {
+  // Try exact match first
+  if (recordFields[baseName] !== undefined) {
+    return baseName
+  }
+  
+  // Try with tab character (common Airtable issue)
+  const withTab = `${baseName}\t`
+  if (recordFields[withTab] !== undefined) {
+    return withTab
+  }
+  
+  // Try variations
+  const variations = [
+    baseName.replace(/_/g, ' '), // Replace underscore with space
+    baseName.toLowerCase(),
+    baseName.toUpperCase(),
+    baseName.replace(/_/g, ' ') + '\t',
+    baseName.toLowerCase() + '\t',
+  ]
+  
+  for (const variation of variations) {
+    if (recordFields[variation] !== undefined) {
+      return variation
+    }
+  }
+  
+  return null
+}
+
+// Helper to get field value from record, trying all variations
+function getFieldValue(recordFields: Record<string, unknown>, baseName: string): unknown {
+  const actualName = getActualFieldName(recordFields, baseName)
+  if (actualName) {
+    return recordFields[actualName]
+  }
+  return undefined
+}
+
 // ============================================
 // USER OPERATIONS
 // ============================================
@@ -106,15 +147,23 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
       
       if (normalizedRecord === normalizedSearch) {
         console.log(`[DB] getUserByPhone: FOUND MATCH! Record ${r.id}`)
+        
+        // Get field values using helper (handles tab characters)
+        const pendingPoll = getFieldValue(r.fields, 'Pending_Poll')
+        const lastResponse = getFieldValue(r.fields, 'Last_Response')
+        const lastNotes = getFieldValue(r.fields, 'Last_Notes')
+        const needsName = getFieldValue(r.fields, 'Needs_Name')
+        const optedOut = getFieldValue(r.fields, 'Opted_Out')
+        
         return {
           id: r.id,
           phone: rawPhone,
           name: r.fields.Name ? String(r.fields.Name) : null,
-          needs_name: r.fields.Needs_Name === true || r.fields.needs_name === true,
-          opted_out: r.fields.Opted_Out === true || r.fields.opted_out === true,
-          pending_poll: r.fields.Pending_Poll ? String(r.fields.Pending_Poll) : (r.fields.pending_poll ? String(r.fields.pending_poll) : null),
-          last_response: r.fields.Last_Response ? String(r.fields.Last_Response) : (r.fields.last_response ? String(r.fields.last_response) : null),
-          last_notes: r.fields.Last_Notes ? String(r.fields.Last_Notes) : (r.fields.last_notes ? String(r.fields.last_notes) : null)
+          needs_name: needsName === true,
+          opted_out: optedOut === true,
+          pending_poll: pendingPoll ? String(pendingPoll) : null,
+          last_response: lastResponse ? String(lastResponse) : null,
+          last_notes: lastNotes ? String(lastNotes) : null
         }
       }
     }
@@ -176,9 +225,23 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
       console.log(`[DB] updateUser: Could not fetch record to check fields`)
     }
     
-    // Try the update with original field names
+    // Try the update - first try with tab versions for known problematic fields
+    const fieldsWithTabs: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(fields)) {
+      // For known fields that might have tabs, try tab version first
+      if (key === 'Pending_Poll') {
+        fieldsWithTabs['Pending_Poll\t'] = value
+      } else if (key === 'Last_Notes') {
+        fieldsWithTabs['Last_Notes\t'] = value
+      } else if (key === 'Opted_Out') {
+        fieldsWithTabs['Opted_Out\t'] = value
+      } else {
+        fieldsWithTabs[key] = value
+      }
+    }
+    
     try {
-      const result = await base(tableName).update(recordId, fields as Airtable.FieldSet)
+      const result = await base(tableName).update(recordId, fieldsWithTabs as Airtable.FieldSet)
       console.log(`[DB] updateUser: SUCCESS - updated record ${result.id}`)
       return true
     } catch (updateError: unknown) {
@@ -190,25 +253,26 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
         console.error(`[DB] updateUser: Attempted fields:`, Object.keys(fields))
         console.error(`[DB] updateUser: Available fields in this record:`, availableFields)
         
-        // Try field name variations for common fields
+        // Try field name variations for common fields (including tab characters)
+        // Priority: try tab version first (most common issue), then standard, then variations
         const fieldVariations: Record<string, string[]> = {
-          'Pending_Poll': ['Pending_Poll', 'pending_poll', 'Pending Poll', 'pending poll', 'PendingPoll'],
+          'Pending_Poll': ['Pending_Poll\t', 'Pending_Poll', 'pending_poll', 'Pending Poll', 'pending poll', 'PendingPoll'],
           'Last_Response': ['Last_Response', 'last_response', 'Last Response', 'last response', 'LastResponse'],
-          'Last_Notes': ['Last_Notes', 'last_notes', 'Last Notes', 'last notes', 'LastNotes'],
+          'Last_Notes': ['Last_Notes\t', 'Last_Notes', 'last_notes', 'Last Notes', 'last notes', 'LastNotes'],
           'Needs_Name': ['Needs_Name', 'needs_name', 'Needs Name', 'needs name', 'NeedsName'],
-          'Opted_Out': ['Opted_Out', 'opted_out', 'Opted Out', 'opted out', 'OptedOut']
+          'Opted_Out': ['Opted_Out\t', 'Opted_Out', 'opted_out', 'Opted Out', 'opted out', 'OptedOut']
         }
         
         const adjustedFields: Record<string, unknown> = {}
         let foundMatch = false
         
         for (const [originalField, value] of Object.entries(fields)) {
+          // First check if field exists as-is
           if (availableFields.includes(originalField)) {
-            // Field exists as-is
             adjustedFields[originalField] = value
             foundMatch = true
           } else {
-            // Try variations
+            // Try variations (prioritize tab versions first)
             const variations = fieldVariations[originalField] || [originalField]
             let matched = false
             for (const variation of variations) {
@@ -222,7 +286,8 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
             }
             if (!matched) {
               console.error(`[DB] updateUser: Could not find field "${originalField}" or any variations in available fields`)
-              adjustedFields[originalField] = value // Try original anyway
+              // Still try the original - sometimes Airtable accepts it even if not in availableFields
+              adjustedFields[originalField] = value
             }
           }
         }
@@ -274,19 +339,25 @@ export async function getOptedInUsers(): Promise<User[]> {
     const users = records.map(r => {
       const rawPhone = r.fields.Phone
       const phone = extractPhone(rawPhone)
-      const optedOut = r.fields.Opted_Out === true || r.fields.opted_out === true
       
-      console.log(`[DB] Record ${r.id}: Phone="${phone}", OptedOut=${optedOut}, Name="${r.fields.Name}"`)
+      // Get field values using helper (handles tab characters)
+      const pendingPoll = getFieldValue(r.fields, 'Pending_Poll')
+      const lastResponse = getFieldValue(r.fields, 'Last_Response')
+      const lastNotes = getFieldValue(r.fields, 'Last_Notes')
+      const needsName = getFieldValue(r.fields, 'Needs_Name')
+      const optedOut = getFieldValue(r.fields, 'Opted_Out')
+      
+      console.log(`[DB] Record ${r.id}: Phone="${phone}", OptedOut=${optedOut === true}, Name="${r.fields.Name}"`)
       
       return {
         id: r.id,
         phone,
         name: r.fields.Name ? String(r.fields.Name) : null,
-        needs_name: r.fields.Needs_Name === true || r.fields.needs_name === true,
-        opted_out: optedOut,
-        pending_poll: r.fields.Pending_Poll ? String(r.fields.Pending_Poll) : (r.fields.pending_poll ? String(r.fields.pending_poll) : null),
-        last_response: r.fields.Last_Response ? String(r.fields.Last_Response) : (r.fields.last_response ? String(r.fields.last_response) : null),
-        last_notes: r.fields.Last_Notes ? String(r.fields.Last_Notes) : (r.fields.last_notes ? String(r.fields.last_notes) : null)
+        needs_name: needsName === true,
+        opted_out: optedOut === true,
+        pending_poll: pendingPoll ? String(pendingPoll) : null,
+        last_response: lastResponse ? String(lastResponse) : null,
+        last_notes: lastNotes ? String(lastNotes) : null
       }
     })
     

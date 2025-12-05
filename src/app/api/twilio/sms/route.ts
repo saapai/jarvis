@@ -510,7 +510,7 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
               
               // If still not found, search for any field containing "pending" and "poll"
               if (actualPendingPollField === 'Pending_Poll') {
-                const matchingField = schemaFieldNames.find(f => {
+                const matchingField = schemaFieldNames.find((f: string) => {
                   const lower = f.toLowerCase()
                   return lower.includes('pending') && lower.includes('poll')
                 })
@@ -594,7 +594,7 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
         } else if (pendingPollValue) {
           console.error(`[Poll] ✗ WARNING: ${actualPendingPollField} has different value: "${pendingPollValue}" (expected: "${question}")`)
           // Try updating again with the exact field name from the record
-          const exactFieldName = recordFields.find(f => {
+          const exactFieldName = recordFields.find((f: string) => {
             const lower = f.toLowerCase()
             return lower.includes('pending') && lower.includes('poll')
           })
@@ -618,7 +618,7 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
           console.error(`[Poll] Available fields in record:`, recordFields)
           
           // Try to find the field by searching all fields
-          const matchingField = recordFields.find(f => {
+          const matchingField = recordFields.find((f: string) => {
             const lower = f.toLowerCase()
             return lower.includes('pending') && lower.includes('poll')
           })

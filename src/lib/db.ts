@@ -375,25 +375,71 @@ export function isAdmin(phone: string): boolean {
 // Verify that all required fields exist in Airtable
 export async function verifyAirtableFields(): Promise<{ success: boolean; missingFields: string[] }> {
   try {
-    const base = getBase()
     const tableName = getTableName()
+    const apiKey = process.env.AIRTABLE_API_KEY
+    const baseId = process.env.AIRTABLE_BASE_ID
     
-    // Get first record to check available fields
-    const records = await base(tableName).select({ maxRecords: 1 }).all()
-    
-    if (records.length === 0) {
-      console.log('[DB] verifyAirtableFields: No records in table, cannot verify fields')
-      return { success: true, missingFields: [] }
+    if (!apiKey || !baseId) {
+      console.error('[DB] verifyAirtableFields: Missing API credentials')
+      return { success: false, missingFields: [] }
     }
     
-    const availableFields = Object.keys(records[0].fields)
-    console.log('[DB] verifyAirtableFields: Available fields:', availableFields)
+    // Fetch table schema using Airtable Metadata API to get ALL fields (even empty ones)
+    let allFieldNames: string[] = []
+    try {
+      const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const meta = await response.json()
+        const table = meta.tables?.find((t: any) => t.name === tableName)
+        if (table && table.fields) {
+          allFieldNames = table.fields.map((f: any) => f.name)
+          console.log('[DB] verifyAirtableFields: All fields from schema:', allFieldNames)
+        } else {
+          console.error(`[DB] verifyAirtableFields: Table "${tableName}" not found in schema`)
+          // Fallback: try to get fields from records
+          const base = getBase()
+          const records = await base(tableName).select({ maxRecords: 1 }).all()
+          if (records.length > 0) {
+            allFieldNames = Object.keys(records[0].fields)
+            console.log('[DB] verifyAirtableFields: Using fields from records (fallback):', allFieldNames)
+          }
+        }
+      } else {
+        console.error(`[DB] verifyAirtableFields: Schema API returned ${response.status}`)
+        // Fallback: try to get fields from records
+        const base = getBase()
+        const records = await base(tableName).select({ maxRecords: 1 }).all()
+        if (records.length > 0) {
+          allFieldNames = Object.keys(records[0].fields)
+          console.log('[DB] verifyAirtableFields: Using fields from records (fallback):', allFieldNames)
+        }
+      }
+    } catch (schemaError) {
+      console.error('[DB] verifyAirtableFields: Schema fetch failed, using record fields:', schemaError)
+      // Fallback: try to get fields from records
+      const base = getBase()
+      const records = await base(tableName).select({ maxRecords: 1 }).all()
+      if (records.length > 0) {
+        allFieldNames = Object.keys(records[0].fields)
+        console.log('[DB] verifyAirtableFields: Using fields from records (fallback):', allFieldNames)
+      }
+    }
     
     const requiredFields = ['Phone', 'Name', 'Needs_Name', 'Opted_Out', 'Pending_Poll', 'Last_Response', 'Last_Notes']
     const missingFields: string[] = []
     
+    // Check each required field (try normal name and tab version)
     for (const field of requiredFields) {
-      if (!availableFields.includes(field)) {
+      const hasNormal = allFieldNames.includes(field)
+      const hasTab = allFieldNames.includes(`${field}\t`)
+      
+      if (!hasNormal && !hasTab) {
         missingFields.push(field)
       }
     }

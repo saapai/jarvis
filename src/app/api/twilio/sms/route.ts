@@ -226,6 +226,31 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   // Check for admin commands FIRST (before user lookup)
   // This allows admins to use commands even on first text
   if (isAdmin(phone)) {
+    // Check for existing draft first
+    const existingDraft = adminDrafts.get(phone)
+    
+    // Send command with existing draft
+    if (/^(send|go|yes|yep|yeah|yea|ship|do it|send it)\s*$/i.test(lower) && existingDraft) {
+      adminDrafts.delete(phone)
+      // Ensure admin exists in DB
+      let user = await getUserByPhone(phone)
+      if (!user) {
+        user = await createUser(phone)
+        await updateUser(user!.id, { Name: 'Admin', Needs_Name: false })
+      }
+      if (existingDraft.type === 'announcement') {
+        return await sendAnnouncementToAll(existingDraft.content, phone)
+      } else {
+        return await sendPollToAll(existingDraft.content, phone)
+      }
+    }
+    
+    // Cancel command with existing draft
+    if (/^(cancel|nvm|nevermind|no|nope|nah)\s*$/i.test(lower) && existingDraft) {
+      adminDrafts.delete(phone)
+      return "👍 draft discarded."
+    }
+    
     // Intent-based parsing for announcements and polls
     const parsedIntent = parseAdminIntent(message)
     
@@ -236,7 +261,9 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         user = await createUser(phone)
         await updateUser(user!.id, { Name: 'Admin', Needs_Name: false })
       }
-      return await sendAnnouncementToAll(parsedIntent.content, phone)
+      // Save as draft and ask for confirmation
+      adminDrafts.set(phone, { type: 'announcement', content: parsedIntent.content })
+      return `📝 announcement draft:\n\n"${parsedIntent.content}"\n\nreply "send" to send to everyone, or "cancel" to discard`
     }
     
     if (parsedIntent.type === 'poll' && parsedIntent.content) {
@@ -247,7 +274,9 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         await updateUser(user!.id, { Name: 'Admin', Needs_Name: false })
       }
       const question = normalizePollQuestion(parsedIntent.content)
-      return await sendPollToAll(question, phone)
+      // Save as draft and ask for confirmation
+      adminDrafts.set(phone, { type: 'poll', content: question })
+      return `📊 poll draft:\n\n"${question}"\n\nreply "send" to send to everyone, or "cancel" to discard`
     }
   }
   
@@ -325,44 +354,29 @@ text STOP to unsubscribe`
     }
   }
   
-  // Admin commands (for existing users - announce/poll already handled above for new admins)
+  // Admin commands (for existing users - handle interactive draft flow)
   if (isAdmin(phone)) {
-    // Check for pending draft
+    // Check for pending draft that needs content
     const draft = adminDrafts.get(phone)
     
-    // Send command
-    if (/^(send|go|yes|ship)/i.test(lower) && draft) {
-      adminDrafts.delete(phone)
-      if (draft.type === 'announcement') {
-        return await sendAnnouncementToAll(draft.content, phone)
-      } else {
-        return await sendPollToAll(draft.content, phone)
-      }
-    }
-    
-    // Cancel command
-    if (/^(cancel|nvm|nevermind)/i.test(lower) && draft) {
-      adminDrafts.delete(phone)
-      return "discarded."
-    }
-    
-    // Start announcement flow
-    if (/make an announcement|send an announcement/i.test(lower)) {
+    // Start announcement flow (two-step)
+    if (/^(make an announcement|send an announcement)\s*$/i.test(lower)) {
       adminDrafts.set(phone, { type: 'announcement', content: '' })
       return "what would you like to announce?"
     }
     
-    // Start poll flow
-    if (/create a poll|make a poll|start a poll/i.test(lower)) {
+    // Start poll flow (two-step)
+    if (/^(create a poll|make a poll|start a poll)\s*$/i.test(lower)) {
       adminDrafts.set(phone, { type: 'poll', content: '' })
       return "what's your poll question?"
     }
     
-    // If waiting for content
+    // If waiting for content (draft exists but has no content yet)
     if (draft && !draft.content) {
       draft.content = draft.type === 'poll' ? normalizePollQuestion(message) : message
       adminDrafts.set(phone, draft)
-      return `📝 ready to send:\n\n"${draft.content}"\n\nreply "send" or "cancel"`
+      const emoji = draft.type === 'poll' ? '📊' : '📝'
+      return `${emoji} ${draft.type} draft:\n\n"${draft.content}"\n\nreply "send" to send to everyone, or "cancel" to discard`
     }
   }
   

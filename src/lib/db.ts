@@ -165,9 +165,89 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
     const base = getBase()
     const tableName = getTableName()
     console.log(`[DB] updateUser: record=${recordId}, table=${tableName}, fields=${JSON.stringify(fields)}`)
-    const result = await base(tableName).update(recordId, fields as Airtable.FieldSet)
-    console.log(`[DB] updateUser: SUCCESS - updated record ${result.id}`)
-    return true
+    
+    // First, try to get the record to see what fields actually exist
+    let availableFields: string[] = []
+    try {
+      const record = await base(tableName).find(recordId)
+      availableFields = Object.keys(record.fields)
+      console.log(`[DB] updateUser: Available fields in record:`, availableFields)
+    } catch (fetchError) {
+      console.log(`[DB] updateUser: Could not fetch record to check fields`)
+    }
+    
+    // Try the update with original field names
+    try {
+      const result = await base(tableName).update(recordId, fields as Airtable.FieldSet)
+      console.log(`[DB] updateUser: SUCCESS - updated record ${result.id}`)
+      return true
+    } catch (updateError: unknown) {
+      const err = updateError as { message?: string; error?: string; statusCode?: number }
+      
+      // If it's a field name error, try variations
+      if (err.error === 'UNKNOWN_FIELD_NAME' || err.message?.includes('Unknown field name')) {
+        console.error(`[DB] updateUser: Field name error detected`)
+        console.error(`[DB] updateUser: Attempted fields:`, Object.keys(fields))
+        console.error(`[DB] updateUser: Available fields in this record:`, availableFields)
+        
+        // Try field name variations for common fields
+        const fieldVariations: Record<string, string[]> = {
+          'Pending_Poll': ['Pending_Poll', 'pending_poll', 'Pending Poll', 'pending poll', 'PendingPoll'],
+          'Last_Response': ['Last_Response', 'last_response', 'Last Response', 'last response', 'LastResponse'],
+          'Last_Notes': ['Last_Notes', 'last_notes', 'Last Notes', 'last notes', 'LastNotes'],
+          'Needs_Name': ['Needs_Name', 'needs_name', 'Needs Name', 'needs name', 'NeedsName'],
+          'Opted_Out': ['Opted_Out', 'opted_out', 'Opted Out', 'opted out', 'OptedOut']
+        }
+        
+        const adjustedFields: Record<string, unknown> = {}
+        let foundMatch = false
+        
+        for (const [originalField, value] of Object.entries(fields)) {
+          if (availableFields.includes(originalField)) {
+            // Field exists as-is
+            adjustedFields[originalField] = value
+            foundMatch = true
+          } else {
+            // Try variations
+            const variations = fieldVariations[originalField] || [originalField]
+            let matched = false
+            for (const variation of variations) {
+              if (availableFields.includes(variation)) {
+                console.log(`[DB] updateUser: Using field variation "${variation}" instead of "${originalField}"`)
+                adjustedFields[variation] = value
+                matched = true
+                foundMatch = true
+                break
+              }
+            }
+            if (!matched) {
+              console.error(`[DB] updateUser: Could not find field "${originalField}" or any variations in available fields`)
+              adjustedFields[originalField] = value // Try original anyway
+            }
+          }
+        }
+        
+        if (foundMatch && Object.keys(adjustedFields).length > 0) {
+          try {
+            const result = await base(tableName).update(recordId, adjustedFields as Airtable.FieldSet)
+            console.log(`[DB] updateUser: SUCCESS with field variations - updated record ${result.id}`)
+            return true
+          } catch (retryError) {
+            console.error(`[DB] updateUser: Still failed after trying field variations`)
+          }
+        }
+      }
+      
+      // If we get here, the update failed
+      console.error(`[DB] updateUser: FAILED - record=${recordId}`)
+      console.error(`[DB] updateUser: error message:`, err.message || err.error || String(updateError))
+      console.error(`[DB] updateUser: status code:`, err.statusCode)
+      console.error(`[DB] updateUser: full error:`, JSON.stringify(updateError))
+      if (availableFields.length > 0) {
+        console.error(`[DB] updateUser: Available fields were:`, availableFields)
+      }
+      return false
+    }
   } catch (error: unknown) {
     const err = error as { message?: string; error?: string; statusCode?: number }
     console.error(`[DB] updateUser: FAILED - record=${recordId}`)
@@ -234,4 +314,44 @@ export function isAdmin(phone: string): boolean {
   const admins = process.env.ADMIN_PHONE_NUMBERS || ''
   const adminList = admins.split(',').map(p => normalizePhone(p.trim())).filter(Boolean)
   return adminList.includes(normalizePhone(phone))
+}
+
+// Verify that all required fields exist in Airtable
+export async function verifyAirtableFields(): Promise<{ success: boolean; missingFields: string[] }> {
+  try {
+    const base = getBase()
+    const tableName = getTableName()
+    
+    // Get first record to check available fields
+    const records = await base(tableName).select({ maxRecords: 1 }).all()
+    
+    if (records.length === 0) {
+      console.log('[DB] verifyAirtableFields: No records in table, cannot verify fields')
+      return { success: true, missingFields: [] }
+    }
+    
+    const availableFields = Object.keys(records[0].fields)
+    console.log('[DB] verifyAirtableFields: Available fields:', availableFields)
+    
+    const requiredFields = ['Phone', 'Name', 'Needs_Name', 'Opted_Out', 'Pending_Poll', 'Last_Response', 'Last_Notes']
+    const missingFields: string[] = []
+    
+    for (const field of requiredFields) {
+      if (!availableFields.includes(field)) {
+        missingFields.push(field)
+      }
+    }
+    
+    if (missingFields.length > 0) {
+      console.error('[DB] verifyAirtableFields: Missing fields:', missingFields)
+      console.error('[DB] verifyAirtableFields: Please add these fields to your Airtable table')
+      return { success: false, missingFields }
+    }
+    
+    console.log('[DB] verifyAirtableFields: All required fields exist ✓')
+    return { success: true, missingFields: [] }
+  } catch (error) {
+    console.error('[DB] verifyAirtableFields error:', error)
+    return { success: false, missingFields: [] }
+  }
 }

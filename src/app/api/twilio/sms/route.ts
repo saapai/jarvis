@@ -6,7 +6,8 @@ import {
   getOptedInUsers,
   normalizePhone,
   toE164,
-  isAdmin
+  isAdmin,
+  verifyAirtableFields
 } from '@/lib/db'
 import { validateTwilioSignature, toTwiml, sendSms } from '@/lib/twilio'
 
@@ -86,6 +87,11 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   
   // Get or create user
   let user = await getUserByPhone(phone)
+  
+  // Log user state for debugging
+  if (user) {
+    console.log(`[SMS] User found: ${user.name || 'unnamed'} (${phone}), pending_poll: ${user.pending_poll ? `"${user.pending_poll}"` : 'none'}`)
+  }
   
   if (!user) {
     // New user - create them
@@ -197,12 +203,21 @@ text STOP to unsubscribe`
   // Poll response - check if user has pending poll
   if (user.pending_poll) {
     const parsed = parsePollResponse(message)
-    await updateUser(user.id, {
-      Pending_Poll: '',  // Clear pending
+    console.log(`[PollResponse] User ${user.id} (${user.name}) responding to poll: "${user.pending_poll}"`)
+    console.log(`[PollResponse] Parsed response: ${parsed.response}, notes: ${parsed.notes || 'none'}`)
+    
+    const updateResult = await updateUser(user.id, {
+      Pending_Poll: '',  // Clear pending poll
       Last_Response: parsed.response,
       Last_Notes: parsed.notes || ''
     })
     
+    if (!updateResult) {
+      console.error(`[PollResponse] FAILED to update user ${user.id} - check Airtable field names`)
+      return "sorry, there was an error recording your response. please try again."
+    }
+    
+    console.log(`[PollResponse] Successfully recorded response for user ${user.id}`)
     let reply = `got it! recorded: ${parsed.response}`
     if (parsed.notes) reply += ` (note: "${parsed.notes}")`
     return reply
@@ -257,6 +272,13 @@ async function sendAnnouncementToAll(content: string, senderPhone?: string): Pro
 
 // Send poll to all (excluding the sender)
 async function sendPollToAll(question: string, senderPhone?: string): Promise<string> {
+  // Verify Airtable fields exist
+  const fieldCheck = await verifyAirtableFields()
+  if (!fieldCheck.success && fieldCheck.missingFields.length > 0) {
+    console.error(`[Poll] Cannot send poll - missing Airtable fields: ${fieldCheck.missingFields.join(', ')}`)
+    return `⚠️ error: missing Airtable fields: ${fieldCheck.missingFields.join(', ')}. please add them to your table.`
+  }
+  
   const users = await getOptedInUsers()
   const senderNormalized = senderPhone ? normalizePhone(senderPhone) : null
   let sent = 0
@@ -285,12 +307,15 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
     if (result.ok) {
       sent++
       // Mark user as having pending poll
-      console.log(`[Poll] SMS sent, now setting Pending_Poll for record ${user.id}`)
+      console.log(`[Poll] SMS sent successfully to ${user.name || 'unnamed'} (${userPhoneNormalized})`)
+      console.log(`[Poll] Now setting Pending_Poll="${question}" for record ${user.id}`)
       const updateResult = await updateUser(user.id, { Pending_Poll: question })
       if (updateResult) {
-        console.log(`[Poll] Successfully set Pending_Poll for ${user.id}`)
+        console.log(`[Poll] ✓ Successfully set Pending_Poll for ${user.id}`)
       } else {
-        console.log(`[Poll] FAILED to set Pending_Poll for ${user.id}`)
+        console.error(`[Poll] ✗ FAILED to set Pending_Poll for ${user.id}`)
+        console.error(`[Poll] This likely means the "Pending_Poll" field doesn't exist in your Airtable table`)
+        console.error(`[Poll] Please add a "Pending_Poll" field (Single line text) to your Airtable`)
         updateFailed++
       }
     } else {
@@ -343,7 +368,49 @@ export async function GET(request: NextRequest) {
     const base = Airtable.base(process.env.AIRTABLE_BASE_ID!)
     const tableName = process.env.AIRTABLE_TABLE_NAME || 'Enclave'
     
+    // Try to fetch table schema using Airtable REST API
+    let tableSchema: any = null
+    let schemaError: string | null = null
+    try {
+      const apiKey = process.env.AIRTABLE_API_KEY
+      const baseId = process.env.AIRTABLE_BASE_ID
+      const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (response.ok) {
+        const meta = await response.json()
+        const table = meta.tables?.find((t: any) => t.name === tableName)
+        if (table) {
+          tableSchema = {
+            name: table.name,
+            fields: table.fields.map((f: any) => ({
+              name: f.name,
+              type: f.type,
+              options: f.options
+            }))
+          }
+        } else {
+          schemaError = `Table "${tableName}" not found in schema. Available tables: ${meta.tables?.map((t: any) => t.name).join(', ') || 'none'}`
+        }
+      } else {
+        const errorText = await response.text()
+        schemaError = `Schema API returned ${response.status}: ${errorText}`
+      }
+    } catch (err) {
+      schemaError = `Schema fetch error: ${err instanceof Error ? err.message : String(err)}`
+      console.log('[Diagnostic] Could not fetch table schema:', err)
+    }
+    
     const records = await base(tableName).select({}).all()
+    
+    // Collect all unique field names across all records (some fields might be empty in some records)
+    const allFieldNames = new Set<string>()
+    records.forEach(r => {
+      Object.keys(r.fields).forEach(field => allFieldNames.add(field))
+    })
     
     const rawRecords = records.map(r => ({
       id: r.id,
@@ -365,10 +432,16 @@ export async function GET(request: NextRequest) {
       status: 'running',
       tableName,
       rawRecordCount: records.length,
+      // Show all fields found across all records (not just fields with values)
+      allFieldsFound: Array.from(allFieldNames).sort(),
+      // Show actual table schema if available
+      tableSchema: tableSchema || null,
+      schemaError: schemaError || null,
       rawRecords: rawRecords.slice(0, 5), // Show first 5 raw records for debugging
       processedUserCount: users.length,
       usersWithValidPhone: users.filter(u => u.phone && normalizePhone(u.phone).length >= 10).length,
-      processedUsers: summary
+      processedUsers: summary,
+      note: 'Fields with empty values may not appear in rawRecords. Check tableSchema for all fields. If tableSchema is null, check schemaError for details. The error "Unknown field name: Pending_Poll" means the field does not exist with that exact name in Airtable.'
     })
   } catch (error) {
     return NextResponse.json({

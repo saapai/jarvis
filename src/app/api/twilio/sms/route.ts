@@ -260,6 +260,9 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
   const users = await getOptedInUsers()
   const senderNormalized = senderPhone ? normalizePhone(senderPhone) : null
   let sent = 0
+  let updateFailed = 0
+  
+  console.log(`[Poll] Starting poll send to ${users.length} users, question: "${question}"`)
   
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe (add notes like "yes but running late")`
   
@@ -267,17 +270,35 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
     const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
     
     // Skip users without valid phone or the admin who sent the poll
-    if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
-    if (userPhoneNormalized === senderNormalized) continue
+    if (!userPhoneNormalized || userPhoneNormalized.length < 10) {
+      console.log(`[Poll] Skipping user ${user.id} - invalid phone`)
+      continue
+    }
+    if (userPhoneNormalized === senderNormalized) {
+      console.log(`[Poll] Skipping sender ${userPhoneNormalized}`)
+      continue
+    }
     
+    console.log(`[Poll] Sending to ${user.name || 'unnamed'} (${userPhoneNormalized}), record ID: ${user.id}`)
     const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
+    
     if (result.ok) {
       sent++
       // Mark user as having pending poll
-      await updateUser(user.id, { Pending_Poll: question })
+      console.log(`[Poll] SMS sent, now setting Pending_Poll for record ${user.id}`)
+      const updateResult = await updateUser(user.id, { Pending_Poll: question })
+      if (updateResult) {
+        console.log(`[Poll] Successfully set Pending_Poll for ${user.id}`)
+      } else {
+        console.log(`[Poll] FAILED to set Pending_Poll for ${user.id}`)
+        updateFailed++
+      }
+    } else {
+      console.log(`[Poll] SMS failed for ${userPhoneNormalized}: ${result.error}`)
     }
   }
   
+  console.log(`[Poll] Complete: sent=${sent}, updateFailed=${updateFailed}`)
   return `✅ poll sent to ${sent} people!`
 }
 

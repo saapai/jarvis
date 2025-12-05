@@ -164,12 +164,16 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
   try {
     const base = getBase()
     const tableName = getTableName()
-    console.log(`[DB] Updating record ${recordId} with:`, JSON.stringify(fields))
-    await base(tableName).update(recordId, fields as Airtable.FieldSet)
-    console.log(`[DB] Update successful`)
+    console.log(`[DB] updateUser: record=${recordId}, table=${tableName}, fields=${JSON.stringify(fields)}`)
+    const result = await base(tableName).update(recordId, fields as Airtable.FieldSet)
+    console.log(`[DB] updateUser: SUCCESS - updated record ${result.id}`)
     return true
-  } catch (error) {
-    console.error('updateUser error:', error)
+  } catch (error: unknown) {
+    const err = error as { message?: string; error?: string; statusCode?: number }
+    console.error(`[DB] updateUser: FAILED - record=${recordId}`)
+    console.error(`[DB] updateUser: error message:`, err.message || err.error || String(error))
+    console.error(`[DB] updateUser: status code:`, err.statusCode)
+    console.error(`[DB] updateUser: full error:`, JSON.stringify(error))
     return false
   }
 }

@@ -242,28 +242,72 @@ text STOP to unsubscribe`
       console.log(`[PollResponse] Could not fetch record to check field names, using defaults`)
     }
     
-    // Update all fields together using the actual field names
-    const updateFields: Record<string, unknown> = {
-      [actualPendingPollField]: '',  // Clear pending poll
+    // Update response fields first
+    const responseFields: Record<string, unknown> = {
       [actualLastResponseField]: parsed.response,
       [actualLastNotesField]: parsed.notes || ''
     }
     
-    console.log(`[PollResponse] Updating with fields:`, updateFields)
-    const updateResult = await updateUser(user.id, updateFields)
+    console.log(`[PollResponse] Updating response fields:`, responseFields)
+    const updateResult = await updateUser(user.id, responseFields)
     
     if (!updateResult) {
       console.error(`[PollResponse] FAILED to update user ${user.id} - check Airtable field names`)
       return "sorry, there was an error recording your response. please try again."
     }
     
-    // Verify the field was actually cleared by re-fetching the user
-    const updatedUser = await getUserByPhone(phone)
-    if (updatedUser && updatedUser.pending_poll) {
-      console.error(`[PollResponse] WARNING: Pending_Poll was not cleared! Still has: "${updatedUser.pending_poll}"`)
-      console.error(`[PollResponse] Field name used: "${actualPendingPollField}"`)
-    } else {
-      console.log(`[PollResponse] Verified: Pending_Poll was successfully cleared`)
+    // Now clear Pending_Poll separately - try null first, then empty string
+    console.log(`[PollResponse] Attempting to clear ${actualPendingPollField}`)
+    let clearResult = await updateUser(user.id, { [actualPendingPollField]: null })
+    
+    if (!clearResult) {
+      console.log(`[PollResponse] Null didn't work, trying empty string...`)
+      clearResult = await updateUser(user.id, { [actualPendingPollField]: '' })
+    }
+    
+    // Verify the field was actually cleared by checking the actual Airtable record
+    try {
+      const record = await base(tableName).find(user.id)
+      const recordFields = Object.keys(record.fields)
+      const pendingPollValue = record.fields[actualPendingPollField]
+      
+      console.log(`[PollResponse] Checking actual Airtable record...`)
+      console.log(`[PollResponse] Record fields:`, recordFields)
+      console.log(`[PollResponse] Pending_Poll value in record:`, pendingPollValue)
+      
+      if (pendingPollValue && String(pendingPollValue).trim() !== '') {
+        console.error(`[PollResponse] WARNING: Pending_Poll still has value: "${pendingPollValue}"`)
+        console.error(`[PollResponse] Field name used: "${actualPendingPollField}"`)
+        console.error(`[PollResponse] Clear result: ${clearResult}`)
+        
+        // Try one more direct update with empty string
+        console.log(`[PollResponse] Trying direct update with empty string...`)
+        try {
+          const directUpdate = await base(tableName).update(user.id, { [actualPendingPollField]: '' } as any)
+          console.log(`[PollResponse] Direct update result fields:`, Object.keys(directUpdate.fields))
+          const finalRecord = await base(tableName).find(user.id)
+          const finalValue = finalRecord.fields[actualPendingPollField]
+          if (finalValue && String(finalValue).trim() !== '') {
+            console.error(`[PollResponse] Still not cleared after direct update. Final value: "${finalValue}"`)
+            console.error(`[PollResponse] This may be an Airtable API limitation - field may need manual clearing`)
+          } else {
+            console.log(`[PollResponse] Successfully cleared with direct update`)
+          }
+        } catch (directError) {
+          console.error(`[PollResponse] Direct update failed:`, directError)
+        }
+      } else {
+        console.log(`[PollResponse] Verified: Pending_Poll was successfully cleared (value: ${pendingPollValue})`)
+      }
+    } catch (verifyError) {
+      console.error(`[PollResponse] Could not verify:`, verifyError)
+      // Fallback to our user check
+      const updatedUser = await getUserByPhone(phone)
+      if (updatedUser && updatedUser.pending_poll) {
+        console.error(`[PollResponse] WARNING: Pending_Poll still has value: "${updatedUser.pending_poll}"`)
+      } else {
+        console.log(`[PollResponse] Verified via getUserByPhone: Pending_Poll appears cleared`)
+      }
     }
     
     console.log(`[PollResponse] Successfully recorded response for user ${user.id}`)

@@ -142,7 +142,6 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     phone,
     message,
     user: userContext,
-    conversationHistoryJson: null, // TODO: Load from Airtable
     sendAnnouncement: (content) => sendAnnouncementToAll(content, phone),
     sendPoll: (question) => sendPollToAll(question, phone)
   })

@@ -1,257 +1,191 @@
 /**
- * Conversation History Module
- * Stores and retrieves weighted conversation context
+ * History Management
+ * Manages conversation history and draft state for the planner
  */
 
-import {
-  ConversationTurn,
-  WeightedTurn,
-  Draft,
-  HISTORY_WEIGHTS,
-  MAX_HISTORY_LENGTH,
-  MessageRole
-} from './types'
+import { Draft, DraftType, ConversationTurn } from './types'
 
 // ============================================
-// IN-MEMORY STORAGE (can be swapped for Airtable)
+// IN-MEMORY STORAGE
 // ============================================
 
-interface UserState {
-  history: ConversationTurn[]
-  draft: Draft | null
-}
+// Conversation history per user (keyed by phone)
+const conversationHistory: Map<string, ConversationTurn[]> = new Map()
 
-// Phone -> UserState mapping
-const userStates = new Map<string, UserState>()
+// Active drafts per user (keyed by phone)
+const activeDrafts: Map<string, Draft> = new Map()
 
-function getOrCreateState(phone: string): UserState {
-  let state = userStates.get(phone)
-  if (!state) {
-    state = { history: [], draft: null }
-    userStates.set(phone, state)
-  }
-  return state
-}
+// Maximum history length
+const MAX_HISTORY_LENGTH = 10
 
 // ============================================
-// HISTORY OPERATIONS
+// CONVERSATION HISTORY
 // ============================================
 
 /**
- * Get conversation history with weights applied
- * Most recent message has weight 1.0, decays for older messages
+ * Add a conversation turn to history
  */
-export function getWeightedHistory(phone: string): WeightedTurn[] {
-  const state = getOrCreateState(phone)
-  const history = state.history.slice(-MAX_HISTORY_LENGTH)
-  
-  // Apply weights (most recent first)
-  return history.map((turn, index) => {
-    const reverseIndex = history.length - 1 - index
-    const weight = HISTORY_WEIGHTS[reverseIndex] ?? 0.2
-    return { ...turn, weight }
-  })
-}
-
-/**
- * Get raw conversation history (last N messages)
- */
-export function getHistory(phone: string, limit = MAX_HISTORY_LENGTH): ConversationTurn[] {
-  const state = getOrCreateState(phone)
-  return state.history.slice(-limit)
-}
-
-/**
- * Add a message to conversation history
- */
-export function addToHistory(
+export function addConversationTurn(
   phone: string,
-  role: MessageRole,
   content: string,
-  action?: string
-): ConversationTurn {
-  const state = getOrCreateState(phone)
+  role: 'user' | 'assistant'
+): void {
+  const history = conversationHistory.get(phone) || []
   
-  const turn: ConversationTurn = {
-    role,
+  history.push({
     content,
-    timestamp: Date.now(),
-    action: action as any
+    role,
+    timestamp: Date.now()
+  })
+  
+  // Keep only last MAX_HISTORY_LENGTH turns
+  while (history.length > MAX_HISTORY_LENGTH) {
+    history.shift()
   }
   
-  state.history.push(turn)
-  
-  // Keep only last N messages
-  if (state.history.length > MAX_HISTORY_LENGTH * 2) {
-    state.history = state.history.slice(-MAX_HISTORY_LENGTH)
-  }
-  
-  return turn
+  conversationHistory.set(phone, history)
 }
 
 /**
- * Clear conversation history for a user
+ * Get conversation history with weighted context
+ * More recent messages get higher weights
+ */
+export function getConversationHistory(
+  phone: string,
+  count: number = 5
+): { turns: ConversationTurn[]; weightedContext: string } {
+  const history = conversationHistory.get(phone) || []
+  const recentTurns = history.slice(-count)
+  
+  // Build weighted context string
+  // Weight decreases with age: 1.0, 0.8, 0.6, 0.4, 0.2
+  const weights = [0.2, 0.4, 0.6, 0.8, 1.0].slice(-recentTurns.length)
+  
+  const weightedContext = recentTurns
+    .map((turn, i) => {
+      const weight = weights[i] || 0.2
+      return `[${weight.toFixed(1)}] ${turn.role}: ${turn.content}`
+    })
+    .join('\n')
+  
+  return { turns: recentTurns, weightedContext }
+}
+
+/**
+ * Clear history for a user
  */
 export function clearHistory(phone: string): void {
-  const state = getOrCreateState(phone)
-  state.history = []
+  conversationHistory.delete(phone)
+}
+
+/**
+ * Get raw history turns
+ */
+export function getRawHistory(phone: string): ConversationTurn[] {
+  return conversationHistory.get(phone) || []
 }
 
 // ============================================
-// DRAFT OPERATIONS
+// DRAFT MANAGEMENT
 // ============================================
 
 /**
- * Get active draft for a user
+ * Get the current draft for a user
  */
-export function getDraft(phone: string): Draft | null {
-  const state = getOrCreateState(phone)
-  return state.draft
+export function getDraft(phone: string): Draft | undefined {
+  return activeDrafts.get(phone)
 }
 
 /**
- * Set draft for a user
+ * Set/create a draft for a user
+ * Can accept either (phone, type, content) or (phone, draft)
  */
-export function setDraft(phone: string, draft: Draft | null): void {
-  const state = getOrCreateState(phone)
-  state.draft = draft
-}
-
-/**
- * Update draft content
- */
-export function updateDraft(phone: string, updates: Partial<Draft>): Draft | null {
-  const state = getOrCreateState(phone)
-  if (!state.draft) return null
+export function setDraft(
+  phone: string,
+  typeOrDraft: DraftType | Draft,
+  content?: string
+): Draft {
+  let draft: Draft
+  const now = Date.now()
   
-  state.draft = {
-    ...state.draft,
-    ...updates,
-    updatedAt: Date.now()
+  if (typeof typeOrDraft === 'object') {
+    // Called with a Draft object
+    draft = {
+      type: typeOrDraft.type,
+      content: typeOrDraft.content,
+      status: typeOrDraft.status || 'drafting',
+      createdAt: typeOrDraft.createdAt || now,
+      updatedAt: typeOrDraft.updatedAt || now
+    }
+  } else {
+    // Called with type and content
+    draft = {
+      type: typeOrDraft,
+      content: content || '',
+      status: 'drafting',
+      createdAt: now,
+      updatedAt: now
+    }
   }
   
-  return state.draft
+  activeDrafts.set(phone, draft)
+  return draft
 }
 
 /**
- * Clear draft for a user
+ * Update an existing draft
+ * Can accept either (phone, content) or (phone, partialDraft)
+ */
+export function updateDraft(
+  phone: string,
+  contentOrPartial: string | Partial<Draft>
+): Draft | undefined {
+  const existing = activeDrafts.get(phone)
+  if (!existing) return undefined
+  
+  if (typeof contentOrPartial === 'string') {
+    existing.content = contentOrPartial
+  } else {
+    Object.assign(existing, contentOrPartial)
+  }
+  
+  existing.updatedAt = Date.now()
+  activeDrafts.set(phone, existing)
+  return existing
+}
+
+/**
+ * Clear/delete a draft
  */
 export function clearDraft(phone: string): void {
-  const state = getOrCreateState(phone)
-  state.draft = null
+  activeDrafts.delete(phone)
+}
+
+/**
+ * Check if user has an active draft
+ */
+export function hasDraft(phone: string): boolean {
+  return activeDrafts.has(phone)
 }
 
 // ============================================
-// CONTEXT HELPERS
+// UTILITY FUNCTIONS
 // ============================================
 
 /**
- * Get the last assistant message (for context-based classification)
+ * Get context summary for debugging
  */
-export function getLastAssistantMessage(phone: string): string | null {
-  const state = getOrCreateState(phone)
-  for (let i = state.history.length - 1; i >= 0; i--) {
-    if (state.history[i].role === 'assistant') {
-      return state.history[i].content
-    }
-  }
-  return null
-}
-
-/**
- * Get the last user message (excluding current)
- */
-export function getLastUserMessage(phone: string): string | null {
-  const state = getOrCreateState(phone)
-  // Skip the most recent (current) message
-  for (let i = state.history.length - 2; i >= 0; i--) {
-    if (state.history[i].role === 'user') {
-      return state.history[i].content
-    }
-  }
-  return null
-}
-
-/**
- * Check if bot just asked for draft content
- */
-export function isAwaitingDraftContent(phone: string): boolean {
-  const lastMsg = getLastAssistantMessage(phone)
-  if (!lastMsg) return false
+export function getContextSummary(phone: string): string {
+  const history = conversationHistory.get(phone) || []
+  const draft = activeDrafts.get(phone)
   
-  const lower = lastMsg.toLowerCase()
-  return (
-    lower.includes('what would you like to announce') ||
-    lower.includes('what would you like the announcement to say') ||
-    lower.includes("what's your poll question") ||
-    lower.includes('what do you want to ask') ||
-    lower.includes('what should the poll say')
-  )
+  return `History: ${history.length} turns, Draft: ${draft ? `${draft.type} "${draft.content.slice(0, 30)}..."` : 'none'}`
 }
 
 /**
- * Check if bot just showed a draft preview
+ * Clear all state for a user (history + draft)
  */
-export function isAwaitingDraftConfirmation(phone: string): boolean {
-  const lastMsg = getLastAssistantMessage(phone)
-  if (!lastMsg) return false
-  
-  const lower = lastMsg.toLowerCase()
-  return (
-    lower.includes('ready to send') ||
-    lower.includes('reply "send"') ||
-    lower.includes("reply 'send'") ||
-    lower.includes('send or cancel')
-  )
+export function clearAllState(phone: string): void {
+  clearHistory(phone)
+  clearDraft(phone)
 }
-
-// ============================================
-// SERIALIZATION (for Airtable storage)
-// ============================================
-
-/**
- * Serialize user state to JSON string (for Airtable storage)
- */
-export function serializeState(phone: string): string {
-  const state = getOrCreateState(phone)
-  return JSON.stringify({
-    history: state.history.slice(-MAX_HISTORY_LENGTH),
-    draft: state.draft
-  })
-}
-
-/**
- * Deserialize user state from JSON string
- */
-export function deserializeState(phone: string, json: string): void {
-  try {
-    const parsed = JSON.parse(json)
-    const state = getOrCreateState(phone)
-    
-    if (Array.isArray(parsed.history)) {
-      state.history = parsed.history
-    }
-    if (parsed.draft && typeof parsed.draft === 'object') {
-      state.draft = parsed.draft
-    }
-  } catch (e) {
-    console.error('[History] Failed to deserialize state:', e)
-  }
-}
-
-/**
- * Load state from Airtable field (call on user lookup)
- */
-export function loadStateFromAirtable(phone: string, conversationHistoryJson: string | null): void {
-  if (conversationHistoryJson) {
-    deserializeState(phone, conversationHistoryJson)
-  }
-}
-
-/**
- * Get state JSON for Airtable update
- */
-export function getStateForAirtable(phone: string): string {
-  return serializeState(phone)
-}
-

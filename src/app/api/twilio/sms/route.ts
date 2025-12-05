@@ -251,6 +251,74 @@ async function handleMessage(phone: string, message: string): Promise<string> {
       return "👍 draft discarded."
     }
     
+    // Edit request with existing draft - detect edit intent
+    if (existingDraft && existingDraft.content) {
+      // Patterns that indicate an edit request
+      const isEditRequest = /\b(make it|change it|change that|actually|instead|edit|update|modify|say|says)\b/i.test(lower)
+      
+      if (isEditRequest) {
+        // Extract the new content from the edit request
+        let newContent = message
+        
+        // Try to extract the actual edit content
+        // "Make it so it says it's at Pauley actually" -> "it's at Pauley"
+        // "Change it to X" -> "X"
+        // "Actually make it say X" -> "X"
+        
+        // Pattern: "make it (so it)? say(s)? X"
+        let match = message.match(/\bmake it(?:\s+so it)?\s+says?\s+(.+)/i)
+        if (match) {
+          newContent = match[1].replace(/\s*(actually|instead)\s*$/i, '').trim()
+        }
+        
+        // Pattern: "change it to X" / "change that to X"
+        if (!match) {
+          match = message.match(/\bchange\s+(?:it|that)\s+to\s+(.+)/i)
+          if (match) newContent = match[1].trim()
+        }
+        
+        // Pattern: "actually X" at start
+        if (!match) {
+          match = message.match(/^actually[,\s]+(.+)/i)
+          if (match) newContent = match[1].trim()
+        }
+        
+        // Pattern: "X instead"
+        if (!match) {
+          match = message.match(/^(.+)\s+instead\s*$/i)
+          if (match) newContent = match[1].trim()
+        }
+        
+        // Pattern: contains location change like "at X" when draft has "at Y"
+        const locationMatch = message.match(/\bat\s+(\w+(?:\s+\w+)*)\s*(?:actually|instead)?\s*$/i)
+        if (locationMatch && existingDraft.content.includes(' at ')) {
+          // Replace the location in the existing draft
+          newContent = existingDraft.content.replace(/\bat\s+[^.!?]+/i, `at ${locationMatch[1]}`)
+        } else if (newContent === message && locationMatch) {
+          // Just use the extracted location change
+          newContent = existingDraft.content.replace(/\bat\s+[^.!?]+/i, `at ${locationMatch[1]}`)
+        }
+        
+        // If we couldn't parse a clear edit, treat the whole message as new content
+        // but try to be smart about it
+        if (newContent === message) {
+          // Remove common edit prefixes
+          newContent = message
+            .replace(/^(make it|change it|actually|edit|update)\s*(so\s*)?(it\s*)?(says?\s*)?/i, '')
+            .replace(/\s*(actually|instead)\s*$/i, '')
+            .trim()
+        }
+        
+        // Update the draft
+        if (newContent && newContent.length > 0) {
+          existingDraft.content = existingDraft.type === 'poll' ? normalizePollQuestion(newContent) : newContent
+          adminDrafts.set(phone, existingDraft)
+          const emoji = existingDraft.type === 'poll' ? '📊' : '📝'
+          return `${emoji} updated draft:\n\n"${existingDraft.content}"\n\nreply "send" to send to everyone, or "cancel" to discard`
+        }
+      }
+    }
+    
     // Intent-based parsing for announcements and polls
     const parsedIntent = parseAdminIntent(message)
     

@@ -82,19 +82,30 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
     const tableName = getTableName()
     const normalizedSearch = normalizePhone(phone)
     
-    console.log(`[DB] getUserByPhone: searching for normalized phone "${normalizedSearch}"`)
+    console.log(`[DB] getUserByPhone: searching for "${phone}" -> normalized: "${normalizedSearch}"`)
     
     // Fetch all records and find by normalized phone (Airtable stores formatted phones)
     const records = await base(tableName)
       .select({})
       .all()
     
+    console.log(`[DB] getUserByPhone: checking ${records.length} records...`)
+    
+    // Log all available field names from first record
+    if (records.length > 0) {
+      console.log(`[DB] getUserByPhone: available fields:`, Object.keys(records[0].fields))
+    }
+    
     for (const r of records) {
-      const rawPhone = extractPhone(r.fields.Phone)
+      // Try multiple possible field names for phone
+      const phoneField = r.fields.Phone ?? r.fields.phone ?? r.fields.PHONE ?? r.fields['Phone Number'] ?? r.fields['phone number']
+      const rawPhone = extractPhone(phoneField)
       const normalizedRecord = normalizePhone(rawPhone)
       
+      console.log(`[DB] getUserByPhone: record ${r.id} -> raw: "${rawPhone}" -> normalized: "${normalizedRecord}" (match: ${normalizedRecord === normalizedSearch})`)
+      
       if (normalizedRecord === normalizedSearch) {
-        console.log(`[DB] getUserByPhone: found match! Record ${r.id} with phone "${rawPhone}"`)
+        console.log(`[DB] getUserByPhone: FOUND MATCH! Record ${r.id}`)
         return {
           id: r.id,
           phone: rawPhone,
@@ -108,7 +119,7 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
       }
     }
     
-    console.log(`[DB] getUserByPhone: no match found for "${normalizedSearch}"`)
+    console.log(`[DB] getUserByPhone: NO MATCH found for "${normalizedSearch}" after checking ${records.length} records`)
     return null
   } catch (error) {
     console.error('getUserByPhone error:', error)

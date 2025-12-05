@@ -313,9 +313,23 @@ function parsePollResponse(message: string): { response: string; notes: string |
   return { response: 'Unknown', notes: message }
 }
 
-export async function GET() {
-  // Diagnostic endpoint - shows opted-in users (no sensitive data exposed)
+export async function GET(request: NextRequest) {
+  // Diagnostic endpoint - shows raw Airtable data for debugging
   try {
+    // Import Airtable directly for raw access
+    const Airtable = (await import('airtable')).default
+    Airtable.configure({ apiKey: process.env.AIRTABLE_API_KEY })
+    const base = Airtable.base(process.env.AIRTABLE_BASE_ID!)
+    const tableName = process.env.AIRTABLE_TABLE_NAME || 'Enclave'
+    
+    const records = await base(tableName).select({}).all()
+    
+    const rawRecords = records.map(r => ({
+      id: r.id,
+      fields: r.fields,
+      fieldNames: Object.keys(r.fields)
+    }))
+    
     const users = await getOptedInUsers()
     const summary = users.map(u => ({
       id: u.id,
@@ -328,9 +342,12 @@ export async function GET() {
     
     return NextResponse.json({
       status: 'running',
-      userCount: users.length,
+      tableName,
+      rawRecordCount: records.length,
+      rawRecords: rawRecords.slice(0, 5), // Show first 5 raw records for debugging
+      processedUserCount: users.length,
       usersWithValidPhone: users.filter(u => u.phone && normalizePhone(u.phone).length >= 10).length,
-      users: summary
+      processedUsers: summary
     })
   } catch (error) {
     return NextResponse.json({

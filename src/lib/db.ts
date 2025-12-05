@@ -117,13 +117,17 @@ export async function getOptedInUsers(): Promise<User[]> {
   try {
     const base = getBase()
     const tableName = getTableName()
+    
+    // Get all users first, then filter - checkbox fields in Airtable can be tricky
     const records = await base(tableName)
       .select({
-        filterByFormula: `OR({Opted_Out} = FALSE(), {Opted_Out} = BLANK())`
+        filterByFormula: `NOT({Opted_Out} = TRUE())`
       })
       .all()
     
-    return records.map(r => ({
+    console.log(`[DB] getOptedInUsers: found ${records.length} total records`)
+    
+    const users = records.map(r => ({
       id: r.id,
       phone: String(r.fields.Phone || ''),
       name: r.fields.Name ? String(r.fields.Name) : null,
@@ -133,6 +137,13 @@ export async function getOptedInUsers(): Promise<User[]> {
       last_response: r.fields.Last_Response ? String(r.fields.Last_Response) : null,
       last_notes: r.fields.Last_Notes ? String(r.fields.Last_Notes) : null
     }))
+    
+    // Log users with phones for debugging
+    const usersWithPhones = users.filter(u => u.phone && u.phone.length >= 10)
+    console.log(`[DB] getOptedInUsers: ${usersWithPhones.length} users have valid phone numbers`)
+    usersWithPhones.forEach(u => console.log(`[DB]   - ${u.name || 'unnamed'}: ${u.phone}`))
+    
+    return users
   } catch (error) {
     console.error('getOptedInUsers error:', error)
     return []

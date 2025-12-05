@@ -221,15 +221,37 @@ async function sendAnnouncementToAll(content: string, senderPhone?: string): Pro
   const users = await getOptedInUsers()
   const senderNormalized = senderPhone ? normalizePhone(senderPhone) : null
   let sent = 0
+  let skipped = 0
+  
+  console.log(`[Announce] Sending to ${users.length} users (excluding sender: ${senderNormalized})`)
   
   for (const user of users) {
+    const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
+    
+    // Skip users without valid phone numbers
+    if (!user.phone || user.phone.length < 10) {
+      console.log(`[Announce] Skipping user ${user.id} - no valid phone`)
+      skipped++
+      continue
+    }
+    
     // Skip the admin who sent the announcement
-    if (user.phone && normalizePhone(user.phone) !== senderNormalized) {
-      const result = await sendSms(toE164(user.phone), content)
-      if (result.ok) sent++
+    if (userPhoneNormalized === senderNormalized) {
+      console.log(`[Announce] Skipping sender: ${user.phone}`)
+      skipped++
+      continue
+    }
+    
+    console.log(`[Announce] Sending to ${user.name || 'unnamed'} (${user.phone})`)
+    const result = await sendSms(toE164(user.phone), content)
+    if (result.ok) {
+      sent++
+    } else {
+      console.log(`[Announce] Failed to send to ${user.phone}: ${result.error}`)
     }
   }
   
+  console.log(`[Announce] Complete: sent=${sent}, skipped=${skipped}`)
   return `✅ sent to ${sent} people!`
 }
 

@@ -87,18 +87,32 @@ function parseAdminIntent(message: string): { type: 'announcement' | 'poll' | nu
       // Extract the question/content
       let content = original
       
-      // Special handling for "who's coming" patterns - use the full question
+      // Special handling for "who's coming" patterns - capture FULL semantic question
       if (/\b(who'?s|who is|who can|who will)\s+(coming|going|attending|make it|be there|show up)/i.test(lower)) {
-        // For "who's coming" patterns, extract everything after "who's" to get the full question
+        // Extract EVERYTHING after "who's" to preserve complete semantic meaning
+        // Example: "who's coming to the meeting tonight" -> "coming to the meeting tonight"
         const whoMatch = original.match(/\b(who'?s|who is|who can|who will)\s+(.+)/i)
         if (whoMatch && whoMatch[2]) {
-          // Use everything after "who's" - this captures "coming to the meeting tonight"
+          // Use everything after "who's" - this preserves the FULL question semantically
           content = whoMatch[2].trim()
+          // Ensure we got the full question, not just "coming"
+          if (content.length < 10) {
+            // If we only got a short word, try to get more context from original
+            const fullMatch = original.match(/\b(who'?s|who is|who can|who will)\s+(.+)/i)
+            if (fullMatch && fullMatch[2] && fullMatch[2].length > content.length) {
+              content = fullMatch[2].trim()
+            }
+          }
         } else {
-          // Fallback: remove command words and use the rest
+          // Fallback: remove command words semantically
           content = original.replace(/\b(send|send out|create|make|start|post|ask|asking|poll)\s+(a\s+)?(poll|message)?\s*/i, '').trim()
-          // If it still starts with "who's", remove that too
-          content = content.replace(/^(who'?s|who is|who can|who will)\s+/i, '').trim()
+          // Extract everything after "who's" if present
+          const remainingWhoMatch = content.match(/^(who'?s|who is|who can|who will)\s+(.+)/i)
+          if (remainingWhoMatch && remainingWhoMatch[2]) {
+            content = remainingWhoMatch[2].trim()
+          } else {
+            content = content.replace(/^(who'?s|who is|who can|who will)\s+/i, '').trim()
+          }
         }
       } else {
         // For other patterns, remove command phrases
@@ -884,16 +898,12 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
   return `✅ poll sent to ${sent} people!`
 }
 
-// Normalize poll question - preserve full question, only add prefix if needed
+// Normalize poll question - preserve full semantic question, minimal transformation
 function normalizePollQuestion(raw: string): string {
   let q = raw.trim()
-  // Preserve the full question - don't truncate
+  // Only ensure it ends with a question mark - preserve the full semantic meaning
   if (!q.endsWith('?')) q += '?'
-  // Only add prefix if question doesn't already start with common question words
-  // This preserves questions like "who's coming to the meeting tonight?" as-is
-  if (!/^(are|do|will|can|is|yo|who|what|when|where|how|coming|going)/i.test(q)) {
-    q = `yo are you coming to ${q.replace(/\?$/, '')}?`
-  }
+  // Don't do any hardcoded transformations - preserve what the admin asked
   return q
 }
 

@@ -9,24 +9,35 @@ import { ToneLevel, PersonalityConfig, DEFAULT_PERSONALITY } from './types'
 // EMOJI HELPERS
 // ============================================
 
-// Common emoji ranges (simplified for compatibility)
-const EMOJI_PATTERN = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]/u
-
 /**
  * Check if string ends with an emoji
+ * Uses simple pattern matching without Unicode flag
  */
 function endsWithEmoji(str: string): boolean {
   if (!str) return false
-  // Check last few characters (emoji can be multi-byte)
+  // Check last few characters for common emoji patterns
   const lastChars = str.slice(-4)
-  return EMOJI_PATTERN.test(lastChars)
+  // Match common emoji ranges (simplified, no Unicode flag)
+  return /[\u2600-\u27BF]$/.test(lastChars) || 
+         /\uD83C[\uDF00-\uDFFF]$/.test(lastChars) ||
+         /\uD83D[\uDC00-\uDE4F]$/.test(lastChars) ||
+         /\uD83D[\uDE80-\uDEFF]$/.test(lastChars)
 }
 
 /**
  * Remove emoji from string
+ * Uses simple pattern matching without Unicode flag
  */
 export function removeEmoji(str: string): string {
-  return str.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]/gu, '').trim()
+  if (!str) return ''
+  // Remove emoji using simple patterns (no Unicode flag needed)
+  return str
+    .replace(/[\u2600-\u27BF]/g, '') // Miscellaneous symbols
+    .replace(/\uD83C[\uDF00-\uDFFF]/g, '') // Emoji with D83C prefix
+    .replace(/\uD83D[\uDC00-\uDE4F]/g, '') // Emoticons
+    .replace(/\uD83D[\uDE80-\uDEFF]/g, '') // Transport symbols
+    .replace(/\uD83E[\uDD00-\uDDFF]/g, '') // Additional emoji
+    .trim()
 }
 
 // ============================================

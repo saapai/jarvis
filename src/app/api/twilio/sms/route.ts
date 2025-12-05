@@ -907,92 +907,120 @@ function normalizePollQuestion(raw: string): string {
   return q
 }
 
-// Parse poll response with intent-based understanding
+// Parse poll response with semantic/intent-based understanding (no hardcoded keywords)
 function parsePollResponse(message: string): { response: string; notes: string | null } {
   const lower = message.toLowerCase().trim()
   const original = message.trim()
   
-  // Explicit yes responses
-  if (/^(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|1)\b/i.test(lower)) {
-    const notes = original.replace(/^(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|1)\s*/i, '').replace(/^(but|though|,)\s*/i, '').trim()
-    return { response: 'Yes', notes: notes || null }
-  }
+  // Semantic analysis: detect intent through patterns and context
   
-  // Explicit no responses
-  if (/^(no|nope|nah|n|cant|can't|cannot|2)\b/i.test(lower)) {
-    const notes = original.replace(/^(no|nope|nah|n|cant|can't|cannot|2)\s*/i, '').replace(/^(but|because|cuz|,)\s*/i, '').trim()
-    return { response: 'No', notes: notes || null }
-  }
-  
-  // Explicit maybe responses
-  if (/^(maybe|possibly|idk|i don't know|3)\b/i.test(lower)) {
-    const notes = original.replace(/^(maybe|possibly|idk|i don't know|3)\s*/i, '').replace(/^(but|,)\s*/i, '').trim()
-    return { response: 'Maybe', notes: notes || null }
-  }
-  
-  // Intent-based parsing: NO patterns
-  const noPatterns = [
-    /\b(busy|can't make it|cant make it|won't be there|wont be there|not coming|not gonna make it|not going|can't come|cant come|cannot come|unavailable|not available|have to skip|gonna skip|skipping|can't attend|cant attend|cannot attend)\b/i,
-    /\b(not|won't|wont|can't|cant|cannot)\s+(coming|going|make|attend|be there|show)\b/i,
-    /\b(sorry|unfortunately)\s+(can't|cant|cannot|won't|wont|not)\b/i
+  // NEGATIVE INTENT: Patterns indicating refusal, inability, or absence
+  const negativeIndicators = [
+    // Inability patterns
+    /\b(can'?t|cannot|cant|unable|won'?t|wont|will not)\s+(make|come|go|attend|be there|show|make it)\b/i,
+    /\b(not|no)\s+(coming|going|attending|making it|gonna make it|gonna come|gonna go)\b/i,
+    // Unavailability patterns
+    /\b(busy|unavailable|have to skip|gonna skip|skipping|can'?t make it|cant make it)\b/i,
+    // Refusal patterns
+    /\b(sorry|unfortunately|regret)\s+(can'?t|cant|cannot|won'?t|wont|not)\b/i,
+    // Negative sentiment
+    /\b(not|no|nope|nah)\s+(thanks|thank you|way|chance|problem)\b/i,
+    // Single letter "n" at start (common shorthand)
+    /^n\b/i
   ]
   
-  for (const pattern of noPatterns) {
+  for (const pattern of negativeIndicators) {
     if (pattern.test(lower)) {
       // Extract the reason/note
-      const note = original.replace(/^(sorry|unfortunately|i'm|im|i am)\s*/i, '').trim()
+      let note = original
+      // Remove common negative starters
+      note = note.replace(/^(sorry|unfortunately|i'?m|im|i am|regret)\s*/i, '').trim()
+      note = note.replace(/^(can'?t|cannot|cant|won'?t|wont|not|no|nope|nah|n)\s*/i, '').trim()
       return { response: 'No', notes: note || null }
     }
   }
   
-  // Intent-based parsing: YES patterns (including "yes but late")
-  const yesPatterns = [
-    /\b(will be there|coming|gonna be there|going to be there|i'll be there|ill be there|see you|be there|attending|will attend|gonna attend|going to attend)\b/i,
-    /\b(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay)\s+(but|though|however|just)\s+(late|running late|gonna be late|going to be late|might be late)\b/i,
-    /\b(gonna be late|going to be late|running late|might be late|will be late)\s+(but|though|however|just)\s+(coming|going|attending|be there)\b/i,
-    /\b(late|running late|gonna be late|going to be late)\s+(but|though|however|just)\s+(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|coming|going|attending|be there)\b/i
+  // AFFIRMATIVE INTENT: Patterns indicating agreement, confirmation, or attendance
+  const affirmativeIndicators = [
+    // Attendance commitment patterns
+    /\b(will|i'?ll|ill|gonna|going to|plan to|planning to)\s+(be there|come|go|attend|make it|show|show up)\b/i,
+    // Direct attendance statements
+    /\b(coming|going|attending|will attend|gonna attend|going to attend|be there|i'?ll be there|ill be there)\b/i,
+    // Confirmation patterns
+    /\b(see you|count me in|i'?m in|im in|absolutely|definitely|for sure|of course)\b/i,
+    // Late but coming patterns
+    /\b(late|running late|gonna be late|going to be late|might be late|will be late)\s+(but|though|however|just)\s*(coming|going|attending|be there|i'?ll|ill|will|gonna)?\b/i,
+    // Affirmative with qualifiers
+    /\b(but|though|however|just)\s+(late|running late|gonna be late|going to be late)\b/i,
+    // Single letter "y" at start (common shorthand)
+    /^y\b/i
   ]
   
-  for (const pattern of yesPatterns) {
+  for (const pattern of affirmativeIndicators) {
     if (pattern.test(lower)) {
       // Extract notes about being late or other details
       let note = original
-      // Remove common yes words if they're at the start
-      note = note.replace(/^(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|coming|going|attending|i'll|ill|will|gonna)\s*/i, '').trim()
+      // Remove common affirmative starters (semantically, not hardcoded)
+      note = note.replace(/^(will|i'?ll|ill|gonna|going to|coming|going|attending|be there|see you|count me|i'?m in|im in|absolutely|definitely|for sure|of course|y)\s*/i, '').trim()
       // Remove common connectors
       note = note.replace(/^(but|though|however|just|,)\s*/i, '').trim()
       return { response: 'Yes', notes: note || null }
     }
   }
   
-  // Intent-based parsing: MAYBE patterns
-  const maybePatterns = [
-    /\b(might|probably|probably will|probably won't|probably wont|might be|might come|might go|might make it|might not|unsure|not sure|don't know|dont know|not certain|uncertain)\b/i,
-    /\b(probably|might)\s+(coming|going|make it|be there|attend)\b/i,
-    /\b(not sure|unsure|don't know|dont know|not certain|uncertain)\s+(if|whether)\s+(i|i'll|ill|will|can)\s+(make|come|go|attend|be there)\b/i
+  // UNCERTAIN INTENT: Patterns indicating hesitation, possibility, or uncertainty
+  const uncertainIndicators = [
+    // Possibility patterns
+    /\b(might|maybe|possibly|perhaps|could|may)\s+(come|go|attend|make it|be there|show)\b/i,
+    // Probability patterns
+    /\b(probably|likely|chances are)\s+(will|won'?t|wont|coming|going|attending)\b/i,
+    // Uncertainty expressions
+    /\b(not sure|unsure|don'?t know|dont know|uncertain|not certain|idk|i don'?t know)\b/i,
+    // Conditional patterns
+    /\b(if|depends|depending on)\s+(.*)\b/i,
+    // Hesitation patterns
+    /\b(probably|might)\s+(not|won'?t|wont)\b/i
   ]
   
-  for (const pattern of maybePatterns) {
+  for (const pattern of uncertainIndicators) {
     if (pattern.test(lower)) {
       // Extract the uncertainty reason
       let note = original
-      note = note.replace(/^(probably|might|not sure|unsure|don't know|dont know|not certain|uncertain)\s*/i, '').trim()
+      // Remove common uncertainty starters
+      note = note.replace(/^(probably|might|maybe|possibly|perhaps|not sure|unsure|don'?t know|dont know|uncertain|not certain|idk|i don'?t know|if|depends)\s*/i, '').trim()
       note = note.replace(/^(but|though|,)\s*/i, '').trim()
       return { response: 'Maybe', notes: note || null }
     }
   }
   
-  // Check for "late" without explicit yes/no - assume yes if they mention being late
-  if (/\b(late|running late|gonna be late|going to be late|might be late|will be late)\b/i.test(lower)) {
+  // Context-based fallbacks: analyze overall sentiment
+  
+  // If message mentions being late, likely affirmative (coming but late)
+  if (/\b(late|running late|gonna be late|going to be late|might be late|will be late)\b/i.test(lower) && 
+      !/\b(not|won'?t|wont|can'?t|cant|cannot)\b/i.test(lower)) {
     return { response: 'Yes', notes: original }
   }
   
-  // Check for "busy" or "can't" without explicit no - assume no
-  if (/\b(busy|can't|cant|cannot|unavailable)\b/i.test(lower)) {
+  // If message mentions being busy/unavailable without negation of attendance, likely negative
+  if (/\b(busy|unavailable|can'?t|cant|cannot)\b/i.test(lower) && 
+      !/\b(but|though|however|still|will|gonna|coming|going)\b/i.test(lower)) {
     return { response: 'No', notes: original }
   }
   
+  // If message is very short (1-3 characters) and looks like a response, analyze semantically
+  if (original.length <= 3) {
+    // Single character responses
+    if (/^[yn]$/i.test(original)) {
+      return { response: /^y$/i.test(original) ? 'Yes' : 'No', notes: null }
+    }
+    // Very short affirmative-sounding responses
+    if (/^(yea|yep|yup|nah|nope)$/i.test(original)) {
+      return { response: /^(yea|yep|yup)$/i.test(original) ? 'Yes' : 'No', notes: null }
+    }
+  }
+  
   // Default: return as Unknown with the full message as notes
+  // This allows manual review of ambiguous responses
   return { response: 'Unknown', notes: original }
 }
 

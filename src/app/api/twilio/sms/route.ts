@@ -442,57 +442,70 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
       }
       
       console.log(`[Poll] Now setting ${actualPendingPollField}="${question}" for record ${user.id}`)
-      const updateFields: Record<string, unknown> = {
-        [actualPendingPollField]: question
-      }
-      const updateResult = await updateUser(user.id, updateFields)
       
-      if (updateResult) {
-        console.log(`[Poll] ✓ Successfully set ${actualPendingPollField} for ${user.id}`)
+      // Use Airtable API directly to ensure the update happens
+      let updateSuccess = false
+      try {
+        console.log(`[Poll] Attempting direct Airtable update...`)
+        const updateResult = await base(tableName).update(user.id, { [actualPendingPollField]: question } as any)
+        console.log(`[Poll] Direct update succeeded. Updated fields:`, Object.keys(updateResult.fields))
+        updateSuccess = true
+        
+        // Wait a moment for Airtable to process
+        await new Promise(resolve => setTimeout(resolve, 500))
         
         // Verify it was actually set by checking the actual Airtable record
-        try {
-          const record = await base(tableName).find(user.id)
-          const recordFields = Object.keys(record.fields)
-          const pendingPollValue = record.fields[actualPendingPollField]
-          
-          console.log(`[Poll] Checking actual Airtable record...`)
-          console.log(`[Poll] Record fields:`, recordFields)
-          console.log(`[Poll] ${actualPendingPollField} value in record:`, pendingPollValue)
-          
-          if (pendingPollValue && String(pendingPollValue).trim() === question.trim()) {
-            console.log(`[Poll] Verified: ${actualPendingPollField} was set to "${pendingPollValue}"`)
-          } else if (pendingPollValue) {
-            console.error(`[Poll] WARNING: ${actualPendingPollField} has different value: "${pendingPollValue}" (expected: "${question}")`)
-          } else {
-            console.error(`[Poll] WARNING: ${actualPendingPollField} was not set! Field is still empty.`)
-            console.error(`[Poll] Attempting direct update...`)
-            // Try direct update
-            try {
-              const directUpdate = await base(tableName).update(user.id, { [actualPendingPollField]: question } as any)
-              console.log(`[Poll] Direct update result fields:`, Object.keys(directUpdate.fields))
-              const finalRecord = await base(tableName).find(user.id)
-              const finalValue = finalRecord.fields[actualPendingPollField]
-              if (finalValue && String(finalValue).trim() === question.trim()) {
-                console.log(`[Poll] Successfully set with direct update: "${finalValue}"`)
-              } else {
-                console.error(`[Poll] Still not set after direct update. Value: "${finalValue}"`)
-              }
-            } catch (directError) {
-              console.error(`[Poll] Direct update failed:`, directError)
+        const record = await base(tableName).find(user.id)
+        const recordFields = Object.keys(record.fields)
+        const pendingPollValue = record.fields[actualPendingPollField]
+        
+        console.log(`[Poll] Checking actual Airtable record after update...`)
+        console.log(`[Poll] Record fields:`, recordFields)
+        console.log(`[Poll] ${actualPendingPollField} value in record:`, pendingPollValue)
+        
+        if (pendingPollValue && String(pendingPollValue).trim() === question.trim()) {
+          console.log(`[Poll] ✓ Verified: ${actualPendingPollField} was set to "${pendingPollValue}"`)
+        } else if (pendingPollValue) {
+          console.error(`[Poll] ✗ WARNING: ${actualPendingPollField} has different value: "${pendingPollValue}" (expected: "${question}")`)
+          // Try updating again with the exact field name from the record
+          const exactFieldName = recordFields.find(f => f.toLowerCase().includes('pending') && f.toLowerCase().includes('poll'))
+          if (exactFieldName && exactFieldName !== actualPendingPollField) {
+            console.log(`[Poll] Found exact field name "${exactFieldName}", trying update with that...`)
+            await base(tableName).update(user.id, { [exactFieldName]: question } as any)
+            const retryRecord = await base(tableName).find(user.id)
+            const retryValue = retryRecord.fields[exactFieldName]
+            if (retryValue && String(retryValue).trim() === question.trim()) {
+              console.log(`[Poll] ✓ Successfully set using exact field name "${exactFieldName}"`)
+            } else {
+              console.error(`[Poll] ✗ Still not set. Value: "${retryValue}"`)
             }
           }
-        } catch (verifyError) {
-          console.error(`[Poll] Could not verify:`, verifyError)
-          // Fallback to our user check
-          const updatedUser = await getUserByPhone(userPhoneNormalized)
-          if (updatedUser && updatedUser.pending_poll) {
-            console.log(`[Poll] Verified via getUserByPhone: ${actualPendingPollField} was set to "${updatedUser.pending_poll}"`)
-          } else {
-            console.error(`[Poll] WARNING: ${actualPendingPollField} appears empty via getUserByPhone`)
-          }
+        } else {
+          console.error(`[Poll] ✗ WARNING: ${actualPendingPollField} was not set! Field is still empty.`)
+          console.error(`[Poll] Field name "${actualPendingPollField}" might not exist or be writable`)
+          console.error(`[Poll] Available fields in record:`, recordFields)
+          updateFailed++
         }
-      } else {
+      } catch (directError: any) {
+        console.error(`[Poll] ✗ Direct update failed:`, directError)
+        console.error(`[Poll] Error details:`, directError.message || directError.error || String(directError))
+        
+        // Fallback to updateUser
+        console.log(`[Poll] Trying fallback with updateUser...`)
+        const updateFields: Record<string, unknown> = {
+          [actualPendingPollField]: question
+        }
+        const updateResult = await updateUser(user.id, updateFields)
+        if (updateResult) {
+          console.log(`[Poll] Fallback updateUser succeeded`)
+          updateSuccess = true
+        } else {
+          console.error(`[Poll] Fallback also failed`)
+          updateFailed++
+        }
+      }
+      
+      if (!updateSuccess) {
         console.error(`[Poll] ✗ FAILED to set ${actualPendingPollField} for ${user.id}`)
         console.error(`[Poll] This likely means the field name doesn't match. Tried: "${actualPendingPollField}"`)
         updateFailed++

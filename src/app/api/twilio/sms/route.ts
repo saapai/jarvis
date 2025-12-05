@@ -247,13 +247,67 @@ text STOP to unsubscribe`
                 break
               }
             }
+            // If still not found, search for any field containing "pending" and "poll"
+            if (actualPendingPollField === 'Pending_Poll') {
+              const matchingField = schemaFieldNames.find((f: string) => {
+                const lower = f.toLowerCase()
+                return lower.includes('pending') && lower.includes('poll')
+              })
+              if (matchingField) {
+                actualPendingPollField = matchingField
+                console.log(`[PollResponse] Found matching field in schema: "${matchingField}"`)
+              }
+            }
           }
           
+          // Find Last_Response field name
           if (schemaFieldNames.includes('Last_Response')) {
             actualLastResponseField = 'Last_Response'
+          } else {
+            // Try variations
+            const lastResponseVariations = ['last_response', 'Last Response', 'last response', 'LastResponse']
+            for (const variation of lastResponseVariations) {
+              if (schemaFieldNames.includes(variation)) {
+                actualLastResponseField = variation
+                break
+              }
+            }
+            // If still not found, search for any field containing "last" and "response"
+            if (actualLastResponseField === 'Last_Response') {
+              const matchingField = schemaFieldNames.find((f: string) => {
+                const lower = f.toLowerCase()
+                return lower.includes('last') && lower.includes('response')
+              })
+              if (matchingField) {
+                actualLastResponseField = matchingField
+                console.log(`[PollResponse] Found Last_Response field in schema: "${matchingField}"`)
+              }
+            }
           }
+          
+          // Find Last_Notes field name
           if (schemaFieldNames.includes('Last_Notes')) {
             actualLastNotesField = 'Last_Notes'
+          } else {
+            // Try variations
+            const lastNotesVariations = ['last_notes', 'Last Notes', 'last notes', 'LastNotes', 'Last_Notes\t']
+            for (const variation of lastNotesVariations) {
+              if (schemaFieldNames.includes(variation)) {
+                actualLastNotesField = variation
+                break
+              }
+            }
+            // If still not found, search for any field containing "last" and "notes"
+            if (actualLastNotesField === 'Last_Notes') {
+              const matchingField = schemaFieldNames.find((f: string) => {
+                const lower = f.toLowerCase()
+                return lower.includes('last') && lower.includes('notes')
+              })
+              if (matchingField) {
+                actualLastNotesField = matchingField
+                console.log(`[PollResponse] Found Last_Notes field in schema: "${matchingField}"`)
+              }
+            }
           }
         }
       }
@@ -282,19 +336,72 @@ text STOP to unsubscribe`
       console.log(`[PollResponse] Could not fetch record to check field names, using defaults`)
     }
     
-    console.log(`[PollResponse] Using field name "${actualPendingPollField}" to clear pending poll`)
+    console.log(`[PollResponse] Using field names: Pending_Poll="${actualPendingPollField}", Last_Response="${actualLastResponseField}", Last_Notes="${actualLastNotesField}"`)
     
-    // Update response fields first
+    // Update response fields first - use direct Airtable API update for reliability
     const responseFields: Record<string, unknown> = {
       [actualLastResponseField]: parsed.response,
       [actualLastNotesField]: parsed.notes || ''
     }
     
     console.log(`[PollResponse] Updating response fields:`, responseFields)
-    const updateResult = await updateUser(user.id, responseFields)
+    console.log(`[PollResponse] Field names (hex):`, {
+      Last_Response: Array.from(actualLastResponseField).map(c => c.charCodeAt(0).toString(16)).join(' '),
+      Last_Notes: Array.from(actualLastNotesField).map(c => c.charCodeAt(0).toString(16)).join(' ')
+    })
     
-    if (!updateResult) {
-      console.error(`[PollResponse] FAILED to update user ${user.id} - check Airtable field names`)
+    let responseUpdateSuccess = false
+    try {
+      console.log(`[PollResponse] Attempting direct Airtable update for response fields...`)
+      const updateResult = await base(tableName).update(user.id, responseFields as any)
+      console.log(`[PollResponse] Direct update succeeded. Updated fields:`, Object.keys(updateResult.fields))
+      console.log(`[PollResponse] Update result values:`, {
+        Last_Response: updateResult.fields[actualLastResponseField],
+        Last_Notes: updateResult.fields[actualLastNotesField]
+      })
+      responseUpdateSuccess = true
+      
+      // Wait a moment for Airtable to process
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Verify the fields were actually set
+      const verifyRecord = await base(tableName).find(user.id)
+      const verifyResponse = verifyRecord.fields[actualLastResponseField]
+      const verifyNotes = verifyRecord.fields[actualLastNotesField]
+      
+      console.log(`[PollResponse] Verification - Last_Response: "${verifyResponse}", Last_Notes: "${verifyNotes}"`)
+      
+      if (verifyResponse && String(verifyResponse).trim() === parsed.response.trim()) {
+        console.log(`[PollResponse] ✓ Verified: Last_Response was set to "${verifyResponse}"`)
+      } else {
+        console.error(`[PollResponse] ✗ WARNING: Last_Response not set correctly. Expected: "${parsed.response}", Got: "${verifyResponse}"`)
+      }
+    } catch (directError: any) {
+      console.error(`[PollResponse] Direct update failed:`, directError.message || directError)
+      console.error(`[PollResponse] Error details:`, directError.error || directError.statusCode)
+      
+      // Fallback to updateUser
+      console.log(`[PollResponse] Trying updateUser as fallback...`)
+      const updateResult = await updateUser(user.id, responseFields)
+      if (updateResult) {
+        console.log(`[PollResponse] Fallback updateUser succeeded`)
+        // Verify the fallback actually worked
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const verifyRecord = await base(tableName).find(user.id)
+        const verifyResponse = verifyRecord.fields[actualLastResponseField]
+        if (verifyResponse && String(verifyResponse).trim() === parsed.response.trim()) {
+          console.log(`[PollResponse] ✓ Verified fallback update succeeded`)
+          responseUpdateSuccess = true
+        } else {
+          console.error(`[PollResponse] ✗ Fallback update reported success but field not set. Value: "${verifyResponse}"`)
+        }
+      } else {
+        console.error(`[PollResponse] Fallback also failed`)
+      }
+    }
+    
+    if (!responseUpdateSuccess) {
+      console.error(`[PollResponse] FAILED to update response fields for user ${user.id} - check Airtable field names`)
       return "sorry, there was an error recording your response. please try again."
     }
     

@@ -311,5 +311,28 @@ function parsePollResponse(message: string): { response: string; notes: string |
 }
 
 export async function GET() {
-  return new NextResponse('SMS webhook running', { status: 200 })
+  // Diagnostic endpoint - shows opted-in users (no sensitive data exposed)
+  try {
+    const users = await getOptedInUsers()
+    const summary = users.map(u => ({
+      id: u.id,
+      name: u.name || '(no name)',
+      hasPhone: !!u.phone && u.phone.length >= 10,
+      phoneLength: u.phone?.length || 0,
+      phoneLast4: u.phone ? u.phone.slice(-4) : 'none',
+      optedOut: u.opted_out
+    }))
+    
+    return NextResponse.json({
+      status: 'running',
+      userCount: users.length,
+      usersWithValidPhone: users.filter(u => u.phone && u.phone.length >= 10).length,
+      users: summary
+    })
+  } catch (error) {
+    return NextResponse.json({
+      status: 'error',
+      error: String(error)
+    }, { status: 500 })
+  }
 }

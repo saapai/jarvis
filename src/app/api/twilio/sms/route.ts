@@ -357,14 +357,65 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
       sent++
       // Mark user as having pending poll
       console.log(`[Poll] SMS sent successfully to ${user.name || 'unnamed'} (${userPhoneNormalized})`)
-      console.log(`[Poll] Now setting Pending_Poll="${question}" for record ${user.id}`)
-      const updateResult = await updateUser(user.id, { Pending_Poll: question })
+      
+      // Get the actual field name from the record to ensure we use the correct one
+      const Airtable = (await import('airtable')).default
+      Airtable.configure({ apiKey: process.env.AIRTABLE_API_KEY })
+      const base = Airtable.base(process.env.AIRTABLE_BASE_ID!)
+      const tableName = process.env.AIRTABLE_TABLE_NAME || 'Enclave'
+      
+      let actualPendingPollField = 'Pending_Poll'
+      
+      try {
+        const record = await base(tableName).find(user.id)
+        const recordFields = Object.keys(record.fields)
+        console.log(`[Poll] Available fields in record ${user.id}:`, recordFields)
+        
+        // Find the actual field name (might have tabs or different casing)
+        if (recordFields.includes('Pending_Poll')) {
+          actualPendingPollField = 'Pending_Poll'
+        } else if (recordFields.includes('Pending_Poll\t')) {
+          actualPendingPollField = 'Pending_Poll\t'
+        } else {
+          // Try to find any variation - check schema fields too
+          const pendingPollVariations = ['Pending_Poll', 'Pending_Poll\t', 'pending_poll', 'Pending Poll']
+          for (const variation of pendingPollVariations) {
+            if (recordFields.includes(variation)) {
+              actualPendingPollField = variation
+              break
+            }
+          }
+          // If not found in record fields (because it's empty), use the schema
+          if (actualPendingPollField === 'Pending_Poll' && recordFields.length > 0) {
+            // Field might be empty, so use default - updateUser will try variations
+            console.log(`[Poll] Pending_Poll field not in record (likely empty), using default name`)
+          }
+        }
+        
+        console.log(`[Poll] Using field name "${actualPendingPollField}" to set pending poll`)
+      } catch (fetchError) {
+        console.log(`[Poll] Could not fetch record to check field names, using default: ${fetchError}`)
+      }
+      
+      console.log(`[Poll] Now setting ${actualPendingPollField}="${question}" for record ${user.id}`)
+      const updateFields: Record<string, unknown> = {
+        [actualPendingPollField]: question
+      }
+      const updateResult = await updateUser(user.id, updateFields)
+      
       if (updateResult) {
-        console.log(`[Poll] ✓ Successfully set Pending_Poll for ${user.id}`)
+        console.log(`[Poll] ✓ Successfully set ${actualPendingPollField} for ${user.id}`)
+        
+        // Verify it was actually set
+        const updatedUser = await getUserByPhone(userPhoneNormalized)
+        if (updatedUser && updatedUser.pending_poll) {
+          console.log(`[Poll] Verified: ${actualPendingPollField} was set to "${updatedUser.pending_poll}"`)
+        } else {
+          console.error(`[Poll] WARNING: ${actualPendingPollField} was not set! Field is still empty.`)
+        }
       } else {
-        console.error(`[Poll] ✗ FAILED to set Pending_Poll for ${user.id}`)
-        console.error(`[Poll] This likely means the "Pending_Poll" field doesn't exist in your Airtable table`)
-        console.error(`[Poll] Please add a "Pending_Poll" field (Single line text) to your Airtable`)
+        console.error(`[Poll] ✗ FAILED to set ${actualPendingPollField} for ${user.id}`)
+        console.error(`[Poll] This likely means the field name doesn't match. Tried: "${actualPendingPollField}"`)
         updateFailed++
       }
     } else {

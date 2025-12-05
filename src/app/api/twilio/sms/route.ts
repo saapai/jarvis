@@ -206,15 +206,64 @@ text STOP to unsubscribe`
     console.log(`[PollResponse] User ${user.id} (${user.name}) responding to poll: "${user.pending_poll}"`)
     console.log(`[PollResponse] Parsed response: ${parsed.response}, notes: ${parsed.notes || 'none'}`)
     
-    const updateResult = await updateUser(user.id, {
-      Pending_Poll: '',  // Clear pending poll
-      Last_Response: parsed.response,
-      Last_Notes: parsed.notes || ''
-    })
+    // Get the actual field names from the record to ensure we use the correct ones
+    const Airtable = (await import('airtable')).default
+    Airtable.configure({ apiKey: process.env.AIRTABLE_API_KEY })
+    const base = Airtable.base(process.env.AIRTABLE_BASE_ID!)
+    const tableName = process.env.AIRTABLE_TABLE_NAME || 'Enclave'
+    
+    let actualPendingPollField = 'Pending_Poll'
+    let actualLastResponseField = 'Last_Response'
+    let actualLastNotesField = 'Last_Notes'
+    
+    try {
+      const record = await base(tableName).find(user.id)
+      const recordFields = Object.keys(record.fields)
+      console.log(`[PollResponse] Available fields in record:`, recordFields)
+      
+      // Find the actual field names (might have tabs or different casing)
+      if (recordFields.includes('Pending_Poll')) {
+        actualPendingPollField = 'Pending_Poll'
+      } else if (recordFields.includes('Pending_Poll\t')) {
+        actualPendingPollField = 'Pending_Poll\t'
+      } else {
+        // Try to find any variation
+        const pendingPollVariations = ['Pending_Poll', 'Pending_Poll\t', 'pending_poll', 'Pending Poll']
+        for (const variation of pendingPollVariations) {
+          if (recordFields.includes(variation)) {
+            actualPendingPollField = variation
+            break
+          }
+        }
+      }
+      
+      console.log(`[PollResponse] Using field name "${actualPendingPollField}" to clear pending poll`)
+    } catch (fetchError) {
+      console.log(`[PollResponse] Could not fetch record to check field names, using defaults`)
+    }
+    
+    // Update all fields together using the actual field names
+    const updateFields: Record<string, unknown> = {
+      [actualPendingPollField]: '',  // Clear pending poll
+      [actualLastResponseField]: parsed.response,
+      [actualLastNotesField]: parsed.notes || ''
+    }
+    
+    console.log(`[PollResponse] Updating with fields:`, updateFields)
+    const updateResult = await updateUser(user.id, updateFields)
     
     if (!updateResult) {
       console.error(`[PollResponse] FAILED to update user ${user.id} - check Airtable field names`)
       return "sorry, there was an error recording your response. please try again."
+    }
+    
+    // Verify the field was actually cleared by re-fetching the user
+    const updatedUser = await getUserByPhone(phone)
+    if (updatedUser && updatedUser.pending_poll) {
+      console.error(`[PollResponse] WARNING: Pending_Poll was not cleared! Still has: "${updatedUser.pending_poll}"`)
+      console.error(`[PollResponse] Field name used: "${actualPendingPollField}"`)
+    } else {
+      console.log(`[PollResponse] Verified: Pending_Poll was successfully cleared`)
     }
     
     console.log(`[PollResponse] Successfully recorded response for user ${user.id}`)

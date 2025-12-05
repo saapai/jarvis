@@ -227,8 +227,10 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
     
     // Try the update with normal field names first (user fixed the tab issue)
     try {
+      console.log(`[DB] updateUser: Attempting update with fields:`, Object.keys(fields))
       const result = await base(tableName).update(recordId, fields as Airtable.FieldSet)
       console.log(`[DB] updateUser: SUCCESS - updated record ${result.id}`)
+      console.log(`[DB] updateUser: Updated fields in result:`, Object.keys(result.fields))
       return true
     } catch (updateError: unknown) {
       const err = updateError as { message?: string; error?: string; statusCode?: number }

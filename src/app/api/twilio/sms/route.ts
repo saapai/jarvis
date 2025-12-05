@@ -75,8 +75,8 @@ function parseAdminIntent(message: string): { type: 'announcement' | 'poll' | nu
     // "send out a message asking if", "ask everyone if", "ask people if"
     /\b(send|send out|text|message)\s+(everyone|people|all|the group|the team)\s+(asking|to ask|if|whether)\s+(.+)/i,
     /\b(ask|asking)\s+(everyone|people|all|the group|the team|everybody)\s+(if|whether|about)\s+(.+)/i,
-    // "who's coming", "who is coming", "who can make it"
-    /\b(who'?s|who is|who can|who will)\s+(coming|going|attending|make it|be there|show up)\b/i,
+    // "who's coming", "who is coming", "who can make it" - capture full question
+    /\b(who'?s|who is|who can|who will)\s+(coming|going|attending|make it|be there|show up)/i,
     // "poll about X", "poll for X"
     /\bpoll\s+(about|for|on)\s+(.+)/i
   ]
@@ -87,26 +87,41 @@ function parseAdminIntent(message: string): { type: 'announcement' | 'poll' | nu
       // Extract the question/content
       let content = original
       
-      // Remove command phrases
-      content = content.replace(/\b(send|send out|create|make|start|post)\s+(a\s+)?poll\b/i, '').trim()
-      content = content.replace(/\b(send|send out|text|message)\s+(everyone|people|all|the group|the team)\s+(asking|to ask|if|whether)\s*/i, '').trim()
-      content = content.replace(/\b(ask|asking)\s+(everyone|people|all|the group|the team|everybody)\s+(if|whether|about)\s*/i, '').trim()
-      content = content.replace(/\bpoll\s+(about|for|on)\s+/i, '').trim()
-      
-      // If we matched a pattern that captures content in a group, use that
-      if (match.length > 1 && match[match.length - 1]) {
-        const capturedContent = match[match.length - 1]
-        if (capturedContent && capturedContent.length > 3) {
-          content = capturedContent.trim()
+      // Special handling for "who's coming" patterns - use the full question
+      if (/\b(who'?s|who is|who can|who will)\s+(coming|going|attending|make it|be there|show up)/i.test(lower)) {
+        // For "who's coming" patterns, extract everything after "who's" to get the full question
+        const whoMatch = original.match(/\b(who'?s|who is|who can|who will)\s+(.+)/i)
+        if (whoMatch && whoMatch[2]) {
+          // Use everything after "who's" - this captures "coming to the meeting tonight"
+          content = whoMatch[2].trim()
+        } else {
+          // Fallback: remove command words and use the rest
+          content = original.replace(/\b(send|send out|create|make|start|post|ask|asking|poll)\s+(a\s+)?(poll|message)?\s*/i, '').trim()
+          // If it still starts with "who's", remove that too
+          content = content.replace(/^(who'?s|who is|who can|who will)\s+/i, '').trim()
         }
-      }
-      
-      // If content is still the full message, try to extract the question part
-      if (content === original || content.length < 5) {
-        // Look for question words or phrases
-        const questionMatch = original.match(/\b(if|whether|who|what|when|where|how|are|is|will|can|do)\s+(.+)/i)
-        if (questionMatch && questionMatch[2]) {
-          content = questionMatch[2].trim()
+      } else {
+        // For other patterns, remove command phrases
+        content = content.replace(/\b(send|send out|create|make|start|post)\s+(a\s+)?poll\b/i, '').trim()
+        content = content.replace(/\b(send|send out|text|message)\s+(everyone|people|all|the group|the team)\s+(asking|to ask|if|whether)\s*/i, '').trim()
+        content = content.replace(/\b(ask|asking)\s+(everyone|people|all|the group|the team|everybody)\s+(if|whether|about)\s*/i, '').trim()
+        content = content.replace(/\bpoll\s+(about|for|on)\s+/i, '').trim()
+        
+        // If we matched a pattern that captures content in a group, use that
+        if (match.length > 1 && match[match.length - 1]) {
+          const capturedContent = match[match.length - 1]
+          if (capturedContent && capturedContent.length > 3) {
+            content = capturedContent.trim()
+          }
+        }
+        
+        // If content is still the full message, try to extract the question part
+        if (content === original || content.length < 5) {
+          // Look for question words or phrases
+          const questionMatch = original.match(/\b(if|whether|who|what|when|where|how|are|is|will|can|do)\s+(.+)/i)
+          if (questionMatch && questionMatch[2]) {
+            content = questionMatch[2].trim()
+          }
         }
       }
       
@@ -869,11 +884,14 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
   return `✅ poll sent to ${sent} people!`
 }
 
-// Normalize poll question
+// Normalize poll question - preserve full question, only add prefix if needed
 function normalizePollQuestion(raw: string): string {
   let q = raw.trim()
+  // Preserve the full question - don't truncate
   if (!q.endsWith('?')) q += '?'
-  if (!/^(are|do|will|can|is|yo|coming|going)/i.test(q)) {
+  // Only add prefix if question doesn't already start with common question words
+  // This preserves questions like "who's coming to the meeting tonight?" as-is
+  if (!/^(are|do|will|can|is|yo|who|what|when|where|how|coming|going)/i.test(q)) {
     q = `yo are you coming to ${q.replace(/\?$/, '')}?`
   }
   return q

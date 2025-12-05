@@ -913,8 +913,8 @@ function parsePollResponse(message: string): { response: string; notes: string |
   const original = message.trim()
   
   // Explicit yes responses
-  if (/^(yes|yeah|yep|ya|y|sure|ok|okay|1)\b/i.test(lower)) {
-    const notes = original.replace(/^(yes|yeah|yep|ya|y|sure|ok|okay|1)\s*/i, '').replace(/^(but|though|,)\s*/i, '').trim()
+  if (/^(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|1)\b/i.test(lower)) {
+    const notes = original.replace(/^(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|1)\s*/i, '').replace(/^(but|though|,)\s*/i, '').trim()
     return { response: 'Yes', notes: notes || null }
   }
   
@@ -948,9 +948,9 @@ function parsePollResponse(message: string): { response: string; notes: string |
   // Intent-based parsing: YES patterns (including "yes but late")
   const yesPatterns = [
     /\b(will be there|coming|gonna be there|going to be there|i'll be there|ill be there|see you|be there|attending|will attend|gonna attend|going to attend)\b/i,
-    /\b(yes|yeah|yep|ya|y|sure|ok|okay)\s+(but|though|however|just)\s+(late|running late|gonna be late|going to be late|might be late)\b/i,
+    /\b(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay)\s+(but|though|however|just)\s+(late|running late|gonna be late|going to be late|might be late)\b/i,
     /\b(gonna be late|going to be late|running late|might be late|will be late)\s+(but|though|however|just)\s+(coming|going|attending|be there)\b/i,
-    /\b(late|running late|gonna be late|going to be late)\s+(but|though|however|just)\s+(yes|yeah|yep|ya|y|sure|ok|okay|coming|going|attending|be there)\b/i
+    /\b(late|running late|gonna be late|going to be late)\s+(but|though|however|just)\s+(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|coming|going|attending|be there)\b/i
   ]
   
   for (const pattern of yesPatterns) {
@@ -958,7 +958,7 @@ function parsePollResponse(message: string): { response: string; notes: string |
       // Extract notes about being late or other details
       let note = original
       // Remove common yes words if they're at the start
-      note = note.replace(/^(yes|yeah|yep|ya|y|sure|ok|okay|coming|going|attending|i'll|ill|will|gonna)\s*/i, '').trim()
+      note = note.replace(/^(yes|yeah|yep|ya|y|yea|yup|yess|sure|ok|okay|coming|going|attending|i'll|ill|will|gonna)\s*/i, '').trim()
       // Remove common connectors
       note = note.replace(/^(but|though|however|just|,)\s*/i, '').trim()
       return { response: 'Yes', notes: note || null }

@@ -13,12 +13,12 @@ import {
 } from './types'
 
 import {
-  getWeightedHistory,
-  addToHistory,
+  getConversationHistory,
+  addConversationTurn,
   getDraft,
-  loadStateFromAirtable,
-  getStateForAirtable
+  getRawHistory
 } from './history'
+import { WeightedTurn, HISTORY_WEIGHTS } from './types'
 
 import { classifyIntent } from './classifier'
 
@@ -39,8 +39,6 @@ export interface PlannerInput {
   phone: string
   message: string
   user: UserContext
-  // Optional: conversation history from Airtable
-  conversationHistoryJson?: string | null
   // Optional: content search function
   searchContent?: (query: string) => Promise<{ title: string; body: string; score: number }[]>
   // Required for sending drafts
@@ -51,7 +49,6 @@ export interface PlannerInput {
 export interface PlannerResult {
   response: string
   action: string
-  newConversationHistoryJson: string
   classification: ClassificationResult
 }
 
@@ -63,42 +60,40 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
     phone,
     message,
     user,
-    conversationHistoryJson,
     searchContent,
     sendAnnouncement,
     sendPoll
   } = input
   
-  // Load conversation history from Airtable if provided
-  if (conversationHistoryJson) {
-    loadStateFromAirtable(phone, conversationHistoryJson)
-  }
-  
   // Handle empty messages
   if (!message || message.trim().length === 0) {
     const result = handleEmptyMessage(user.name)
-    addToHistory(phone, 'user', message)
-    addToHistory(phone, 'assistant', result.response, result.action)
+    addConversationTurn(phone, message, 'user')
+    addConversationTurn(phone, result.response, 'assistant')
     
     return {
       response: result.response,
       action: result.action,
-      newConversationHistoryJson: getStateForAirtable(phone),
       classification: { action: 'chat', confidence: 1.0 }
     }
   }
   
   // Add user message to history
-  addToHistory(phone, 'user', message)
+  addConversationTurn(phone, message, 'user')
   
   // Build classification context
-  const weightedHistory = getWeightedHistory(phone)
+  const { turns } = getConversationHistory(phone, 5)
+  const weightedHistory: WeightedTurn[] = turns.map((turn, i) => {
+    const weightIndex = turns.length - 1 - i
+    const weight = HISTORY_WEIGHTS[weightIndex] || 0.2
+    return { ...turn, weight }
+  })
   const activeDraft = getDraft(phone)
   
   const classificationContext = {
     currentMessage: message,
     history: weightedHistory,
-    activeDraft,
+    activeDraft: activeDraft || null,
     isAdmin: user.isAdmin,
     userName: user.name
   }
@@ -113,7 +108,7 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
     user,
     currentMessage: message,
     history: weightedHistory,
-    activeDraft,
+    activeDraft: activeDraft || null,
     timestamp: Date.now()
   }
   
@@ -179,13 +174,12 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
   }
   
   // Add assistant response to history
-  addToHistory(phone, 'assistant', result.response, result.action)
+  addConversationTurn(phone, result.response, 'assistant')
   
-  // Return result with updated history
+  // Return result
   return {
     response: result.response,
     action: result.action,
-    newConversationHistoryJson: getStateForAirtable(phone),
     classification
   }
 }

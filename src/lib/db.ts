@@ -22,6 +22,46 @@ function getTableName(): string {
 }
 
 // ============================================
+// UTILITIES (defined early for use in user operations)
+// ============================================
+
+export function normalizePhone(phone: string): string {
+  const digits = phone.replace(/[^\d]/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return digits.substring(1)
+  }
+  return digits.slice(-10)
+}
+
+// Extract phone from various Airtable field formats
+function extractPhone(field: unknown): string {
+  if (!field) return ''
+  
+  // If it's already a string
+  if (typeof field === 'string') {
+    return field
+  }
+  
+  // If it's an object (some Airtable field types return objects)
+  if (typeof field === 'object') {
+    const obj = field as Record<string, unknown>
+    // Try common properties
+    if (obj.text) return String(obj.text)
+    if (obj.number) return String(obj.number)
+    if (obj.value) return String(obj.value)
+    // Fallback: stringify and extract digits
+    return JSON.stringify(obj)
+  }
+  
+  // If it's a number
+  if (typeof field === 'number') {
+    return String(field)
+  }
+  
+  return String(field)
+}
+
+// ============================================
 // USER OPERATIONS
 // ============================================
 
@@ -40,26 +80,36 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
   try {
     const base = getBase()
     const tableName = getTableName()
+    const normalizedSearch = normalizePhone(phone)
+    
+    console.log(`[DB] getUserByPhone: searching for normalized phone "${normalizedSearch}"`)
+    
+    // Fetch all records and find by normalized phone (Airtable stores formatted phones)
     const records = await base(tableName)
-      .select({
-        filterByFormula: `{Phone} = '${phone}'`,
-        maxRecords: 1
-      })
-      .firstPage()
+      .select({})
+      .all()
     
-    if (records.length === 0) return null
-    
-    const r = records[0]
-    return {
-      id: r.id,
-      phone: String(r.fields.Phone || ''),
-      name: r.fields.Name ? String(r.fields.Name) : null,
-      needs_name: r.fields.Needs_Name === true,
-      opted_out: r.fields.Opted_Out === true,
-      pending_poll: r.fields.Pending_Poll ? String(r.fields.Pending_Poll) : null,
-      last_response: r.fields.Last_Response ? String(r.fields.Last_Response) : null,
-      last_notes: r.fields.Last_Notes ? String(r.fields.Last_Notes) : null
+    for (const r of records) {
+      const rawPhone = extractPhone(r.fields.Phone)
+      const normalizedRecord = normalizePhone(rawPhone)
+      
+      if (normalizedRecord === normalizedSearch) {
+        console.log(`[DB] getUserByPhone: found match! Record ${r.id} with phone "${rawPhone}"`)
+        return {
+          id: r.id,
+          phone: rawPhone,
+          name: r.fields.Name ? String(r.fields.Name) : null,
+          needs_name: r.fields.Needs_Name === true || r.fields.needs_name === true,
+          opted_out: r.fields.Opted_Out === true || r.fields.opted_out === true,
+          pending_poll: r.fields.Pending_Poll ? String(r.fields.Pending_Poll) : (r.fields.pending_poll ? String(r.fields.pending_poll) : null),
+          last_response: r.fields.Last_Response ? String(r.fields.Last_Response) : (r.fields.last_response ? String(r.fields.last_response) : null),
+          last_notes: r.fields.Last_Notes ? String(r.fields.Last_Notes) : (r.fields.last_notes ? String(r.fields.last_notes) : null)
+        }
+      }
     }
+    
+    console.log(`[DB] getUserByPhone: no match found for "${normalizedSearch}"`)
+    return null
   } catch (error) {
     console.error('getUserByPhone error:', error)
     return null
@@ -113,34 +163,6 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
   }
 }
 
-// Extract phone from various Airtable field formats
-function extractPhone(field: unknown): string {
-  if (!field) return ''
-  
-  // If it's already a string
-  if (typeof field === 'string') {
-    return field
-  }
-  
-  // If it's an object (some Airtable field types return objects)
-  if (typeof field === 'object') {
-    const obj = field as Record<string, unknown>
-    // Try common properties
-    if (obj.text) return String(obj.text)
-    if (obj.number) return String(obj.number)
-    if (obj.value) return String(obj.value)
-    // Fallback: stringify and extract digits
-    return JSON.stringify(obj)
-  }
-  
-  // If it's a number
-  if (typeof field === 'number') {
-    return String(field)
-  }
-  
-  return String(field)
-}
-
 export async function getOptedInUsers(): Promise<User[]> {
   try {
     const base = getBase()
@@ -186,18 +208,6 @@ export async function getOptedInUsers(): Promise<User[]> {
     console.error('getOptedInUsers error:', error)
     return []
   }
-}
-
-// ============================================
-// UTILITIES
-// ============================================
-
-export function normalizePhone(phone: string): string {
-  const digits = phone.replace(/[^\d]/g, '')
-  if (digits.length === 11 && digits.startsWith('1')) {
-    return digits.substring(1)
-  }
-  return digits.slice(-10)
 }
 
 export function toE164(phone: string): string {

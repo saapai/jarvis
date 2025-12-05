@@ -254,7 +254,7 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
         let foundMatch = false
         
         for (const [originalField, value] of Object.entries(fields)) {
-          // First check if field exists as-is
+          // First check if field exists as-is in availableFields
           if (availableFields.includes(originalField)) {
             adjustedFields[originalField] = value
             foundMatch = true
@@ -272,14 +272,22 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
               }
             }
             if (!matched) {
-              console.error(`[DB] updateUser: Could not find field "${originalField}" or any variations in available fields`)
-              // Still try the original - sometimes Airtable accepts it even if not in availableFields
+              // Field not in availableFields - this can happen if the field is empty
+              // Still try the original field name - Airtable may accept it even if not in availableFields
+              // This is especially important when clearing fields (empty string or null)
+              const isClearingField = value === null || value === '' || (typeof value === 'string' && value.trim() === '')
+              if (isClearingField) {
+                console.log(`[DB] updateUser: Field "${originalField}" not in availableFields (likely empty), but trying to clear it - using original name`)
+              } else {
+                console.error(`[DB] updateUser: Could not find field "${originalField}" or any variations in available fields`)
+              }
               adjustedFields[originalField] = value
             }
           }
         }
         
-        if (foundMatch && Object.keys(adjustedFields).length > 0) {
+        // Try the update with adjusted fields (even if some fields weren't in availableFields)
+        if (Object.keys(adjustedFields).length > 0) {
           try {
             const result = await base(tableName).update(recordId, adjustedFields as Airtable.FieldSet)
             console.log(`[DB] updateUser: SUCCESS with field variations - updated record ${result.id}`)

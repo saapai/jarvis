@@ -206,7 +206,8 @@ text STOP to unsubscribe`
     console.log(`[PollResponse] User ${user.id} (${user.name}) responding to poll: "${user.pending_poll}"`)
     console.log(`[PollResponse] Parsed response: ${parsed.response}, notes: ${parsed.notes || 'none'}`)
     
-    // Get the actual field names from the record to ensure we use the correct ones
+    // Get the actual field names from the schema to ensure we use the correct ones
+    // (Record fields don't include empty fields, so we need to check the schema)
     const Airtable = (await import('airtable')).default
     Airtable.configure({ apiKey: process.env.AIRTABLE_API_KEY })
     const base = Airtable.base(process.env.AIRTABLE_BASE_ID!)
@@ -216,19 +217,60 @@ text STOP to unsubscribe`
     let actualLastResponseField = 'Last_Response'
     let actualLastNotesField = 'Last_Notes'
     
+    // First, try to get field names from the table schema (includes all fields, even empty ones)
+    try {
+      const apiKey = process.env.AIRTABLE_API_KEY
+      const baseId = process.env.AIRTABLE_BASE_ID
+      const schemaResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (schemaResponse.ok) {
+        const meta = await schemaResponse.json()
+        const table = meta.tables?.find((t: any) => t.name === tableName)
+        if (table && table.fields) {
+          const schemaFieldNames = table.fields.map((f: any) => f.name)
+          console.log(`[PollResponse] Schema fields:`, schemaFieldNames)
+          
+          // Find exact field names from schema
+          if (schemaFieldNames.includes('Pending_Poll')) {
+            actualPendingPollField = 'Pending_Poll'
+          } else {
+            // Try variations
+            const pendingPollVariations = ['Pending_Poll\t', 'pending_poll', 'Pending Poll', 'pending poll']
+            for (const variation of pendingPollVariations) {
+              if (schemaFieldNames.includes(variation)) {
+                actualPendingPollField = variation
+                break
+              }
+            }
+          }
+          
+          if (schemaFieldNames.includes('Last_Response')) {
+            actualLastResponseField = 'Last_Response'
+          }
+          if (schemaFieldNames.includes('Last_Notes')) {
+            actualLastNotesField = 'Last_Notes'
+          }
+        }
+      }
+    } catch (schemaError) {
+      console.log(`[PollResponse] Could not fetch schema, will try record fields:`, schemaError)
+    }
+    
+    // Fallback: try to get field names from the record (but empty fields won't be there)
     try {
       const record = await base(tableName).find(user.id)
       const recordFields = Object.keys(record.fields)
       console.log(`[PollResponse] Available fields in record:`, recordFields)
       
-      // Find the actual field names (might have tabs or different casing)
-      if (recordFields.includes('Pending_Poll')) {
-        actualPendingPollField = 'Pending_Poll'
-      } else if (recordFields.includes('Pending_Poll\t')) {
-        actualPendingPollField = 'Pending_Poll\t'
-      } else {
-        // Try to find any variation
-        const pendingPollVariations = ['Pending_Poll', 'Pending_Poll\t', 'pending_poll', 'Pending Poll']
+      // If we didn't find Pending_Poll in schema, try record fields
+      if (actualPendingPollField === 'Pending_Poll' && !recordFields.includes('Pending_Poll')) {
+        // Try variations in record fields
+        const pendingPollVariations = ['Pending_Poll\t', 'pending_poll', 'Pending Poll']
         for (const variation of pendingPollVariations) {
           if (recordFields.includes(variation)) {
             actualPendingPollField = variation
@@ -236,11 +278,11 @@ text STOP to unsubscribe`
           }
         }
       }
-      
-      console.log(`[PollResponse] Using field name "${actualPendingPollField}" to clear pending poll`)
     } catch (fetchError) {
       console.log(`[PollResponse] Could not fetch record to check field names, using defaults`)
     }
+    
+    console.log(`[PollResponse] Using field name "${actualPendingPollField}" to clear pending poll`)
     
     // Update response fields first
     const responseFields: Record<string, unknown> = {
@@ -256,16 +298,32 @@ text STOP to unsubscribe`
       return "sorry, there was an error recording your response. please try again."
     }
     
-    // Now clear Pending_Poll separately - try null first, then empty string
+    // Now clear Pending_Poll separately - use empty string (Airtable text fields should be cleared with '', not null)
     console.log(`[PollResponse] Attempting to clear ${actualPendingPollField}`)
-    let clearResult = await updateUser(user.id, { [actualPendingPollField]: null })
     
-    if (!clearResult) {
-      console.log(`[PollResponse] Null didn't work, trying empty string...`)
+    // Try direct Airtable update first (more reliable than updateUser for clearing)
+    let clearResult = false
+    try {
+      console.log(`[PollResponse] Trying direct Airtable update with empty string...`)
+      const directUpdate = await base(tableName).update(user.id, { [actualPendingPollField]: '' } as any)
+      console.log(`[PollResponse] Direct update succeeded. Updated fields:`, Object.keys(directUpdate.fields))
+      clearResult = true
+    } catch (directError: any) {
+      console.error(`[PollResponse] Direct update failed:`, directError.message || directError)
+      // Fallback to updateUser
+      console.log(`[PollResponse] Trying updateUser as fallback...`)
       clearResult = await updateUser(user.id, { [actualPendingPollField]: '' })
+      if (!clearResult) {
+        console.log(`[PollResponse] updateUser also failed, trying null...`)
+        clearResult = await updateUser(user.id, { [actualPendingPollField]: null })
+      }
     }
     
+    // Wait a moment for Airtable to process the update
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
     // Verify the field was actually cleared by checking the actual Airtable record
+    // Note: Airtable doesn't return empty fields, so if the field is not in the response, it's cleared
     try {
       const record = await base(tableName).find(user.id)
       const recordFields = Object.keys(record.fields)
@@ -275,29 +333,37 @@ text STOP to unsubscribe`
       console.log(`[PollResponse] Record fields:`, recordFields)
       console.log(`[PollResponse] Pending_Poll value in record:`, pendingPollValue)
       
-      if (pendingPollValue && String(pendingPollValue).trim() !== '') {
+      // If the field is not in recordFields, it means it's empty (Airtable doesn't return empty fields)
+      // If it is in recordFields but has a value, that's a problem
+      if (recordFields.includes(actualPendingPollField) && pendingPollValue && String(pendingPollValue).trim() !== '') {
         console.error(`[PollResponse] WARNING: Pending_Poll still has value: "${pendingPollValue}"`)
         console.error(`[PollResponse] Field name used: "${actualPendingPollField}"`)
         console.error(`[PollResponse] Clear result: ${clearResult}`)
         
-        // Try one more direct update with empty string
-        console.log(`[PollResponse] Trying direct update with empty string...`)
+        // Try one more time with direct update
+        console.log(`[PollResponse] Retrying direct update with empty string...`)
         try {
-          const directUpdate = await base(tableName).update(user.id, { [actualPendingPollField]: '' } as any)
-          console.log(`[PollResponse] Direct update result fields:`, Object.keys(directUpdate.fields))
+          await base(tableName).update(user.id, { [actualPendingPollField]: '' } as any)
+          await new Promise(resolve => setTimeout(resolve, 500))
           const finalRecord = await base(tableName).find(user.id)
           const finalValue = finalRecord.fields[actualPendingPollField]
           if (finalValue && String(finalValue).trim() !== '') {
-            console.error(`[PollResponse] Still not cleared after direct update. Final value: "${finalValue}"`)
+            console.error(`[PollResponse] Still not cleared after retry. Final value: "${finalValue}"`)
             console.error(`[PollResponse] This may be an Airtable API limitation - field may need manual clearing`)
           } else {
-            console.log(`[PollResponse] Successfully cleared with direct update`)
+            console.log(`[PollResponse] Successfully cleared with retry`)
           }
-        } catch (directError) {
-          console.error(`[PollResponse] Direct update failed:`, directError)
+        } catch (retryError) {
+          console.error(`[PollResponse] Retry also failed:`, retryError)
         }
       } else {
-        console.log(`[PollResponse] Verified: Pending_Poll was successfully cleared (value: ${pendingPollValue})`)
+        // Field is either not in recordFields (empty) or has empty value - both mean it's cleared
+        console.log(`[PollResponse] Verified: Pending_Poll was successfully cleared`)
+        if (recordFields.includes(actualPendingPollField)) {
+          console.log(`[PollResponse] Field exists but is empty: "${pendingPollValue}"`)
+        } else {
+          console.log(`[PollResponse] Field not in response (Airtable doesn't return empty fields)`)
+        }
       }
     } catch (verifyError) {
       console.error(`[PollResponse] Could not verify:`, verifyError)

@@ -468,7 +468,8 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
       // Mark user as having pending poll
       console.log(`[Poll] SMS sent successfully to ${user.name || 'unnamed'} (${userPhoneNormalized})`)
       
-      // Get the actual field name from the record to ensure we use the correct one
+      // Get the actual field name from the schema to ensure we use the correct one
+      // (Record fields don't include empty fields, so we need to check the schema)
       const Airtable = (await import('airtable')).default
       Airtable.configure({ apiKey: process.env.AIRTABLE_API_KEY })
       const base = Airtable.base(process.env.AIRTABLE_BASE_ID!)
@@ -476,36 +477,81 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
       
       let actualPendingPollField = 'Pending_Poll'
       
+      // First, try to get field name from the table schema (includes all fields, even empty ones)
+      try {
+        const apiKey = process.env.AIRTABLE_API_KEY
+        const baseId = process.env.AIRTABLE_BASE_ID
+        const schemaResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (schemaResponse.ok) {
+          const meta = await schemaResponse.json()
+          const table = meta.tables?.find((t: any) => t.name === tableName)
+          if (table && table.fields) {
+            const schemaFieldNames = table.fields.map((f: any) => f.name)
+            console.log(`[Poll] Schema fields:`, schemaFieldNames)
+            
+            // Find exact field name from schema - try exact match first
+            if (schemaFieldNames.includes('Pending_Poll')) {
+              actualPendingPollField = 'Pending_Poll'
+            } else {
+              // Try variations
+              const pendingPollVariations = ['Pending_Poll\t', 'pending_poll', 'Pending Poll', 'pending poll']
+              for (const variation of pendingPollVariations) {
+                if (schemaFieldNames.includes(variation)) {
+                  actualPendingPollField = variation
+                  break
+                }
+              }
+              
+              // If still not found, search for any field containing "pending" and "poll"
+              if (actualPendingPollField === 'Pending_Poll') {
+                const matchingField = schemaFieldNames.find(f => {
+                  const lower = f.toLowerCase()
+                  return lower.includes('pending') && lower.includes('poll')
+                })
+                if (matchingField) {
+                  actualPendingPollField = matchingField
+                  console.log(`[Poll] Found matching field in schema: "${matchingField}"`)
+                }
+              }
+            }
+          }
+        }
+      } catch (schemaError) {
+        console.log(`[Poll] Could not fetch schema, will try record fields:`, schemaError)
+      }
+      
+      // Fallback: try to get field names from the record (but empty fields won't be there)
       try {
         const record = await base(tableName).find(user.id)
         const recordFields = Object.keys(record.fields)
         console.log(`[Poll] Available fields in record ${user.id}:`, recordFields)
         
-        // Find the actual field name (might have tabs or different casing)
-        if (recordFields.includes('Pending_Poll')) {
-          actualPendingPollField = 'Pending_Poll'
-        } else if (recordFields.includes('Pending_Poll\t')) {
-          actualPendingPollField = 'Pending_Poll\t'
-        } else {
-          // Try to find any variation - check schema fields too
-          const pendingPollVariations = ['Pending_Poll', 'Pending_Poll\t', 'pending_poll', 'Pending Poll']
+        // If we didn't find Pending_Poll in schema, try record fields
+        if (actualPendingPollField === 'Pending_Poll' && !recordFields.includes('Pending_Poll')) {
+          // Try variations in record fields
+          const pendingPollVariations = ['Pending_Poll\t', 'pending_poll', 'Pending Poll']
           for (const variation of pendingPollVariations) {
             if (recordFields.includes(variation)) {
               actualPendingPollField = variation
               break
             }
           }
-          // If not found in record fields (because it's empty), use the schema
-          if (actualPendingPollField === 'Pending_Poll' && recordFields.length > 0) {
-            // Field might be empty, so use default - updateUser will try variations
-            console.log(`[Poll] Pending_Poll field not in record (likely empty), using default name`)
+          if (actualPendingPollField === 'Pending_Poll') {
+            console.log(`[Poll] Pending_Poll field not in record (likely empty), using schema name: "${actualPendingPollField}"`)
           }
         }
-        
-        console.log(`[Poll] Using field name "${actualPendingPollField}" to set pending poll`)
       } catch (fetchError) {
-        console.log(`[Poll] Could not fetch record to check field names, using default: ${fetchError}`)
+        console.log(`[Poll] Could not fetch record to check field names, using schema/default: ${fetchError}`)
       }
+      
+      console.log(`[Poll] Using field name "${actualPendingPollField}" to set pending poll`)
+      console.log(`[Poll] Field name length: ${actualPendingPollField.length}, contains tab: ${actualPendingPollField.includes('\t')}`)
       
       console.log(`[Poll] Now setting ${actualPendingPollField}="${question}" for record ${user.id}`)
       
@@ -513,12 +559,17 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
       let updateSuccess = false
       try {
         console.log(`[Poll] Attempting direct Airtable update...`)
-        const updateResult = await base(tableName).update(user.id, { [actualPendingPollField]: question } as any)
+        const updatePayload = { [actualPendingPollField]: question }
+        console.log(`[Poll] Update payload keys:`, Object.keys(updatePayload))
+        console.log(`[Poll] Update payload field name (hex):`, Array.from(actualPendingPollField).map(c => c.charCodeAt(0).toString(16)).join(' '))
+        
+        const updateResult = await base(tableName).update(user.id, updatePayload as any)
         console.log(`[Poll] Direct update succeeded. Updated fields:`, Object.keys(updateResult.fields))
+        console.log(`[Poll] Update result fields values:`, Object.entries(updateResult.fields).map(([k, v]) => `${k}="${v}"`).join(', '))
         updateSuccess = true
         
         // Wait a moment for Airtable to process
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise(resolve => setTimeout(resolve, 1000))
         
         // Verify it was actually set by checking the actual Airtable record
         const record = await base(tableName).find(user.id)
@@ -527,21 +578,36 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
         
         console.log(`[Poll] Checking actual Airtable record after update...`)
         console.log(`[Poll] Record fields:`, recordFields)
+        console.log(`[Poll] Record fields (hex):`, recordFields.map(f => `${f} [${Array.from(f).map(c => c.charCodeAt(0).toString(16)).join(' ')}]`))
         console.log(`[Poll] ${actualPendingPollField} value in record:`, pendingPollValue)
+        
+        // Check all fields that might contain the poll question
+        const allFieldValues = Object.entries(record.fields)
+          .filter(([k, v]) => v && String(v).includes(question.substring(0, 10)))
+          .map(([k, v]) => `${k}="${v}"`)
+        if (allFieldValues.length > 0) {
+          console.log(`[Poll] Fields containing question text:`, allFieldValues)
+        }
         
         if (pendingPollValue && String(pendingPollValue).trim() === question.trim()) {
           console.log(`[Poll] ✓ Verified: ${actualPendingPollField} was set to "${pendingPollValue}"`)
         } else if (pendingPollValue) {
           console.error(`[Poll] ✗ WARNING: ${actualPendingPollField} has different value: "${pendingPollValue}" (expected: "${question}")`)
           // Try updating again with the exact field name from the record
-          const exactFieldName = recordFields.find(f => f.toLowerCase().includes('pending') && f.toLowerCase().includes('poll'))
+          const exactFieldName = recordFields.find(f => {
+            const lower = f.toLowerCase()
+            return lower.includes('pending') && lower.includes('poll')
+          })
           if (exactFieldName && exactFieldName !== actualPendingPollField) {
             console.log(`[Poll] Found exact field name "${exactFieldName}", trying update with that...`)
+            console.log(`[Poll] Exact field name (hex):`, Array.from(exactFieldName).map(c => c.charCodeAt(0).toString(16)).join(' '))
             await base(tableName).update(user.id, { [exactFieldName]: question } as any)
+            await new Promise(resolve => setTimeout(resolve, 1000))
             const retryRecord = await base(tableName).find(user.id)
             const retryValue = retryRecord.fields[exactFieldName]
             if (retryValue && String(retryValue).trim() === question.trim()) {
               console.log(`[Poll] ✓ Successfully set using exact field name "${exactFieldName}"`)
+              updateSuccess = true
             } else {
               console.error(`[Poll] ✗ Still not set. Value: "${retryValue}"`)
             }
@@ -550,11 +616,48 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
           console.error(`[Poll] ✗ WARNING: ${actualPendingPollField} was not set! Field is still empty.`)
           console.error(`[Poll] Field name "${actualPendingPollField}" might not exist or be writable`)
           console.error(`[Poll] Available fields in record:`, recordFields)
-          updateFailed++
+          
+          // Try to find the field by searching all fields
+          const matchingField = recordFields.find(f => {
+            const lower = f.toLowerCase()
+            return lower.includes('pending') && lower.includes('poll')
+          })
+          if (matchingField) {
+            console.log(`[Poll] Found matching field "${matchingField}" in record, trying update...`)
+            try {
+              await base(tableName).update(user.id, { [matchingField]: question } as any)
+              await new Promise(resolve => setTimeout(resolve, 1000))
+              const retryRecord = await base(tableName).find(user.id)
+              const retryValue = retryRecord.fields[matchingField]
+              if (retryValue && String(retryValue).trim() === question.trim()) {
+                console.log(`[Poll] ✓ Successfully set using matching field "${matchingField}"`)
+                updateSuccess = true
+              } else {
+                console.error(`[Poll] ✗ Still failed. Value: "${retryValue}"`)
+                updateSuccess = false
+              }
+            } catch (retryError: any) {
+              console.error(`[Poll] ✗ Retry update failed:`, retryError.message || retryError)
+              updateSuccess = false
+            }
+          } else {
+            updateSuccess = false
+          }
+          
+          if (!updateSuccess) {
+            console.error(`[Poll] ✗ FAILED to set Pending_Poll field after all retries`)
+            updateFailed++
+          }
         }
       } catch (directError: any) {
         console.error(`[Poll] ✗ Direct update failed:`, directError)
-        console.error(`[Poll] Error details:`, directError.message || directError.error || String(directError))
+        console.error(`[Poll] Error type:`, directError.constructor?.name)
+        console.error(`[Poll] Error message:`, directError.message)
+        console.error(`[Poll] Error code:`, directError.error || directError.statusCode)
+        console.error(`[Poll] Error status:`, directError.status)
+        console.error(`[Poll] Full error:`, JSON.stringify(directError, null, 2))
+        console.error(`[Poll] Field name attempted: "${actualPendingPollField}"`)
+        console.error(`[Poll] Field name (hex):`, Array.from(actualPendingPollField).map(c => c.charCodeAt(0).toString(16)).join(' '))
         
         // Fallback to updateUser
         console.log(`[Poll] Trying fallback with updateUser...`)
@@ -564,9 +667,21 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
         const updateResult = await updateUser(user.id, updateFields)
         if (updateResult) {
           console.log(`[Poll] Fallback updateUser succeeded`)
-          updateSuccess = true
+          // Verify the fallback actually worked
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          const verifyRecord = await base(tableName).find(user.id)
+          const verifyValue = verifyRecord.fields[actualPendingPollField]
+          if (verifyValue && String(verifyValue).trim() === question.trim()) {
+            console.log(`[Poll] ✓ Verified fallback update succeeded`)
+            updateSuccess = true
+          } else {
+            console.error(`[Poll] ✗ Fallback update reported success but field not set. Value: "${verifyValue}"`)
+            updateSuccess = false
+            updateFailed++
+          }
         } else {
           console.error(`[Poll] Fallback also failed`)
+          updateSuccess = false
           updateFailed++
         }
       }

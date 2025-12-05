@@ -742,26 +742,93 @@ function normalizePollQuestion(raw: string): string {
   return q
 }
 
-// Parse poll response
+// Parse poll response with intent-based understanding
 function parsePollResponse(message: string): { response: string; notes: string | null } {
   const lower = message.toLowerCase().trim()
+  const original = message.trim()
   
-  if (/^(yes|yeah|yep|ya|y|sure|ok|1)\b/i.test(lower)) {
-    const notes = message.replace(/^(yes|yeah|yep|ya|y|sure|ok|1)\s*/i, '').replace(/^(but|though|,)\s*/i, '').trim()
+  // Explicit yes responses
+  if (/^(yes|yeah|yep|ya|y|sure|ok|okay|1)\b/i.test(lower)) {
+    const notes = original.replace(/^(yes|yeah|yep|ya|y|sure|ok|okay|1)\s*/i, '').replace(/^(but|though|,)\s*/i, '').trim()
     return { response: 'Yes', notes: notes || null }
   }
   
-  if (/^(no|nope|nah|n|cant|can't|2)\b/i.test(lower)) {
-    const notes = message.replace(/^(no|nope|nah|n|cant|can't|2)\s*/i, '').replace(/^(but|because|cuz|,)\s*/i, '').trim()
+  // Explicit no responses
+  if (/^(no|nope|nah|n|cant|can't|cannot|2)\b/i.test(lower)) {
+    const notes = original.replace(/^(no|nope|nah|n|cant|can't|cannot|2)\s*/i, '').replace(/^(but|because|cuz|,)\s*/i, '').trim()
     return { response: 'No', notes: notes || null }
   }
   
-  if (/^(maybe|possibly|idk|3)\b/i.test(lower)) {
-    const notes = message.replace(/^(maybe|possibly|idk|3)\s*/i, '').replace(/^(but|,)\s*/i, '').trim()
+  // Explicit maybe responses
+  if (/^(maybe|possibly|idk|i don't know|3)\b/i.test(lower)) {
+    const notes = original.replace(/^(maybe|possibly|idk|i don't know|3)\s*/i, '').replace(/^(but|,)\s*/i, '').trim()
     return { response: 'Maybe', notes: notes || null }
   }
   
-  return { response: 'Unknown', notes: message }
+  // Intent-based parsing: NO patterns
+  const noPatterns = [
+    /\b(busy|can't make it|cant make it|won't be there|wont be there|not coming|not gonna make it|not going|can't come|cant come|cannot come|unavailable|not available|have to skip|gonna skip|skipping|can't attend|cant attend|cannot attend)\b/i,
+    /\b(not|won't|wont|can't|cant|cannot)\s+(coming|going|make|attend|be there|show)\b/i,
+    /\b(sorry|unfortunately)\s+(can't|cant|cannot|won't|wont|not)\b/i
+  ]
+  
+  for (const pattern of noPatterns) {
+    if (pattern.test(lower)) {
+      // Extract the reason/note
+      const note = original.replace(/^(sorry|unfortunately|i'm|im|i am)\s*/i, '').trim()
+      return { response: 'No', notes: note || null }
+    }
+  }
+  
+  // Intent-based parsing: YES patterns (including "yes but late")
+  const yesPatterns = [
+    /\b(will be there|coming|gonna be there|going to be there|i'll be there|ill be there|see you|be there|attending|will attend|gonna attend|going to attend)\b/i,
+    /\b(yes|yeah|yep|ya|y|sure|ok|okay)\s+(but|though|however|just)\s+(late|running late|gonna be late|going to be late|might be late)\b/i,
+    /\b(gonna be late|going to be late|running late|might be late|will be late)\s+(but|though|however|just)\s+(coming|going|attending|be there)\b/i,
+    /\b(late|running late|gonna be late|going to be late)\s+(but|though|however|just)\s+(yes|yeah|yep|ya|y|sure|ok|okay|coming|going|attending|be there)\b/i
+  ]
+  
+  for (const pattern of yesPatterns) {
+    if (pattern.test(lower)) {
+      // Extract notes about being late or other details
+      let note = original
+      // Remove common yes words if they're at the start
+      note = note.replace(/^(yes|yeah|yep|ya|y|sure|ok|okay|coming|going|attending|i'll|ill|will|gonna)\s*/i, '').trim()
+      // Remove common connectors
+      note = note.replace(/^(but|though|however|just|,)\s*/i, '').trim()
+      return { response: 'Yes', notes: note || null }
+    }
+  }
+  
+  // Intent-based parsing: MAYBE patterns
+  const maybePatterns = [
+    /\b(might|probably|probably will|probably won't|probably wont|might be|might come|might go|might make it|might not|unsure|not sure|don't know|dont know|not certain|uncertain)\b/i,
+    /\b(probably|might)\s+(coming|going|make it|be there|attend)\b/i,
+    /\b(not sure|unsure|don't know|dont know|not certain|uncertain)\s+(if|whether)\s+(i|i'll|ill|will|can)\s+(make|come|go|attend|be there)\b/i
+  ]
+  
+  for (const pattern of maybePatterns) {
+    if (pattern.test(lower)) {
+      // Extract the uncertainty reason
+      let note = original
+      note = note.replace(/^(probably|might|not sure|unsure|don't know|dont know|not certain|uncertain)\s*/i, '').trim()
+      note = note.replace(/^(but|though|,)\s*/i, '').trim()
+      return { response: 'Maybe', notes: note || null }
+    }
+  }
+  
+  // Check for "late" without explicit yes/no - assume yes if they mention being late
+  if (/\b(late|running late|gonna be late|going to be late|might be late|will be late)\b/i.test(lower)) {
+    return { response: 'Yes', notes: original }
+  }
+  
+  // Check for "busy" or "can't" without explicit no - assume no
+  if (/\b(busy|can't|cant|cannot|unavailable)\b/i.test(lower)) {
+    return { response: 'No', notes: original }
+  }
+  
+  // Default: return as Unknown with the full message as notes
+  return { response: 'Unknown', notes: original }
 }
 
 export async function GET(request: NextRequest) {

@@ -52,35 +52,172 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Parse admin intent from natural language
+function parseAdminIntent(message: string): { type: 'announcement' | 'poll' | null; content: string | null } {
+  const lower = message.toLowerCase().trim()
+  const original = message.trim()
+  
+  // Explicit keyword patterns (keep for backward compatibility)
+  const announceKeywordMatch = original.match(/^announce\s+(.+)/i)
+  if (announceKeywordMatch) {
+    return { type: 'announcement', content: announceKeywordMatch[1].trim() }
+  }
+  
+  const pollKeywordMatch = original.match(/^poll\s+(.+)/i)
+  if (pollKeywordMatch) {
+    return { type: 'poll', content: pollKeywordMatch[1].trim() }
+  }
+  
+  // Intent-based patterns for POLLS
+  const pollIntentPatterns = [
+    // "send out a poll", "send a poll", "create a poll", "make a poll"
+    /\b(send|send out|create|make|start|post)\s+(a\s+)?poll\b/i,
+    // "send out a message asking if", "ask everyone if", "ask people if"
+    /\b(send|send out|text|message)\s+(everyone|people|all|the group|the team)\s+(asking|to ask|if|whether)\s+(.+)/i,
+    /\b(ask|asking)\s+(everyone|people|all|the group|the team|everybody)\s+(if|whether|about)\s+(.+)/i,
+    // "who's coming", "who is coming", "who can make it"
+    /\b(who'?s|who is|who can|who will)\s+(coming|going|attending|make it|be there|show up)\b/i,
+    // "poll about X", "poll for X"
+    /\bpoll\s+(about|for|on)\s+(.+)/i
+  ]
+  
+  for (const pattern of pollIntentPatterns) {
+    const match = lower.match(pattern)
+    if (match) {
+      // Extract the question/content
+      let content = original
+      
+      // Remove command phrases
+      content = content.replace(/\b(send|send out|create|make|start|post)\s+(a\s+)?poll\b/i, '').trim()
+      content = content.replace(/\b(send|send out|text|message)\s+(everyone|people|all|the group|the team)\s+(asking|to ask|if|whether)\s*/i, '').trim()
+      content = content.replace(/\b(ask|asking)\s+(everyone|people|all|the group|the team|everybody)\s+(if|whether|about)\s*/i, '').trim()
+      content = content.replace(/\bpoll\s+(about|for|on)\s+/i, '').trim()
+      
+      // If we matched a pattern that captures content in a group, use that
+      if (match.length > 1 && match[match.length - 1]) {
+        const capturedContent = match[match.length - 1]
+        if (capturedContent && capturedContent.length > 3) {
+          content = capturedContent.trim()
+        }
+      }
+      
+      // If content is still the full message, try to extract the question part
+      if (content === original || content.length < 5) {
+        // Look for question words or phrases
+        const questionMatch = original.match(/\b(if|whether|who|what|when|where|how|are|is|will|can|do)\s+(.+)/i)
+        if (questionMatch && questionMatch[2]) {
+          content = questionMatch[2].trim()
+        }
+      }
+      
+      if (content && content.length > 3) {
+        return { type: 'poll', content }
+      }
+    }
+  }
+  
+  // Intent-based patterns for ANNOUNCEMENTS
+  const announcementIntentPatterns = [
+    // "send out a message for X" - captures X
+    /\b(send|send out|text)\s+(a\s+)?(message|announcement)\s+(for|about|that|:)\s*(.+)/i,
+    // "send out a message X" (without for/about) - captures X
+    /\b(send|send out|text)\s+(a\s+)?(message|announcement)\s+(.+)/i,
+    // "tell everyone about X" - captures X
+    /\b(tell|notify|announce)\s+(everyone|people|all|the group|the team|everybody)\s+(about|that|to|:)\s*(.+)/i,
+    // "tell everyone X" (without about) - captures X
+    /\b(tell|let)\s+(everyone|people|all|the group|the team|everybody)\s+(.+)/i,
+    // "announce X" - captures X
+    /\bannounce(ment)?\s+(about|for|that|:)?\s*(.+)/i
+  ]
+  
+  for (const pattern of announcementIntentPatterns) {
+    const match = original.match(pattern)
+    if (match) {
+      // Find the last capture group that contains the actual content
+      let content = null
+      for (let i = match.length - 1; i >= 0; i--) {
+        if (match[i] && match[i].length > 3 && match[i] !== lower && match[i] !== original) {
+          // Check if this looks like actual content (not a command word)
+          const testContent = match[i].trim()
+          if (!/^(for|about|that|to|:)$/i.test(testContent) && testContent.length > 3) {
+            content = testContent
+            break
+          }
+        }
+      }
+      
+      if (content) {
+        return { type: 'announcement', content }
+      }
+      
+      // Fallback: try to extract by removing command phrases
+      let extracted = original
+      extracted = extracted.replace(/\b(send|send out|text)\s+(a\s+)?(message|announcement)\s+(for|about|that|:)?\s*/i, '').trim()
+      extracted = extracted.replace(/\b(tell|notify|announce)\s+(everyone|people|all|the group|the team|everybody)\s+(about|that|to|:)?\s*/i, '').trim()
+      extracted = extracted.replace(/\b(tell|let)\s+(everyone|people|all|the group|the team|everybody)\s+/i, '').trim()
+      extracted = extracted.replace(/\bannounce(ment)?\s+(about|for|that|:)?\s*/i, '').trim()
+      
+      if (extracted && extracted.length > 3 && extracted !== original) {
+        return { type: 'announcement', content: extracted }
+      }
+    }
+  }
+  
+  // Fallback: if message contains question words and seems like a question, treat as poll
+  if (/\b(are|is|will|can|do|who|what|when|where|how)\s+.+\?/i.test(original)) {
+    return { type: 'poll', content: original }
+  }
+  
+  // Fallback: if message contains "poll" anywhere, treat as poll
+  if (/\bpoll\b/i.test(original)) {
+    // Try to extract content after "poll"
+    const pollContentMatch = original.match(/\bpoll\s+(.+)/i)
+    if (pollContentMatch && pollContentMatch[1]) {
+      return { type: 'poll', content: pollContentMatch[1].trim() }
+    }
+    return { type: 'poll', content: original }
+  }
+  
+  // Default: if it mentions sending/announcing, treat as announcement
+  if (/\b(send|send out|announce|tell|message|notify)\b/i.test(lower)) {
+    // Try to extract content after these words
+    const contentMatch = original.match(/\b(send|send out|announce|tell|message|notify)\s+(.+)/i)
+    if (contentMatch && contentMatch[2]) {
+      return { type: 'announcement', content: contentMatch[2].trim() }
+    }
+    return { type: 'announcement', content: original }
+  }
+  
+  return { type: null, content: null }
+}
+
 async function handleMessage(phone: string, message: string): Promise<string> {
   const lower = message.toLowerCase().trim()
   
   // Check for admin commands FIRST (before user lookup)
   // This allows admins to use commands even on first text
   if (isAdmin(phone)) {
-    // Quick announce: "announce meeting at 7pm"
-    const announceMatch = message.match(/^announce\s+(.+)/i)
-    if (announceMatch) {
+    // Intent-based parsing for announcements and polls
+    const parsedIntent = parseAdminIntent(message)
+    
+    if (parsedIntent.type === 'announcement' && parsedIntent.content) {
       // Ensure admin exists in DB
       let user = await getUserByPhone(phone)
       if (!user) {
         user = await createUser(phone)
         await updateUser(user!.id, { Name: 'Admin', Needs_Name: false })
       }
-      const content = announceMatch[1].trim()
-      return await sendAnnouncementToAll(content, phone)
+      return await sendAnnouncementToAll(parsedIntent.content, phone)
     }
     
-    // Quick poll: "poll active meeting tonight?"
-    const pollMatch = message.match(/^poll\s+(.+)/i)
-    if (pollMatch) {
+    if (parsedIntent.type === 'poll' && parsedIntent.content) {
       // Ensure admin exists in DB
       let user = await getUserByPhone(phone)
       if (!user) {
         user = await createUser(phone)
         await updateUser(user!.id, { Name: 'Admin', Needs_Name: false })
       }
-      const question = normalizePollQuestion(pollMatch[1].trim())
+      const question = normalizePollQuestion(parsedIntent.content)
       return await sendPollToAll(question, phone)
     }
   }

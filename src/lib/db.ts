@@ -113,37 +113,75 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
   }
 }
 
+// Extract phone from various Airtable field formats
+function extractPhone(field: unknown): string {
+  if (!field) return ''
+  
+  // If it's already a string
+  if (typeof field === 'string') {
+    return field
+  }
+  
+  // If it's an object (some Airtable field types return objects)
+  if (typeof field === 'object') {
+    const obj = field as Record<string, unknown>
+    // Try common properties
+    if (obj.text) return String(obj.text)
+    if (obj.number) return String(obj.number)
+    if (obj.value) return String(obj.value)
+    // Fallback: stringify and extract digits
+    return JSON.stringify(obj)
+  }
+  
+  // If it's a number
+  if (typeof field === 'number') {
+    return String(field)
+  }
+  
+  return String(field)
+}
+
 export async function getOptedInUsers(): Promise<User[]> {
   try {
     const base = getBase()
     const tableName = getTableName()
     
-    // Get all users first, then filter - checkbox fields in Airtable can be tricky
+    // Get ALL records - filter in code to avoid field name issues
     const records = await base(tableName)
-      .select({
-        filterByFormula: `NOT({Opted_Out} = TRUE())`
-      })
+      .select({})
       .all()
     
     console.log(`[DB] getOptedInUsers: found ${records.length} total records`)
+    console.log(`[DB] Available fields in first record:`, records[0] ? Object.keys(records[0].fields) : 'none')
     
-    const users = records.map(r => ({
-      id: r.id,
-      phone: String(r.fields.Phone || ''),
-      name: r.fields.Name ? String(r.fields.Name) : null,
-      needs_name: r.fields.Needs_Name === true,
-      opted_out: false,
-      pending_poll: r.fields.Pending_Poll ? String(r.fields.Pending_Poll) : null,
-      last_response: r.fields.Last_Response ? String(r.fields.Last_Response) : null,
-      last_notes: r.fields.Last_Notes ? String(r.fields.Last_Notes) : null
-    }))
+    const users = records.map(r => {
+      const rawPhone = r.fields.Phone
+      const phone = extractPhone(rawPhone)
+      const optedOut = r.fields.Opted_Out === true || r.fields.opted_out === true
+      
+      console.log(`[DB] Record ${r.id}: Phone="${phone}", OptedOut=${optedOut}, Name="${r.fields.Name}"`)
+      
+      return {
+        id: r.id,
+        phone,
+        name: r.fields.Name ? String(r.fields.Name) : null,
+        needs_name: r.fields.Needs_Name === true || r.fields.needs_name === true,
+        opted_out: optedOut,
+        pending_poll: r.fields.Pending_Poll ? String(r.fields.Pending_Poll) : (r.fields.pending_poll ? String(r.fields.pending_poll) : null),
+        last_response: r.fields.Last_Response ? String(r.fields.Last_Response) : (r.fields.last_response ? String(r.fields.last_response) : null),
+        last_notes: r.fields.Last_Notes ? String(r.fields.Last_Notes) : (r.fields.last_notes ? String(r.fields.last_notes) : null)
+      }
+    })
+    
+    // Filter out opted-out users in code
+    const optedIn = users.filter(u => !u.opted_out)
     
     // Log users with phones for debugging
-    const usersWithPhones = users.filter(u => u.phone && u.phone.length >= 10)
-    console.log(`[DB] getOptedInUsers: ${usersWithPhones.length} users have valid phone numbers`)
-    usersWithPhones.forEach(u => console.log(`[DB]   - ${u.name || 'unnamed'}: ${u.phone}`))
+    const usersWithPhones = optedIn.filter(u => u.phone && normalizePhone(u.phone).length >= 10)
+    console.log(`[DB] getOptedInUsers: ${usersWithPhones.length} users have valid phone numbers (of ${optedIn.length} opted-in)`)
+    usersWithPhones.forEach(u => console.log(`[DB]   - ${u.name || 'unnamed'}: ${u.phone} -> normalized: ${normalizePhone(u.phone)}`))
     
-    return users
+    return optedIn
   } catch (error) {
     console.error('getOptedInUsers error:', error)
     return []

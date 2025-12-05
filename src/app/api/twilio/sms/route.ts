@@ -228,26 +228,26 @@ async function sendAnnouncementToAll(content: string, senderPhone?: string): Pro
   for (const user of users) {
     const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
     
-    // Skip users without valid phone numbers
-    if (!user.phone || user.phone.length < 10) {
-      console.log(`[Announce] Skipping user ${user.id} - no valid phone`)
+    // Skip users without valid phone numbers (check normalized length)
+    if (!userPhoneNormalized || userPhoneNormalized.length < 10) {
+      console.log(`[Announce] Skipping user ${user.id} - no valid phone (raw: "${user.phone}", normalized: "${userPhoneNormalized}")`)
       skipped++
       continue
     }
     
     // Skip the admin who sent the announcement
     if (userPhoneNormalized === senderNormalized) {
-      console.log(`[Announce] Skipping sender: ${user.phone}`)
+      console.log(`[Announce] Skipping sender: ${userPhoneNormalized}`)
       skipped++
       continue
     }
     
-    console.log(`[Announce] Sending to ${user.name || 'unnamed'} (${user.phone})`)
-    const result = await sendSms(toE164(user.phone), content)
+    console.log(`[Announce] Sending to ${user.name || 'unnamed'} (${userPhoneNormalized})`)
+    const result = await sendSms(toE164(userPhoneNormalized), content)
     if (result.ok) {
       sent++
     } else {
-      console.log(`[Announce] Failed to send to ${user.phone}: ${result.error}`)
+      console.log(`[Announce] Failed to send to ${userPhoneNormalized}: ${result.error}`)
     }
   }
   
@@ -264,14 +264,17 @@ async function sendPollToAll(question: string, senderPhone?: string): Promise<st
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe (add notes like "yes but running late")`
   
   for (const user of users) {
-    // Skip the admin who sent the poll
-    if (user.phone && normalizePhone(user.phone) !== senderNormalized) {
-      const result = await sendSms(toE164(user.phone), pollMessage)
-      if (result.ok) {
-        sent++
-        // Mark user as having pending poll
-        await updateUser(user.id, { Pending_Poll: question })
-      }
+    const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
+    
+    // Skip users without valid phone or the admin who sent the poll
+    if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
+    if (userPhoneNormalized === senderNormalized) continue
+    
+    const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
+    if (result.ok) {
+      sent++
+      // Mark user as having pending poll
+      await updateUser(user.id, { Pending_Poll: question })
     }
   }
   
@@ -317,16 +320,16 @@ export async function GET() {
     const summary = users.map(u => ({
       id: u.id,
       name: u.name || '(no name)',
-      hasPhone: !!u.phone && u.phone.length >= 10,
-      phoneLength: u.phone?.length || 0,
-      phoneLast4: u.phone ? u.phone.slice(-4) : 'none',
+      hasPhone: !!u.phone && normalizePhone(u.phone).length >= 10,
+      phoneRaw: u.phone || 'none',
+      phoneNormalized: u.phone ? normalizePhone(u.phone) : 'none',
       optedOut: u.opted_out
     }))
     
     return NextResponse.json({
       status: 'running',
       userCount: users.length,
-      usersWithValidPhone: users.filter(u => u.phone && u.phone.length >= 10).length,
+      usersWithValidPhone: users.filter(u => u.phone && normalizePhone(u.phone).length >= 10).length,
       users: summary
     })
   } catch (error) {

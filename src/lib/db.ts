@@ -225,23 +225,9 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
       console.log(`[DB] updateUser: Could not fetch record to check fields`)
     }
     
-    // Try the update - first try with tab versions for known problematic fields
-    const fieldsWithTabs: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(fields)) {
-      // For known fields that might have tabs, try tab version first
-      if (key === 'Pending_Poll') {
-        fieldsWithTabs['Pending_Poll\t'] = value
-      } else if (key === 'Last_Notes') {
-        fieldsWithTabs['Last_Notes\t'] = value
-      } else if (key === 'Opted_Out') {
-        fieldsWithTabs['Opted_Out\t'] = value
-      } else {
-        fieldsWithTabs[key] = value
-      }
-    }
-    
+    // Try the update with normal field names first (user fixed the tab issue)
     try {
-      const result = await base(tableName).update(recordId, fieldsWithTabs as Airtable.FieldSet)
+      const result = await base(tableName).update(recordId, fields as Airtable.FieldSet)
       console.log(`[DB] updateUser: SUCCESS - updated record ${result.id}`)
       return true
     } catch (updateError: unknown) {
@@ -253,14 +239,13 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
         console.error(`[DB] updateUser: Attempted fields:`, Object.keys(fields))
         console.error(`[DB] updateUser: Available fields in this record:`, availableFields)
         
-        // Try field name variations for common fields (including tab characters)
-        // Priority: try tab version first (most common issue), then standard, then variations
+        // Try field name variations for common fields (normal names first, tab versions as fallback)
         const fieldVariations: Record<string, string[]> = {
-          'Pending_Poll': ['Pending_Poll\t', 'Pending_Poll', 'pending_poll', 'Pending Poll', 'pending poll', 'PendingPoll'],
+          'Pending_Poll': ['Pending_Poll', 'Pending_Poll\t', 'pending_poll', 'Pending Poll', 'pending poll', 'PendingPoll'],
           'Last_Response': ['Last_Response', 'last_response', 'Last Response', 'last response', 'LastResponse'],
-          'Last_Notes': ['Last_Notes\t', 'Last_Notes', 'last_notes', 'Last Notes', 'last notes', 'LastNotes'],
+          'Last_Notes': ['Last_Notes', 'Last_Notes\t', 'last_notes', 'Last Notes', 'last notes', 'LastNotes'],
           'Needs_Name': ['Needs_Name', 'needs_name', 'Needs Name', 'needs name', 'NeedsName'],
-          'Opted_Out': ['Opted_Out\t', 'Opted_Out', 'opted_out', 'Opted Out', 'opted out', 'OptedOut']
+          'Opted_Out': ['Opted_Out', 'Opted_Out\t', 'opted_out', 'Opted Out', 'opted out', 'OptedOut']
         }
         
         const adjustedFields: Record<string, unknown> = {}
@@ -272,7 +257,7 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
             adjustedFields[originalField] = value
             foundMatch = true
           } else {
-            // Try variations (prioritize tab versions first)
+            // Try variations (normal names first, tab versions as fallback)
             const variations = fieldVariations[originalField] || [originalField]
             let matched = false
             for (const variation of variations) {

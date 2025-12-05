@@ -54,6 +54,36 @@ export async function POST(request: NextRequest) {
 async function handleMessage(phone: string, message: string): Promise<string> {
   const lower = message.toLowerCase().trim()
   
+  // Check for admin commands FIRST (before user lookup)
+  // This allows admins to use commands even on first text
+  if (isAdmin(phone)) {
+    // Quick announce: "announce meeting at 7pm"
+    const announceMatch = message.match(/^announce\s+(.+)/i)
+    if (announceMatch) {
+      // Ensure admin exists in DB
+      let user = await getUserByPhone(phone)
+      if (!user) {
+        user = await createUser(phone)
+        await updateUser(user!.id, { Name: 'Admin', Needs_Name: false })
+      }
+      const content = announceMatch[1].trim()
+      return await sendAnnouncementToAll(content, phone)
+    }
+    
+    // Quick poll: "poll active meeting tonight?"
+    const pollMatch = message.match(/^poll\s+(.+)/i)
+    if (pollMatch) {
+      // Ensure admin exists in DB
+      let user = await getUserByPhone(phone)
+      if (!user) {
+        user = await createUser(phone)
+        await updateUser(user!.id, { Name: 'Admin', Needs_Name: false })
+      }
+      const question = normalizePollQuestion(pollMatch[1].trim())
+      return await sendPollToAll(question, phone)
+    }
+  }
+  
   // Get or create user
   let user = await getUserByPhone(phone)
   
@@ -123,22 +153,8 @@ text STOP to unsubscribe`
     }
   }
   
-  // Admin commands
+  // Admin commands (for existing users - announce/poll already handled above for new admins)
   if (isAdmin(phone)) {
-    // Quick announce: "announce meeting at 7pm"
-    const announceMatch = message.match(/^announce\s+(.+)/i)
-    if (announceMatch) {
-      const content = announceMatch[1].trim()
-      return await sendAnnouncementToAll(content)
-    }
-    
-    // Quick poll: "poll active meeting tonight?"
-    const pollMatch = message.match(/^poll\s+(.+)/i)
-    if (pollMatch) {
-      const question = normalizePollQuestion(pollMatch[1].trim())
-      return await sendPollToAll(question)
-    }
-    
     // Check for pending draft
     const draft = adminDrafts.get(phone)
     
@@ -146,9 +162,9 @@ text STOP to unsubscribe`
     if (/^(send|go|yes|ship)/i.test(lower) && draft) {
       adminDrafts.delete(phone)
       if (draft.type === 'announcement') {
-        return await sendAnnouncementToAll(draft.content)
+        return await sendAnnouncementToAll(draft.content, phone)
       } else {
-        return await sendPollToAll(draft.content)
+        return await sendPollToAll(draft.content, phone)
       }
     }
     
@@ -200,13 +216,15 @@ text STOP to unsubscribe`
   return "hey! text HELP for info."
 }
 
-// Send announcement to all
-async function sendAnnouncementToAll(content: string): Promise<string> {
+// Send announcement to all (excluding the sender)
+async function sendAnnouncementToAll(content: string, senderPhone?: string): Promise<string> {
   const users = await getOptedInUsers()
+  const senderNormalized = senderPhone ? normalizePhone(senderPhone) : null
   let sent = 0
   
   for (const user of users) {
-    if (user.phone) {
+    // Skip the admin who sent the announcement
+    if (user.phone && normalizePhone(user.phone) !== senderNormalized) {
       const result = await sendSms(toE164(user.phone), content)
       if (result.ok) sent++
     }
@@ -215,15 +233,17 @@ async function sendAnnouncementToAll(content: string): Promise<string> {
   return `✅ sent to ${sent} people!`
 }
 
-// Send poll to all
-async function sendPollToAll(question: string): Promise<string> {
+// Send poll to all (excluding the sender)
+async function sendPollToAll(question: string, senderPhone?: string): Promise<string> {
   const users = await getOptedInUsers()
+  const senderNormalized = senderPhone ? normalizePhone(senderPhone) : null
   let sent = 0
   
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe (add notes like "yes but running late")`
   
   for (const user of users) {
-    if (user.phone) {
+    // Skip the admin who sent the poll
+    if (user.phone && normalizePhone(user.phone) !== senderNormalized) {
       const result = await sendSms(toE164(user.phone), pollMessage)
       if (result.ok) {
         sent++

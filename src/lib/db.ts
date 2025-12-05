@@ -68,9 +68,16 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
 
 export async function createUser(phone: string): Promise<User | null> {
   try {
+    // First check if user already exists (prevent duplicates)
+    const existing = await getUserByPhone(phone)
+    if (existing) {
+      console.log(`[DB] User ${phone} already exists, returning existing record`)
+      return existing
+    }
+    
     const base = getBase()
     const tableName = getTableName()
-    // Note: Don't set checkbox to false, just omit it (Airtable quirk)
+    console.log(`[DB] Creating new user: ${phone}`)
     const record = await base(tableName).create({
       Phone: phone,
       Needs_Name: true

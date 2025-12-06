@@ -10,6 +10,7 @@ import {
   verifyAirtableFields
 } from '@/lib/db'
 import { validateTwilioSignature, toTwiml, sendSms } from '@/lib/twilio'
+import { prisma } from '@/lib/prisma'
 
 // In-memory state for admin drafts (simple approach)
 const adminDrafts: Map<string, { type: 'announcement' | 'poll', content: string }> = new Map()
@@ -594,12 +595,92 @@ text STOP to unsubscribe`
     return reply
   }
   
+  // Try to answer from facts database
+  const factAnswer = await searchFacts(message)
+  if (factAnswer) {
+    return factAnswer
+  }
+  
   // Default
   if (isAdmin(phone)) {
     return `📢 "announce [message]" - send to all
 📊 "poll [question]" - ask everyone`
   }
   return "hey! text HELP for info."
+}
+
+// Search facts database for relevant information
+async function searchFacts(query: string): Promise<string | null> {
+  try {
+    const lower = query.toLowerCase().trim()
+    
+    // Skip if it looks like a command or very short
+    if (lower.length < 5) return null
+    if (/^(yes|no|maybe|stop|start|help|announce|poll)\b/i.test(lower)) return null
+    
+    // Extract keywords from the query
+    const keywords = lower
+      .replace(/[?!.,]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with'].includes(w))
+    
+    if (keywords.length === 0) return null
+    
+    // Search for facts matching any keyword
+    const facts = await prisma.fact.findMany({
+      where: {
+        OR: [
+          ...keywords.map(kw => ({ content: { contains: kw } })),
+          ...keywords.map(kw => ({ sourceText: { contains: kw } })),
+          ...keywords.map(kw => ({ subcategory: { contains: kw } })),
+          ...keywords.map(kw => ({ entities: { contains: kw } })),
+        ]
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    })
+    
+    if (facts.length === 0) return null
+    
+    // Score facts by keyword matches
+    const scoredFacts = facts.map(fact => {
+      let score = 0
+      const searchText = `${fact.content} ${fact.sourceText || ''} ${fact.subcategory || ''} ${fact.entities}`.toLowerCase()
+      
+      for (const kw of keywords) {
+        if (searchText.includes(kw)) score++
+      }
+      
+      return { fact, score }
+    }).sort((a, b) => b.score - a.score)
+    
+    const bestMatch = scoredFacts[0]
+    if (!bestMatch || bestMatch.score === 0) return null
+    
+    // Format the response
+    const fact = bestMatch.fact
+    let response = `📋 ${fact.content}`
+    
+    if (fact.timeRef) {
+      response += `\n⏰ ${fact.timeRef}`
+    }
+    
+    if (fact.subcategory) {
+      response += `\n📁 ${fact.subcategory}`
+    }
+    
+    // Add source if short enough
+    if (fact.sourceText && fact.sourceText.length < 200 && fact.sourceText !== fact.content) {
+      response += `\n\n"${fact.sourceText}"`
+    }
+    
+    console.log(`[FactSearch] Found match for "${query}" -> ${fact.content.slice(0, 50)}...`)
+    return response
+    
+  } catch (error) {
+    console.error('[FactSearch] Error:', error)
+    return null
+  }
 }
 
 // Send announcement to all (excluding the sender)

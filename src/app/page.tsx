@@ -150,7 +150,7 @@ function HelpIcon({ className }: { className?: string }) {
 // INFO TAB CONTENT
 // ============================================
 
-function InfoTab() {
+function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 animate-fade-in">
       <div className="max-w-2xl w-full space-y-8">
@@ -168,6 +168,15 @@ function InfoTab() {
           <p className="text-xl text-[var(--text-secondary)]">
             sms-powered announcements & polls
           </p>
+
+          {/* Get Started Button */}
+          <button
+            onClick={() => onNavigate('dump')}
+            className="mt-4 px-8 py-3 text-sm font-medium text-[var(--bg-primary)] bg-[var(--accent)] rounded-lg hover:bg-[var(--accent-dim)] transition-colors inline-flex items-center gap-2"
+          >
+            <HomeIcon className="w-4 h-4" />
+            get started
+          </button>
         </div>
 
         {/* Phone Number Card */}
@@ -885,7 +894,7 @@ export default function Home() {
 
       {/* Content Area - offset for fixed header */}
       <div className="pt-14">
-        {activeTab === 'info' && <InfoTab />}
+        {activeTab === 'info' && <InfoTab onNavigate={setActiveTab} />}
         {activeTab === 'dump' && <DumpTab />}
       </div>
     </div>

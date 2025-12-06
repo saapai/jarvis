@@ -10,7 +10,7 @@ import {
   verifyAirtableFields
 } from '@/lib/db'
 import { validateTwilioSignature, toTwiml, sendSms } from '@/lib/twilio'
-import { prisma } from '@/lib/prisma'
+import { getPrisma } from '@/lib/prisma'
 
 // In-memory state for admin drafts (simple approach)
 const adminDrafts: Map<string, { type: 'announcement' | 'poll', content: string }> = new Map()
@@ -627,6 +627,7 @@ async function searchFacts(query: string): Promise<string | null> {
     if (keywords.length === 0) return null
     
     // Search for facts matching any keyword
+    const prisma = await getPrisma()
     const facts = await prisma.fact.findMany({
       where: {
         OR: [

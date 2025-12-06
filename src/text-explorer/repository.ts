@@ -1,8 +1,9 @@
-import { prisma } from '@/lib/prisma';
+import { getPrisma } from '@/lib/prisma';
 import { TextExplorerRepository, ExtractedFact } from './types';
 
 export const textExplorerRepository: TextExplorerRepository = {
   async createUpload({ name, rawText }) {
+    const prisma = await getPrisma();
     const upload = await prisma.upload.create({
       data: { name, rawText },
       select: { id: true },
@@ -11,6 +12,7 @@ export const textExplorerRepository: TextExplorerRepository = {
   },
 
   async createFacts({ uploadId, facts }) {
+    const prisma = await getPrisma();
     await prisma.$transaction(
       facts.map((fact) =>
         prisma.fact.create({

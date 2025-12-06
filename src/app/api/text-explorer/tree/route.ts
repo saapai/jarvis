@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getPrisma } from '@/lib/prisma';
 
 // Helper to parse dateStr for sorting
 function parseDateForSort(dateStr: string | null): number {
@@ -11,6 +11,7 @@ function parseDateForSort(dateStr: string | null): number {
 
 export async function GET() {
   try {
+    const prisma = await getPrisma();
     const facts = await prisma.fact.findMany({
       select: {
         id: true,

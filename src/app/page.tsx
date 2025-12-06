@@ -513,18 +513,84 @@ function DumpTab() {
     return days;
   }, [calendarDate]);
 
+  // Helper to parse date from timeRef (e.g., "November 8th", "november 6th", "@November 8th")
+  const parseDateFromTimeRef = (timeRef: string | null, year: number): string | null => {
+    if (!timeRef) return null;
+    
+    const lower = timeRef.toLowerCase().replace(/^@\s*/, ''); // Remove leading @
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                       'july', 'august', 'september', 'october', 'november', 'december'];
+    const monthAbbrevs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                         'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    
+    // Try full month names first
+    for (let i = 0; i < monthNames.length; i++) {
+      if (lower.includes(monthNames[i])) {
+        // Extract day number (handle "8th", "8", etc.)
+        const dayMatch = lower.match(/(\d+)(?:st|nd|rd|th)?/);
+        if (dayMatch) {
+          const day = parseInt(dayMatch[1], 10);
+          if (day >= 1 && day <= 31) {
+            const month = i + 1;
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          }
+        }
+      }
+    }
+    
+    // Try abbreviated month names
+    for (let i = 0; i < monthAbbrevs.length; i++) {
+      if (lower.includes(monthAbbrevs[i])) {
+        const dayMatch = lower.match(/(\d+)(?:st|nd|rd|th)?/);
+        if (dayMatch) {
+          const day = parseInt(dayMatch[1], 10);
+          if (day >= 1 && day <= 31) {
+            const month = i + 1;
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+
   // Calendar uses ALL facts, not just filtered ones
   const factsByDate = useMemo(() => {
     const map: Record<string, Fact[]> = {};
+    const { year } = calendarDate;
+    
     for (const fact of allFacts) {
+      let dateStr: string | null = null;
+      
+      // First try dateStr (if it's a valid date string)
       if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
-        const date = fact.dateStr.split('T')[0];
-        if (!map[date]) map[date] = [];
-        map[date].push(fact);
+        try {
+          const parsed = fact.dateStr.split('T')[0];
+          // Validate it's a proper date format (YYYY-MM-DD)
+          if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+            dateStr = parsed;
+          }
+        } catch (e) {
+          // Invalid dateStr, try timeRef
+        }
+      } 
+      
+      // Fallback to parsing timeRef if dateStr wasn't valid
+      if (!dateStr && fact.timeRef) {
+        // Try to extract year from timeRef first, otherwise use calendar year
+        const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
+        const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : year;
+        dateStr = parseDateFromTimeRef(fact.timeRef, yearToUse);
+      }
+      
+      if (dateStr) {
+        if (!map[dateStr]) map[dateStr] = [];
+        map[dateStr].push(fact);
       }
     }
     return map;
-  }, [allFacts]);
+  }, [allFacts, calendarDate]);
 
   const recurringFacts = useMemo(() => allFacts.filter(f => f.dateStr?.startsWith('recurring:')), [allFacts]);
 

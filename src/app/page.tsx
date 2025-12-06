@@ -42,8 +42,16 @@ interface TreeData {
   totalFacts: number;
 }
 
-type FilterType = 'all' | 'category' | 'subcategory' | 'entity' | 'time';
-type ViewMode = 'explore' | 'calendar';
+interface Upload {
+  id: string;
+  name: string;
+  rawText: string;
+  factCount: number;
+  createdAt: string;
+}
+
+type FilterType = 'all' | 'category' | 'subcategory' | 'entity' | 'time' | 'upload';
+type ViewMode = 'explore' | 'calendar' | 'uploads';
 type AppTab = 'info' | 'dump';
 
 interface BreadcrumbItem {
@@ -307,12 +315,14 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
 function DumpTab() {
   const [tree, setTree] = useState<TreeData | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
+  const [uploads, setUploads] = useState<Upload[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadText, setUploadText] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [deletingUpload, setDeletingUpload] = useState<string | null>(null);
   
   const [calendarDate, setCalendarDate] = useState(() => {
     const now = new Date();
@@ -327,7 +337,8 @@ function DumpTab() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     categories: true,
     timeline: true,
-    entities: false,
+    entities: true,
+    uploads: true,
   });
 
   const currentFilter = breadcrumbs[breadcrumbs.length - 1];
@@ -336,7 +347,9 @@ function DumpTab() {
     try {
       const res = await fetch('/api/text-explorer/tree');
       const data = await res.json();
-      setTree(data);
+      if (data && !data.error) {
+        setTree(data);
+      }
     } catch (error) {
       console.error('Failed to fetch tree:', error);
     }
@@ -367,8 +380,37 @@ function DumpTab() {
     }
   }, [currentFilter]);
 
+  const fetchUploads = useCallback(async () => {
+    try {
+      const res = await fetch('/api/text-explorer/uploads');
+      const data = await res.json();
+      if (data && !data.error) {
+        setUploads(data.uploads ?? []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch uploads:', error);
+    }
+  }, []);
+
+  const deleteUpload = async (id: string) => {
+    setDeletingUpload(id);
+    try {
+      const res = await fetch(`/api/text-explorer/uploads?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchUploads();
+        fetchTree();
+        fetchFacts();
+      }
+    } catch (error) {
+      console.error('Failed to delete upload:', error);
+    } finally {
+      setDeletingUpload(null);
+    }
+  };
+
   useEffect(() => { fetchTree(); }, [fetchTree]);
   useEffect(() => { fetchFacts(); }, [fetchFacts]);
+  useEffect(() => { fetchUploads(); }, [fetchUploads]);
 
   const handleUpload = async () => {
     if (!uploadText.trim()) return;
@@ -489,17 +531,17 @@ function DumpTab() {
 
         {/* View Tabs */}
         <div className="px-4 pt-4 flex gap-1">
-          {(['explore', 'calendar'] as ViewMode[]).map(mode => (
+          {(['explore', 'calendar', 'uploads'] as ViewMode[]).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`flex-1 px-3 py-2 text-xs font-medium rounded transition-colors ${
+              className={`flex-1 px-2 py-2 text-xs font-medium rounded transition-colors ${
                 viewMode === mode
                   ? 'bg-[var(--accent)] text-[var(--bg-primary)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
-              {mode}
+              {mode === 'uploads' ? '📁' : mode}
             </button>
           ))}
         </div>
@@ -628,6 +670,27 @@ function DumpTab() {
                 >
                   <span className="opacity-30 mr-2">├─</span>{entity.name}
                   <span className="text-[var(--text-tertiary)] ml-2 text-xs">{entity.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Uploads */}
+          {uploads.length > 0 && (
+            <div className="mt-3">
+              <button onClick={() => toggleSection('uploads')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
+                <span className={`transition-transform ${expandedSections.uploads ? 'rotate-90' : ''}`}>▸</span>
+                uploads ({uploads.length})
+              </button>
+              {expandedSections.uploads && uploads.slice(0, 10).map((upload) => (
+                <button
+                  key={upload.id}
+                  onClick={() => setViewMode('uploads')}
+                  className="w-full text-left px-6 py-1.5 text-sm transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                >
+                  <span className="opacity-30 mr-2">📄</span>
+                  <span className="truncate">{upload.name.slice(0, 20)}</span>
+                  <span className="text-[var(--text-tertiary)] ml-2 text-xs">{upload.factCount}</span>
                 </button>
               ))}
             </div>
@@ -770,7 +833,7 @@ function DumpTab() {
                 ))}
               </div>
             )
-          ) : (
+          ) : viewMode === 'calendar' ? (
             /* Calendar View */
             <div className="animate-fade-in">
               <div className="grid grid-cols-7 gap-1 mb-2">
@@ -817,7 +880,63 @@ function DumpTab() {
                 </div>
               )}
             </div>
-          )}
+          ) : viewMode === 'uploads' ? (
+            /* Uploads Management View */
+            <div className="animate-fade-in space-y-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-medium text-[var(--text-primary)]">
+                  uploads<span className="text-[var(--accent)]">_</span>
+                </h2>
+                <button 
+                  onClick={() => setShowUpload(true)}
+                  className="px-4 py-2 text-sm font-medium text-[var(--bg-primary)] bg-[var(--accent)] rounded hover:bg-[var(--accent-dim)] transition-colors"
+                >
+                  + new upload
+                </button>
+              </div>
+              
+              {uploads.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <p className="text-[var(--text-tertiary)]">no uploads yet</p>
+                  <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--accent)] hover:underline">
+                    dump some text
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {uploads.map((upload) => (
+                    <div 
+                      key={upload.id} 
+                      className="p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:border-[var(--border)] transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-[var(--text-primary)] truncate">
+                            {upload.name}
+                          </h3>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-tertiary)]">
+                            <span>{upload.factCount} facts</span>
+                            <span>•</span>
+                            <span>{new Date(upload.createdAt).toLocaleDateString()}</span>
+                          </div>
+                          <p className="mt-2 text-sm text-[var(--text-secondary)] line-clamp-2">
+                            {upload.rawText.slice(0, 200)}...
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => deleteUpload(upload.id)}
+                          disabled={deletingUpload === upload.id}
+                          className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded transition-colors disabled:opacity-50"
+                        >
+                          {deletingUpload === upload.id ? 'deleting...' : 'delete'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       </main>
 

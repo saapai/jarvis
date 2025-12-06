@@ -315,6 +315,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
 function DumpTab() {
   const [tree, setTree] = useState<TreeData | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
+  const [allFacts, setAllFacts] = useState<Fact[]>([]); // For calendar view - all facts
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -392,6 +393,16 @@ function DumpTab() {
     }
   }, []);
 
+  const fetchAllFacts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/text-explorer/facts');
+      const data = await res.json();
+      setAllFacts(data.facts ?? []);
+    } catch (error) {
+      console.error('Failed to fetch all facts:', error);
+    }
+  }, []);
+
   const deleteUpload = async (id: string) => {
     setDeletingUpload(id);
     try {
@@ -400,6 +411,7 @@ function DumpTab() {
         fetchUploads();
         fetchTree();
         fetchFacts();
+        fetchAllFacts();
       }
     } catch (error) {
       console.error('Failed to delete upload:', error);
@@ -411,6 +423,7 @@ function DumpTab() {
   useEffect(() => { fetchTree(); }, [fetchTree]);
   useEffect(() => { fetchFacts(); }, [fetchFacts]);
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
+  useEffect(() => { fetchAllFacts(); }, [fetchAllFacts]);
 
   const handleUpload = async () => {
     if (!uploadText.trim()) return;
@@ -426,6 +439,8 @@ function DumpTab() {
         setShowUpload(false);
         fetchTree();
         fetchFacts();
+        fetchAllFacts();
+        fetchUploads();
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -435,6 +450,9 @@ function DumpTab() {
   };
 
   const navigateTo = (type: FilterType, value: string, label: string, parent?: string) => {
+    // Switch to explore view when navigating to a filter
+    setViewMode('explore');
+    
     if (type === 'all') {
       setBreadcrumbs([{ type: 'all', value: '', label: 'all' }]);
     } else if (type === 'subcategory' && parent) {
@@ -495,9 +513,10 @@ function DumpTab() {
     return days;
   }, [calendarDate]);
 
+  // Calendar uses ALL facts, not just filtered ones
   const factsByDate = useMemo(() => {
     const map: Record<string, Fact[]> = {};
-    for (const fact of facts) {
+    for (const fact of allFacts) {
       if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
         const date = fact.dateStr.split('T')[0];
         if (!map[date]) map[date] = [];
@@ -505,9 +524,9 @@ function DumpTab() {
       }
     }
     return map;
-  }, [facts]);
+  }, [allFacts]);
 
-  const recurringFacts = useMemo(() => facts.filter(f => f.dateStr?.startsWith('recurring:')), [facts]);
+  const recurringFacts = useMemo(() => allFacts.filter(f => f.dateStr?.startsWith('recurring:')), [allFacts]);
 
   const getFactsForDay = (day: number) => {
     const { year, month } = calendarDate;
@@ -541,7 +560,7 @@ function DumpTab() {
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
-              {mode === 'uploads' ? '📁' : mode}
+              {mode}
             </button>
           ))}
         </div>

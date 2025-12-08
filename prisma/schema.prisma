@@ -1,11 +1,11 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Upload {
@@ -35,5 +35,62 @@ model Fact {
   children  Fact[]   @relation("FactTree")
 
   createdAt DateTime @default(now())
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  phoneNumber String
+  direction   String   // "inbound" or "outbound"
+  text        String
+  meta        String?  // JSON: {draftId, pollId, tags}
+  createdAt   DateTime @default(now())
+  
+  @@index([phoneNumber, createdAt])
+}
+
+model ConversationState {
+  phoneNumber  String   @id
+  stateType    String?  // "onboarding", "draft_announcement", "answering_poll"
+  statePayload String?  // JSON: task-specific context
+  updatedAt    DateTime @default(now())
+}
+
+model AnnouncementDraft {
+  id                String   @id @default(cuid())
+  phoneNumber       String
+  draftText         String
+  structuredPayload String?  // JSON: {event, time, date, tone, audience}
+  status            String   // "in_progress" or "finalized"
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+  
+  @@index([phoneNumber, status])
+}
+
+model PollMeta {
+  id                  String         @id @default(cuid())
+  questionText        String
+  requiresReasonForNo Boolean        @default(false)
+  isActive            Boolean        @default(true)
+  createdBy           String         // phone number
+  createdAt           DateTime       @default(now())
+  
+  responses           PollResponse[]
+  
+  @@index([isActive, createdAt])
+}
+
+model PollResponse {
+  id          String   @id @default(cuid())
+  pollId      String
+  poll        PollMeta @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  phoneNumber String
+  response    String   // "Yes", "No", "Maybe"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  
+  @@unique([pollId, phoneNumber])
+  @@index([pollId, phoneNumber])
 }
 

@@ -1,13 +1,64 @@
-# 🤖 Jarvis SMS
+# 🤖 Jarvis SMS (Enclave v2.0)
 
-SMS-powered announcements, polls, and intelligent Q&A powered by a knowledge base.
+SMS-powered organizational assistant with LLM-based intent classification, weighted conversation history, and normalized poll tracking.
 
 ## Features
 
-- **SMS Announcements** - Broadcast messages to all subscribers
-- **Polls** - Ask yes/no/maybe questions with smart response parsing
-- **Text Explorer** - Dump text and extract structured facts with AI
+- **SMS Announcements** - Broadcast messages to all subscribers with draft/edit/send workflow
+- **Polls** - Create polls with yes/no/maybe responses, tracked in normalized database tables
+- **Text Explorer** - Upload documents and extract structured facts with AI
 - **Smart Q&A** - Users can text questions and get answers from the knowledge base
+- **LLM Routing** - OpenAI-powered intent classification with conversation context
+- **Personality Engine** - Jarvis's sassy personality applied to all responses
+- **Conversation History** - Weighted message history for better context understanding
+
+## Architecture
+
+### Data Layer (Hybrid Approach)
+
+**Airtable** (user management):
+- Members table with Phone, Name, Needs_Name, Opted_Out fields
+- Admin can manually manage users
+
+**Prisma/Postgres (Supabase)** (application data):
+- `Message` - SMS history (inbound + outbound)
+- `ConversationState` - Ephemeral state tracking
+- `AnnouncementDraft` - Persistent drafts with structured fields
+- `PollMeta` - Poll questions with metadata
+- `PollResponse` - Normalized poll responses
+- `Fact` - Knowledge base extracted from documents
+
+### SMS Pipeline
+
+```
+Twilio Webhook → /api/twilio/sms
+  ↓
+1. Log inbound message
+  ↓
+2. Get/create member (Airtable)
+  ↓
+3. Load conversation context:
+   - Recent messages (weighted history)
+   - Active draft
+   - Conversation state
+  ↓
+4. LLM Intent Classification
+   - Pattern matching (fast path)
+   - OpenAI classification (fallback)
+  ↓
+5. Route to action handler:
+   - draft_write → Create/edit drafts
+   - draft_send → Send to all members
+   - content_query → Search knowledge base
+   - capability_query → About Jarvis
+   - chat → Personality responses
+  ↓
+6. Apply personality (rule-based or LLM)
+  ↓
+7. Log outbound message
+  ↓
+8. Return TwiML response
+```
 
 ## Quick Start
 
@@ -15,20 +66,25 @@ SMS-powered announcements, polls, and intelligent Q&A powered by a knowledge bas
 
 ```bash
 npm install
-npx prisma generate
-npx prisma db push
+# set DATABASE_URL and DIRECT_URL for Supabase Postgres before running:
+# export DATABASE_URL=\"postgresql://...\" 
+# export DIRECT_URL=\"postgresql://...\" 
+npx prisma migrate dev --name supabase-init
 npm run dev
 ```
 
 ### 2. Environment Variables
 
-Create `.env` for local development:
+Create `.env` for local development (no secrets committed):
 
 ```env
-# Database (local SQLite)
-DATABASE_URL="file:./dev.db"
+# Database (Supabase Postgres)
+DATABASE_URL=postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres
+DIRECT_URL=postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres
+SUPABASE_URL=https://yourproject.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# OpenAI (for text extraction)
+# OpenAI
 OPENAI_API_KEY=your_openai_key
 
 # Twilio
@@ -40,13 +96,6 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 AIRTABLE_API_KEY=your_airtable_key
 AIRTABLE_BASE_ID=your_base_id
 AIRTABLE_TABLE_NAME=your_table_name
-
-# Admin
-ADMIN_PHONE_NUMBERS=1234567890
-
-# App URL
-APP_URL=http://localhost:3000
-```
 
 ### 3. Airtable Fields
 
@@ -108,26 +157,19 @@ bot: 📋 Weekly study session for pledges...
 
 ## Deploy to Vercel
 
-### 1. Set up Turso Database (Free)
-
-```bash
-# Install Turso CLI
-brew install tursodatabase/tap/turso
-
-# Login and create database
-turso auth login
-turso db create jarvis-db
-turso db show jarvis-db --url
-turso db tokens create jarvis-db
-```
+### 1. Configure Supabase (Postgres)
+- Create a Supabase project and note:\n  - SUPABASE_URL\n  - SUPABASE_SERVICE_ROLE_KEY\n  - Postgres connection string (for DATABASE_URL/DIRECT_URL)
+- Use the primary connection for `DATABASE_URL` and (optionally) the pooler for `DIRECT_URL`.
 
 ### 2. Configure Vercel Environment Variables
 
 In your Vercel project settings, add:
 
 ```
-TURSO_DATABASE_URL=libsql://your-db.turso.io
-TURSO_AUTH_TOKEN=your_turso_token
+DATABASE_URL=postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres
+DIRECT_URL=postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres
+SUPABASE_URL=https://yourproject.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 OPENAI_API_KEY=your_openai_key
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
@@ -137,43 +179,15 @@ AIRTABLE_BASE_ID=your_base_id
 AIRTABLE_TABLE_NAME=your_table_name
 ADMIN_PHONE_NUMBERS=1234567890
 APP_URL=https://your-app.vercel.app
-DATABASE_URL=file:./dev.db
 ```
 
-### 3. Initialize Turso Database Schema
+### 3. Initialize Database Schema on Supabase
 
-After deploying, run this locally to push schema to Turso:
+Run locally (with DATABASE_URL/DIRECT_URL set to Supabase):
 
 ```bash
-# Set Turso as the database temporarily
-export DATABASE_URL="libsql://your-db.turso.io?authToken=your_token"
-npx prisma db push
-```
-
-Or use Turso's web shell:
-```sql
-CREATE TABLE Upload (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  rawText TEXT NOT NULL,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE Fact (
-  id TEXT PRIMARY KEY,
-  uploadId TEXT NOT NULL,
-  content TEXT NOT NULL,
-  sourceText TEXT,
-  category TEXT NOT NULL,
-  subcategory TEXT,
-  timeRef TEXT,
-  dateStr TEXT,
-  entities TEXT NOT NULL,
-  parentId TEXT,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (uploadId) REFERENCES Upload(id) ON DELETE CASCADE,
-  FOREIGN KEY (parentId) REFERENCES Fact(id)
-);
+npx prisma migrate deploy
+npx prisma generate
 ```
 
 ### 4. Deploy

@@ -255,3 +255,36 @@ export function getStateForAirtable(phone: string): string {
   return serializeState(phone)
 }
 
+// ============================================
+// BUILD HISTORY FROM MESSAGE OBJECTS
+// ============================================
+
+interface MessageLike {
+  direction: 'inbound' | 'outbound'
+  text: string
+  createdAt: Date
+  meta?: { action?: string } | null
+}
+
+/**
+ * Build weighted history from Message objects (from repository)
+ */
+export function buildWeightedHistoryFromMessages(messages: MessageLike[]): WeightedTurn[] {
+  const turns: ConversationTurn[] = messages.map(msg => ({
+    role: msg.direction === 'inbound' ? 'user' : 'assistant',
+    content: msg.text,
+    timestamp: msg.createdAt.getTime(),
+    action: msg.meta?.action as any
+  }))
+  
+  // Take last MAX_HISTORY_LENGTH turns
+  const recentTurns = turns.slice(-MAX_HISTORY_LENGTH)
+  
+  // Apply weights (most recent has highest weight)
+  return recentTurns.map((turn, index) => {
+    const reverseIndex = recentTurns.length - 1 - index
+    const weight = HISTORY_WEIGHTS[reverseIndex] ?? 0.2
+    return { ...turn, weight }
+  })
+}
+

@@ -169,6 +169,20 @@ describe('Scenario: Send Commands', () => {
     
     expect(result.action).toBe('draft_send')
   })
+  
+  test('non-admin can send drafted announcement', async () => {
+    await testMessage(regularUser, 'announce meeting at 7')
+    
+    const result = await plan({
+      phone: regularUser.phone,
+      message: 'send',
+      user: regularUser,
+      sendAnnouncement: async () => 15,
+      sendPoll: async () => 15
+    })
+    
+    expect(result.action).toBe('draft_send')
+  })
 })
 
 // ============================================
@@ -315,10 +329,10 @@ describe('Scenario: Edit Commands', () => {
 })
 
 // ============================================
-// SCENARIO: Non-Admin Restrictions
+// SCENARIO: Non-Admin Announcement/Poll Support
 // ============================================
 
-describe('Scenario: Non-Admin Restrictions', () => {
+describe('Scenario: Non-Admin Announcement/Poll Support', () => {
   const adminCommands = [
     'announce meeting tonight',
     'poll who is coming',
@@ -327,13 +341,11 @@ describe('Scenario: Non-Admin Restrictions', () => {
     'tell everyone about dinner',
   ]
   
-  test.each(adminCommands)('non-admin: "%s" → handled appropriately', async (input) => {
+  test.each(adminCommands)('non-admin: "%s" → can draft', async (input) => {
     const result = await testMessage(regularUser, input)
-    // Should be rejected or handled differently than admin
-    // Either not draft_write, or if it is, should indicate not allowed
-    if (result.action === 'draft_write') {
-      expect(result.response.toLowerCase()).toMatch(/admin|can't|cannot|not allowed|permission/)
-    }
+    expect(result.action).toBe('draft_write')
+    expect(['announcement', 'poll']).toContain(result.classification.subtype)
+    expect(result.response.toLowerCase()).not.toMatch(/admin|cannot|not allowed|permission/)
   })
 })
 
@@ -424,7 +436,7 @@ describe('Scenario: Easter Eggs', () => {
   
   test('good morning', async () => {
     const result = await testMessage(regularUser, 'good morning')
-    expect(result.response.toLowerCase()).toMatch(/morn/)
+    expect(result.response.toLowerCase()).toMatch(/morn|need/)
   })
   
   test('how are you', async () => {

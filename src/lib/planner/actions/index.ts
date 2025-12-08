@@ -8,4 +8,5 @@ export { handleDraftSend, handleDraftCancel, type SendActionInput } from './send
 export { handleContentQuery, getQuickContentAnswer, type ContentQueryInput, type ContentResult } from './content'
 export { handleCapabilityQuery, checkForEasterEgg, type CapabilityQueryInput } from './capability'
 export { handleChat, handleGibberish, handleEmptyMessage, type ChatActionInput } from './chat'
+export { handlePollResponse, hasActivePoll, type PollResponseInput } from './pollResponse'
 

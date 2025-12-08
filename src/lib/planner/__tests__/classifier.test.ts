@@ -103,13 +103,13 @@ describe('Admin Announcement Classification', () => {
     expect(result.subtype).toBe('announcement')
   })
   
-  test('non-admin cannot make announcements', async () => {
+  test('regular user can make announcements', async () => {
     const result = await classifyIntent(createContext(
       'announce meeting tonight',
       { isAdmin: false }
     ))
-    // Should not be classified as draft_write for non-admins
-    expect(result.action).not.toBe('draft_write')
+    expect(result.action).toBe('draft_write')
+    expect(result.subtype).toBe('announcement')
   })
 })
 
@@ -173,12 +173,13 @@ describe('Admin Poll Classification', () => {
     expect(result.subtype).toBe('poll')
   })
   
-  test('non-admin cannot create polls', async () => {
+  test('regular user can create polls', async () => {
     const result = await classifyIntent(createContext(
       'poll who is coming',
       { isAdmin: false }
     ))
-    expect(result.action).not.toBe('draft_write')
+    expect(result.action).toBe('draft_write')
+    expect(result.subtype).toBe('poll')
   })
 })
 

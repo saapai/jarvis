@@ -152,7 +152,7 @@ describe('Personality Application', () => {
     })
     
     // Should be an acknowledgment response
-    expect(result.toLowerCase()).toMatch(/welcome|np|sure|mention|appreciate|know|amazing/)
+    expect(result.toLowerCase()).toMatch(/welcome|np|sure|mention|appreciate|know|amazing|here for|appreciation/)
   })
   
   test('handles greetings', () => {
@@ -259,7 +259,7 @@ describe('Easter Eggs', () => {
   test('good morning', () => {
     const result = checkForEasterEgg('good morning')
     expect(result).toBeTruthy()
-    expect(result!.toLowerCase()).toMatch(/morn/)
+    expect(result!.toLowerCase()).toMatch(/morn|need/)
   })
   
   test('good night', () => {
@@ -320,12 +320,12 @@ describe('Response Templates', () => {
     expect(poll.toLowerCase()).toMatch(/poll|ask/)
   })
   
-  test('capabilities differs for admin vs non-admin', () => {
+  test('capabilities include announcements for everyone', () => {
     const admin = TEMPLATES.capabilities(true)
     const user = TEMPLATES.capabilities(false)
-    expect(admin).not.toBe(user)
     expect(admin.toLowerCase()).toContain('announce')
-    expect(user.toLowerCase()).not.toContain('announce')
+    expect(user.toLowerCase()).toContain('announce')
+    expect(user).toBe(admin)
   })
   
   test('noDraft response', () => {
@@ -334,10 +334,10 @@ describe('Response Templates', () => {
     expect(result.length).toBeGreaterThan(10)
   })
   
-  test('notAdmin response', () => {
+  test('notAdmin response now encourages sending', () => {
     const result = TEMPLATES.notAdmin()
     expect(result).toBeTruthy()
-    expect(result.toLowerCase()).toMatch(/admin|can't|cannot/)
+    expect(result.toLowerCase()).toMatch(/everyone can send|what do you want to say/)
   })
   
   test('noResults response', () => {

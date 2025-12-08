@@ -88,10 +88,10 @@ export function analyzeTone(message: string): ToneAnalysis {
   
   // Energy level
   let energy: 'low' | 'medium' | 'high' = 'medium'
-  if (message.length < 10 || /^(k|ok|sure|fine|whatever)$/i.test(lower)) {
-    energy = 'low'
-  } else if (isInsult || isAggressive || message.includes('!') || /[A-Z]{2,}/.test(message)) {
+  if (isInsult || isAggressive || message.includes('!') || /[A-Z]{2,}/.test(message)) {
     energy = 'high'
+  } else if (message.length < 10 || /^(k|ok|sure|fine|whatever)$/i.test(lower)) {
+    energy = 'low'
   }
   
   return {
@@ -245,10 +245,59 @@ export interface PersonalityInput {
   userMessage: string
   userName: string | null
   config?: PersonalityConfig
+  useLLM?: boolean  // If true, use LLM for personality rendering
 }
 
 /**
- * Apply personality to a response
+ * Apply personality using LLM for more dynamic responses
+ */
+async function applyPersonalityLLM(
+  baseResponse: string,
+  userMessage: string,
+  userName: string | null,
+  config: PersonalityConfig
+): Promise<string> {
+  try {
+    const tone = analyzeTone(userMessage)
+    const toneLevel = config.matchUserEnergy && tone.isAggressive ? 'spicy' : config.baseTone
+    
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    
+    const systemPrompt = `You are Jarvis, a sassy AI assistant for an organization.
+
+Personality traits:
+- Witty and slightly mean, but helpful
+- Lowercase messages, minimal punctuation
+- Uses emoji sparingly (${config.useEmoji ? 'yes' : 'no'})
+- Tone level: ${toneLevel} (mild=gentle sass, medium=normal sass, spicy=very sassy)
+- Match user energy: ${config.matchUserEnergy ? 'if they insult you, be meaner back' : 'stay consistent'}
+
+Transform the base response below into your voice. Keep it under 160 characters if possible (SMS limit).`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { 
+          role: 'user', 
+          content: `Base response: "${baseResponse}"\n\nUser said: "${userMessage}"\n\nTransform this into Jarvis's voice.` 
+        }
+      ],
+      temperature: 0.8,
+      max_tokens: 100
+    })
+    
+    return response.choices[0].message.content || baseResponse
+  } catch (error) {
+    console.error('[Personality] LLM error:', error)
+    // Fallback to rule-based personality
+    return addSass(baseResponse, config.baseTone)
+  }
+}
+
+/**
+ * Apply personality to a response (synchronous version using rules)
  */
 export function applyPersonality(input: PersonalityInput): string {
   const { baseResponse, userMessage, userName, config = DEFAULT_PERSONALITY } = input
@@ -296,6 +345,40 @@ export function applyPersonality(input: PersonalityInput): string {
   return result
 }
 
+/**
+ * Apply personality to a response (async version with optional LLM)
+ */
+export async function applyPersonalityAsync(input: PersonalityInput): Promise<string> {
+  const { baseResponse, userMessage, userName, config = DEFAULT_PERSONALITY, useLLM = false } = input
+  
+  const tone = analyzeTone(userMessage)
+  
+  // Handle special cases first (always use rules for these)
+  
+  // 1. Insults -> comebacks
+  if (tone.isInsult && config.matchUserEnergy) {
+    return generateComeback(userMessage)
+  }
+  
+  // 2. Thank you responses
+  if (/\b(thanks|thank you|thx|ty)\b/i.test(userMessage.toLowerCase())) {
+    return handleThankYou()
+  }
+  
+  // 3. Pure greetings (just "hi", "hey", etc.)
+  if (/^(hi|hey|hello|yo|sup|what'?s up|wassup)$/i.test(userMessage.trim())) {
+    return handleGreeting(userName)
+  }
+  
+  // 4. Use LLM for non-template responses if requested
+  if (useLLM && process.env.OPENAI_API_KEY) {
+    return await applyPersonalityLLM(baseResponse, userMessage, userName, config)
+  }
+  
+  // 5. Fallback to rule-based personality
+  return applyPersonality(input)
+}
+
 // ============================================
 // RESPONSE TEMPLATES
 // ============================================
@@ -324,16 +407,15 @@ export const TEMPLATES = {
     `you don't have anything drafted rn. wanna make an announcement or poll?`,
   
   notAdmin: () =>
-    `nice try but you can't do that. only admins can send announcements and polls`,
+    `everyone can send announcements and polls now. what do you want to say?`,
   
   // Content queries
   noResults: () =>
     `idk what you're asking about tbh. try being more specific?`,
   
   // Capability queries  
-  capabilities: (isAdmin: boolean) => isAdmin
-    ? `i can:\n📢 send announcements ("announce [message]")\n📊 create polls ("poll [question]")\n💬 answer questions about the org\n\nor just chat if you're bored`
-    : `i can:\n💬 answer questions about the org\n📊 respond to polls\n\njust text me what you need`,
+  capabilities: (_isAdmin: boolean) =>
+    `i can:\n📢 send announcements ("announce [message]")\n📊 create polls ("poll [question]")\n💬 answer questions about the org\n\njust text me what you need or tell me what to send`,
   
   // Default fallback
   confused: () =>

@@ -228,18 +228,13 @@ describe('Mixed Intent Conversations', () => {
 // ============================================
 
 describe('Regular User Conversations', () => {
-  test('Non-admin announcement attempt gets rejected', async () => {
+  test('Regular user can create announcements', async () => {
     const results = await simulateConversation(createRegularUser(), [
       'announce meeting tonight'
     ])
     
-    // Should either not be draft_write, or if it is, response should indicate not allowed
-    if (results[0].action === 'draft_write') {
-      expect(results[0].response.toLowerCase()).toMatch(/admin|can't|cannot|not allowed|permission/)
-    } else {
-      // Falls through to chat or other action - that's also acceptable
-      expect(results[0].action).toBeTruthy()
-    }
+    expect(results[0].action).toBe('draft_write')
+    expect(results[0].response.toLowerCase()).not.toMatch(/admin|cannot|not allowed|permission/)
   })
   
   test('Can ask questions', async () => {
@@ -424,6 +419,16 @@ describe('Admin vs Non-Admin Behavior', () => {
     expect(results[1].action).toBe('draft_send')
   })
   
+  test('Regular user can create polls', async () => {
+    const results = await simulateConversation(createRegularUser(), [
+      'poll who is coming',
+      'send'
+    ])
+    
+    expect(results[0].action).toBe('draft_write')
+    expect(results[1].action).toBe('draft_send')
+  })
+  
   test('Both can ask for help', async () => {
     const adminResults = await simulateConversation(createAdminUser(), ['help'])
     const userResults = await simulateConversation(createRegularUser(), ['help'])
@@ -431,10 +436,9 @@ describe('Admin vs Non-Admin Behavior', () => {
     expect(adminResults[0].action).toBe('capability_query')
     expect(userResults[0].action).toBe('capability_query')
     
-    // Admin response should mention announcements
+    // Everyone should see announcement/poll capabilities
     expect(adminResults[0].response.toLowerCase()).toMatch(/announce/)
-    // Regular user response should not
-    expect(userResults[0].response.toLowerCase()).not.toMatch(/announce/)
+    expect(userResults[0].response.toLowerCase()).toMatch(/announce/)
   })
   
   test('Both can ask questions', async () => {

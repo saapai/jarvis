@@ -10,7 +10,7 @@ import {
   createEmptyDraft,
   ClassificationResult
 } from '../types'
-import { getDraft, setDraft, updateDraft } from '../history'
+import * as draftRepo from '@/lib/repositories/draftRepository'
 import { extractContent } from '../classifier'
 import { applyPersonality, TEMPLATES, removeEmoji } from '../personality'
 
@@ -26,22 +26,10 @@ export interface DraftActionInput {
  * Handle draft write/edit action
  */
 export async function handleDraftWrite(input: DraftActionInput): Promise<ActionResult> {
-  const { phone, message, userName, isAdmin, classification } = input
-  
-  // Non-admins can't create drafts
-  if (!isAdmin) {
-    return {
-      action: 'draft_write',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.notAdmin(),
-        userMessage: message,
-        userName
-      })
-    }
-  }
+  const { phone, message, userName, classification } = input
   
   const draftType = classification.subtype || 'announcement'
-  const existingDraft = getDraft(phone)
+  const existingDraft = await draftRepo.getActiveDraft(phone)
   
   // Case 1: No existing draft - determine if we have content or need to ask
   if (!existingDraft) {
@@ -49,8 +37,9 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     
     // If message was just a command without content, ask for it
     if (content.length < 5 || isJustCommand(message, draftType)) {
+      // Create empty draft in DB
+      await draftRepo.createDraft(phone, draftType, '')
       const newDraft = createEmptyDraft(draftType)
-      setDraft(phone, newDraft)
       
       return {
         action: 'draft_write',
@@ -64,14 +53,16 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     }
     
     // We have content - create draft with it
+    const formattedContent = formatContent(content, draftType)
+    await draftRepo.createDraft(phone, draftType, formattedContent)
+    
     const newDraft: Draft = {
       type: draftType,
-      content: formatContent(content, draftType),
+      content: formattedContent,
       status: 'ready',
       createdAt: Date.now(),
       updatedAt: Date.now()
     }
-    setDraft(phone, newDraft)
     
     return {
       action: 'draft_write',
@@ -88,10 +79,15 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   if (existingDraft.status === 'drafting' && !existingDraft.content) {
     const content = formatContent(message.trim(), existingDraft.type)
     
-    const updatedDraft = updateDraft(phone, {
+    // Update draft in DB
+    await draftRepo.updateDraftByPhone(phone, { draftText: content })
+    
+    const updatedDraft: Draft = {
+      ...existingDraft,
       content,
-      status: 'ready'
-    })
+      status: 'ready',
+      updatedAt: Date.now()
+    }
     
     return {
       action: 'draft_write',
@@ -100,7 +96,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
         userMessage: message,
         userName
       }),
-      newDraft: updatedDraft || undefined
+      newDraft: updatedDraft
     }
   }
   
@@ -108,9 +104,14 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   if (existingDraft.status === 'ready') {
     const editedContent = applyEdit(existingDraft.content, message, existingDraft.type)
     
-    const updatedDraft = updateDraft(phone, {
-      content: editedContent
-    })
+    // Update draft in DB
+    await draftRepo.updateDraftByPhone(phone, { draftText: editedContent })
+    
+    const updatedDraft: Draft = {
+      ...existingDraft,
+      content: editedContent,
+      updatedAt: Date.now()
+    }
     
     return {
       action: 'draft_write',
@@ -119,7 +120,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
         userMessage: message,
         userName
       }),
-      newDraft: updatedDraft || undefined
+      newDraft: updatedDraft
     }
   }
   

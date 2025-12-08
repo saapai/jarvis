@@ -4,7 +4,7 @@
  */
 
 import { ActionResult } from '../types'
-import { getDraft, clearDraft } from '../history'
+import * as draftRepo from '@/lib/repositories/draftRepository'
 import { applyPersonality, TEMPLATES } from '../personality'
 
 export interface SendActionInput {
@@ -21,21 +21,9 @@ export interface SendActionInput {
  * Handle draft send action
  */
 export async function handleDraftSend(input: SendActionInput): Promise<ActionResult> {
-  const { phone, message, userName, isAdmin, sendAnnouncement, sendPoll } = input
+  const { phone, message, userName, sendAnnouncement, sendPoll } = input
   
-  // Non-admins can't send
-  if (!isAdmin) {
-    return {
-      action: 'draft_send',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.notAdmin(),
-        userMessage: message,
-        userName
-      })
-    }
-  }
-  
-  const draft = getDraft(phone)
+  const draft = await draftRepo.getActiveDraft(phone)
   
   // No draft to send
   if (!draft) {
@@ -71,8 +59,8 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
       sentCount = await sendPoll(draft.content, phone)
     }
     
-    // Clear the draft after successful send
-    clearDraft(phone)
+    // Finalize the draft after successful send
+    await draftRepo.finalizeDraft(phone)
     
     return {
       action: 'draft_send',
@@ -81,7 +69,7 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
         userMessage: message,
         userName
       }),
-      newDraft: undefined  // Draft is cleared
+      newDraft: undefined  // Draft is finalized
     }
   } catch (error) {
     console.error('[Send] Failed to send draft:', error)
@@ -100,14 +88,14 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
 /**
  * Handle draft cancellation
  */
-export function handleDraftCancel(input: {
+export async function handleDraftCancel(input: {
   phone: string
   message: string
   userName: string | null
-}): ActionResult {
+}): Promise<ActionResult> {
   const { phone, message, userName } = input
   
-  const draft = getDraft(phone)
+  const draft = await draftRepo.getActiveDraft(phone)
   
   if (!draft) {
     return {
@@ -120,7 +108,7 @@ export function handleDraftCancel(input: {
     }
   }
   
-  clearDraft(phone)
+  await draftRepo.deleteDraft(phone)
   
   return {
     action: 'chat',

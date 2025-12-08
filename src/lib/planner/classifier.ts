@@ -28,7 +28,7 @@ interface PatternMatch {
  */
 function patternMatch(message: string, context: ClassificationContext): PatternMatch | null {
   const lower = message.toLowerCase().trim()
-  const { activeDraft, isAdmin } = context
+  const { activeDraft } = context
   
   // ============================================
   // SEND COMMANDS (highest priority when draft exists)
@@ -49,58 +49,54 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
   }
   
   // ============================================
-  // ADMIN: ANNOUNCEMENT INTENT
+  // ANNOUNCEMENT INTENT
   // ============================================
-  if (isAdmin) {
-    // Explicit "announce X" command
-    if (/^announce\s+.+/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.95, subtype: 'announcement' }
-    }
-    
-    // "make/send an announcement"
-    if (/\b(make|send|create|start)\s+(an?\s+)?announcement\b/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.9, subtype: 'announcement' }
-    }
-    
-    // "tell everyone X" / "let everyone know"
-    if (/\b(tell|notify|let)\s+(everyone|people|all|the group|everybody)\b/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.85, subtype: 'announcement' }
-    }
-    
-    // "send out a message"
-    if (/\b(send|send out)\s+(a\s+)?(message|text)\s+(to\s+)?(everyone|all|the group)\b/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.85, subtype: 'announcement' }
-    }
-    
-    // "send out a message about X" (without everyone)
-    if (/\b(send|send out)\s+(a\s+)?(message|text)\s+(about|for|regarding)\b/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.8, subtype: 'announcement' }
-    }
+  // Explicit "announce X" command
+  if (/^announce\s+.+/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.95, subtype: 'announcement' }
+  }
+  
+  // "make/send an announcement"
+  if (/\b(make|send|create|start)\s+(an?\s+)?announcement\b/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.9, subtype: 'announcement' }
+  }
+  
+  // "tell everyone X" / "let everyone know"
+  if (/\b(tell|notify|let)\s+(everyone|people|all|the group|everybody)\b/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.85, subtype: 'announcement' }
+  }
+  
+  // "send out a message"
+  if (/\b(send|send out)\s+(a\s+)?(message|text)\s+(to\s+)?(everyone|all|the group)\b/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.85, subtype: 'announcement' }
+  }
+  
+  // "send out a message about X" (without everyone)
+  if (/\b(send|send out)\s+(a\s+)?(message|text)\s+(about|for|regarding)\b/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.8, subtype: 'announcement' }
   }
   
   // ============================================
-  // ADMIN: POLL INTENT
+  // POLL INTENT
   // ============================================
-  if (isAdmin) {
-    // Explicit "poll X" command
-    if (/^poll\s+.+/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.95, subtype: 'poll' }
-    }
-    
-    // "make/create/start a poll"
-    if (/\b(make|send|create|start)\s+(a\s+)?poll\b/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.9, subtype: 'poll' }
-    }
-    
-    // "ask everyone if/whether"
-    if (/\b(ask|asking)\s+(everyone|people|all|the group|everybody)\s+(if|whether|about)\b/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.85, subtype: 'poll' }
-    }
-    
-    // "who's coming to X" - poll intent
-    if (/\b(who'?s|who is|who can|who will)\s+(coming|going|attending|free|available)\b/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.8, subtype: 'poll' }
-    }
+  // Explicit "poll X" command
+  if (/^poll\s+.+/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.95, subtype: 'poll' }
+  }
+  
+  // "make/create/start a poll"
+  if (/\b(make|send|create|start)\s+(a\s+)?poll\b/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.9, subtype: 'poll' }
+  }
+  
+  // "ask everyone if/whether"
+  if (/\b(ask|asking)\s+(everyone|people|all|the group|everybody)\s+(if|whether|about)\b/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.85, subtype: 'poll' }
+  }
+  
+  // "who's coming to X" - poll intent
+  if (/\b(who'?s|who is|who can|who will)\s+(coming|going|attend(?:ing)?|free|available)\b/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.8, subtype: 'poll' }
   }
   
   // ============================================
@@ -128,7 +124,11 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
     /\b(what'?s|what is) (happening|going on|the plan)\b/i,
     /\b(is there|are there) (a |an )?(meeting|event|active)\b/i,
     /\b(tell me about|info on|details about)\b/i,
-    /\bwhat('?s| is) (tonight|today|tomorrow|this week)\b/i
+    /\bwhat('?s| is) (tonight|today|tomorrow|this week)\b/i,
+    /\bwhat are we doing\b/i,
+    /\bwhen does [a-z0-9 ]+ start\b/i,
+    /\bwhat time should (i|we) (be there|arrive)\b/i,
+    /\bwhere should (we|i) (meet|go|be)\b/i
   ]
   
   for (const pattern of contentPatterns) {
@@ -140,20 +140,10 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
   // ============================================
   // CONTEXT-BASED: Awaiting draft input
   // ============================================
-  const lastAssistantMsg = context.history.find(h => h.role === 'assistant')?.content?.toLowerCase() || ''
-  
   if (activeDraft && activeDraft.status === 'drafting' && !activeDraft.content) {
-    // Bot asked for content, user is providing it
-    if (
-      lastAssistantMsg.includes('what would you like to announce') ||
-      lastAssistantMsg.includes('what would you like the announcement to say') ||
-      lastAssistantMsg.includes("what's your poll question") ||
-      lastAssistantMsg.includes('what do you want to ask')
-    ) {
-      // Unless it looks like a question or command
-      if (!lower.endsWith('?') && !/^(cancel|nvm|help|stop)/i.test(lower)) {
-        return { action: 'draft_write', confidence: 0.85, subtype: activeDraft.type }
-      }
+    // Bot asked for content, user is providing it (any non-cancel input)
+    if (!/^(cancel|nvm|help|stop)/i.test(lower)) {
+      return { action: 'draft_write', confidence: 0.85, subtype: activeDraft.type }
     }
   }
   
@@ -219,7 +209,6 @@ Classify this message into ONE of these actions:
 Consider:
 - The weighted history (higher weight = more relevant context)
 - Whether there's an active draft waiting for input or confirmation
-- Whether the user is an admin (only admins can create announcements/polls)
 - The tone and intent of the message
 
 Respond with JSON only:
@@ -234,20 +223,54 @@ Respond with JSON only:
 }
 
 /**
- * Call LLM for classification (placeholder - integrate with actual LLM)
+ * Call LLM for classification using OpenAI
  */
 async function callLLMClassifier(prompt: string): Promise<ClassificationResult> {
-  // TODO: Integrate with Mistral/OpenAI API
-  // For now, return default chat action
-  console.log('[Classifier] LLM prompt:', prompt.substring(0, 200) + '...')
-  
-  // Placeholder: In production, call your LLM here
-  // const response = await fetch('https://api.mistral.ai/v1/chat/completions', { ... })
-  
-  return {
-    action: 'chat',
-    confidence: 0.5,
-    reasoning: 'LLM fallback not yet implemented'
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    
+    console.log('[Classifier] Calling OpenAI for intent classification...')
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', // fast + cheap for routing
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are a precise intent classifier. Always respond with valid JSON.' 
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      response_format: { type: 'json_object' }
+    })
+    
+    const content = response.choices[0].message.content
+    if (!content) {
+      console.error('[Classifier] LLM returned empty response')
+      return {
+        action: 'chat',
+        confidence: 0.5,
+        reasoning: 'LLM returned empty response'
+      }
+    }
+    
+    const json = JSON.parse(content)
+    
+    return {
+      action: json.action || 'chat',
+      confidence: json.confidence || 0.5,
+      subtype: json.subtype || undefined,
+      reasoning: json.reasoning || 'LLM classification'
+    }
+  } catch (error) {
+    console.error('[Classifier] LLM classification error:', error)
+    // Fallback to chat on error
+    return {
+      action: 'chat',
+      confidence: 0.5,
+      reasoning: `LLM error: ${error instanceof Error ? error.message : 'unknown'}`
+    }
   }
 }
 

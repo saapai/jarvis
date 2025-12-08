@@ -144,7 +144,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
       actionResult = await actions.handleChat({
         phone,
         message,
-        userName: user.name
+      userName: user.name,
+      isAdmin: memberRepo.isAdmin(phone)
       })
       break
   }

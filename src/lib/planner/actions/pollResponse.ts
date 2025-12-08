@@ -68,3 +68,4 @@ export async function hasActivePoll(): Promise<boolean> {
   const activePoll = await pollRepo.getActivePoll()
   return activePoll !== null
 }
+

@@ -233,3 +233,4 @@ export async function deactivatePoll(pollId: string): Promise<void> {
     data: { isActive: false }
   })
 }
+

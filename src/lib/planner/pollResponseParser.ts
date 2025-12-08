@@ -102,3 +102,4 @@ export function parsePollResponse(message: string): ParsedPollResponse {
   // Default: return as Maybe with the full message as notes
   return { response: 'Maybe', notes: original }
 }
+

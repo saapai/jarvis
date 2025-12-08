@@ -109,3 +109,4 @@ export async function deleteOldMessages(daysOld: number = 30): Promise<number> {
   
   return result.count
 }
+

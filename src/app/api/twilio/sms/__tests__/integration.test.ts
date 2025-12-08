@@ -148,3 +148,4 @@ describe('Poll Response Parsing', () => {
     expect(parsePollResponse('depends on work')).toEqual({ response: 'Maybe', notes: expect.stringContaining('work') })
   })
 })
+

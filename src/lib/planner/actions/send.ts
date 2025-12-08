@@ -25,8 +25,11 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
   
   const draft = await draftRepo.getActiveDraft(phone)
   
+  console.log(`[Send] Draft found: ${draft ? 'yes' : 'no'}`)
+  
   // No draft to send
   if (!draft) {
+    console.log(`[Send] No draft available to send`)
     return {
       action: 'draft_send',
       response: applyPersonality({
@@ -53,11 +56,15 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
   try {
     let sentCount: number
     
+    console.log(`[Send] Sending ${draft.type}: "${draft.content}"`)
+    
     if (draft.type === 'announcement') {
       sentCount = await sendAnnouncement(draft.content, phone)
     } else {
       sentCount = await sendPoll(draft.content, phone)
     }
+    
+    console.log(`[Send] Successfully sent to ${sentCount} users`)
     
     // Finalize the draft after successful send
     await draftRepo.finalizeDraft(phone)

@@ -95,12 +95,14 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   
   const classification = await classifyIntent(context)
   console.log(`[Classification] ${classification.action} (${classification.confidence.toFixed(2)}) - ${classification.reasoning}`)
+  console.log(`[ActionRouter] Routing to ${classification.action} handler...`)
   
   // 7. Route to appropriate handler
   let actionResult: ActionResult
   
   switch (classification.action) {
     case 'draft_write':
+      console.log(`[DraftWrite] Creating/editing draft...`)
       actionResult = await actions.handleDraftWrite({
         phone,
         message,
@@ -108,9 +110,17 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         isAdmin: memberRepo.isAdmin(phone),
         classification
       })
+      console.log(`[DraftWrite] Result: ${actionResult.response.substring(0, 50)}...`)
+      if (actionResult.newDraft) {
+        console.log(`[DraftWrite] Draft state: ${actionResult.newDraft.status}, content: "${actionResult.newDraft.content}"`)
+      }
       break
     
     case 'draft_send':
+      console.log(`[DraftSend] Attempting to send draft...`)
+      if (activeDraft) {
+        console.log(`[DraftSend] Active draft: type=${activeDraft.type}, content="${activeDraft.content}"`)
+      }
       actionResult = await actions.handleDraftSend({
         phone,
         message,
@@ -119,36 +129,46 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         sendAnnouncement: sendAnnouncementToAll,
         sendPoll: sendPollToAll
       })
+      console.log(`[DraftSend] Result: ${actionResult.response.substring(0, 50)}...`)
       break
     
     case 'content_query':
+      console.log(`[ContentQuery] Querying content for: "${message}"`)
       actionResult = await actions.handleContentQuery({
         phone,
         message,
         userName: user.name,
-        searchContent: searchFactsDatabase
+        searchContent: searchFactsDatabase,
+        recentMessages
       })
+      console.log(`[ContentQuery] Result: ${actionResult.response.substring(0, 50)}...`)
       break
     
     case 'capability_query':
+      console.log(`[CapabilityQuery] Explaining capabilities...`)
       actionResult = await actions.handleCapabilityQuery({
         phone,
         message,
         userName: user.name,
         isAdmin: memberRepo.isAdmin(phone)
       })
+      console.log(`[CapabilityQuery] Result: ${actionResult.response.substring(0, 50)}...`)
       break
     
     case 'chat':
     default:
+      console.log(`[Chat] Handling as casual conversation...`)
       actionResult = await actions.handleChat({
         phone,
         message,
       userName: user.name,
       isAdmin: memberRepo.isAdmin(phone)
       })
+      console.log(`[Chat] Result: ${actionResult.response.substring(0, 50)}...`)
       break
   }
+  
+  console.log(`[ActionRouter] Action complete, applying personality...`)
   
   // 8. Apply personality to response (async LLM version for richer responses)
   const finalResponse = await applyPersonalityAsync({
@@ -158,11 +178,20 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     useLLM: false // Set to true to use LLM personality (costs more)
   })
   
-  // 9. Log outbound message
-  await messageRepo.logMessage(phone, 'outbound', finalResponse, {
+  // 9. Log outbound message with draft content if applicable
+  const metadata: any = {
     action: classification.action,
     confidence: classification.confidence
-  })
+  }
+  
+  // Store draft content for later retrieval
+  if (classification.action === 'draft_send' && activeDraft?.content) {
+    metadata.draftContent = activeDraft.content
+  } else if (classification.action === 'draft_write' && actionResult.newDraft?.content) {
+    metadata.draftContent = actionResult.newDraft.content
+  }
+  
+  await messageRepo.logMessage(phone, 'outbound', finalResponse, metadata)
   
   // 10. Update conversation state if needed (handled by action handlers)
   
@@ -292,7 +321,6 @@ async function handleOnboarding(phone: string, message: string, user: any): Prom
 
 async function sendAnnouncementToAll(content: string, senderPhone: string): Promise<number> {
   const users = await memberRepo.getOptedInMembers()
-  const senderNormalized = normalizePhone(senderPhone)
   let sent = 0
   
   console.log(`[Announce] Sending to ${users.length} users`)
@@ -300,9 +328,8 @@ async function sendAnnouncementToAll(content: string, senderPhone: string): Prom
   for (const user of users) {
     const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
     
-    // Skip invalid phones or sender
+    // Skip invalid phones only
     if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
-    if (userPhoneNormalized === senderNormalized) continue
     
     const result = await sendSms(toE164(userPhoneNormalized), content)
     if (result.ok) {
@@ -325,7 +352,6 @@ async function sendPollToAll(question: string, senderPhone: string): Promise<num
   const poll = await pollRepo.createPoll(question, senderPhone, false)
   
   const users = await memberRepo.getOptedInMembers()
-  const senderNormalized = normalizePhone(senderPhone)
   let sent = 0
   
   console.log(`[Poll] Sending poll "${question}" to ${users.length} users`)
@@ -335,9 +361,8 @@ async function sendPollToAll(question: string, senderPhone: string): Promise<num
   for (const user of users) {
     const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
     
-    // Skip invalid phones or sender
+    // Skip invalid phones only
     if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
-    if (userPhoneNormalized === senderNormalized) continue
     
     const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
     if (result.ok) {

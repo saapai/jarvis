@@ -465,4 +465,3 @@ export function getQuickResponse(input: string): string | null {
   
   return null
 }
-

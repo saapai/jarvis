@@ -120,6 +120,8 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
   // CONTENT QUERIES (about org stuff)
   // ============================================
   const contentPatterns = [
+    /\b(what did|what have) (you|i) (just )?(send|sent|say|said|announce|do|did)\b/i,
+    /\bwhat (was|is) (that|the) (announcement|message|poll)\b/i,
     /\b(when|what time|where) is\b/i,
     /\b(what'?s|what is) (happening|going on|the plan)\b/i,
     /\b(is there|are there) (a |an )?(meeting|event|active)\b/i,
@@ -201,10 +203,15 @@ Current message: "${currentMessage}"
 
 Classify this message into ONE of these actions:
 1. draft_write - Creating or editing an announcement or poll draft
-2. draft_send - Sending out an existing draft (only if draft exists and is ready)
+2. draft_send - ONLY explicit send commands like "send", "yes", "go", "send it" when a draft is ready. NOT requests to create announcements.
 3. content_query - Questions about organization content (events, meetings, schedules, people)
 4. capability_query - Questions about Jarvis/Enclave capabilities, help requests
 5. chat - Casual conversation, banter, insults, greetings, or anything else
+
+IMPORTANT:
+- draft_send should ONLY match explicit confirmation words like "send", "yes", "go", "do it", "blast it"
+- If the message is asking to create/send an announcement or poll (like "can you send out an announcement saying X"), classify as draft_write, NOT draft_send
+- If the message matches the draft content exactly, classify as chat (they're repeating themselves) unless it's an explicit send command
 
 Consider:
 - The weighted history (higher weight = more relevant context)
@@ -380,4 +387,3 @@ export function extractContent(message: string, type: DraftType): string {
   
   return content.trim()
 }
-

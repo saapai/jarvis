@@ -31,12 +31,16 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   const draftType = classification.subtype || 'announcement'
   const existingDraft = await draftRepo.getActiveDraft(phone)
   
+  console.log(`[DraftWrite] Type: ${draftType}, Existing draft: ${existingDraft ? 'yes' : 'no'}`)
+  
   // Case 1: No existing draft - determine if we have content or need to ask
   if (!existingDraft) {
     const content = extractContent(message, draftType)
+    console.log(`[DraftWrite] Extracted content: "${content}"`)
     
     // If message was just a command without content, ask for it
     if (content.length < 5 || isJustCommand(message, draftType)) {
+      console.log(`[DraftWrite] No content provided, asking for content...`)
       // Create empty draft in DB
       await draftRepo.createDraft(phone, draftType, '')
       const newDraft = createEmptyDraft(draftType)
@@ -54,6 +58,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     
     // We have content - create draft with it
     const formattedContent = formatContent(content, draftType)
+    console.log(`[DraftWrite] Creating draft with content: "${formattedContent}"`)
     await draftRepo.createDraft(phone, draftType, formattedContent)
     
     const newDraft: Draft = {
@@ -263,6 +268,58 @@ function applyToneModification(content: string, tone: string, type: DraftType): 
     
     case 'short':
       // Truncate to first sentence
+      const firstSentence = content.match(/^[^.!?]+[.!?]?/)?.[0]
+      return firstSentence || content
+    
+    case 'long':
+      // Can't really make it longer without context
+      return content + ' (details to follow)'
+    
+    default:
+      return content
+  }
+}
+
+
+      const firstSentence = content.match(/^[^.!?]+[.!?]?/)?.[0]
+      return firstSentence || content
+    
+    case 'long':
+      // Can't really make it longer without context
+      return content + ' (details to follow)'
+    
+    default:
+      return content
+  }
+}
+
+
+      const firstSentence = content.match(/^[^.!?]+[.!?]?/)?.[0]
+      return firstSentence || content
+    
+    case 'long':
+      // Can't really make it longer without context
+      return content + ' (details to follow)'
+    
+    default:
+      return content
+  }
+}
+
+
+      const firstSentence = content.match(/^[^.!?]+[.!?]?/)?.[0]
+      return firstSentence || content
+    
+    case 'long':
+      // Can't really make it longer without context
+      return content + ' (details to follow)'
+    
+    default:
+      return content
+  }
+}
+
+
       const firstSentence = content.match(/^[^.!?]+[.!?]?/)?.[0]
       return firstSentence || content
     

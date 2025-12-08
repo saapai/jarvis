@@ -211,26 +211,78 @@ text STOP to unsubscribe`
 // ONBOARDING
 // ============================================
 
-async function handleOnboarding(phone: string, message: string, user: any): Promise<string> {
-  // Simple name extraction (could use LLM for better accuracy)
-  const looksLikeName = message.length < 50 && 
-    message.length > 1 &&
-    !/^(yes|no|maybe|\d+|stop|help|start|announce|poll|hi|hello|hey)/i.test(message.toLowerCase())
+/**
+ * Extract name from user message
+ * Removes common prefixes like "I'm", "my name is", etc.
+ */
+function extractName(message: string): string | null {
+  const text = message.trim()
   
-  if (looksLikeName) {
-    const name = message.trim()
-    await memberRepo.updateMemberName(user.id, name)
+  // Check if message is too long or too short
+  if (text.length > 50 || text.length < 2) return null
+  
+  // Check if it starts with common non-name patterns
+  if (/^(yes|no|maybe|\d+|stop|help|start|announce|poll)$/i.test(text.toLowerCase())) {
+    return null
+  }
+  
+  // Remove common prefixes
+  const patterns = [
+    /^i'?m\s+/i,              // "I'm" or "Im"
+    /^my\s+name\s+is\s+/i,    // "my name is"
+    /^this\s+is\s+/i,         // "this is"
+    /^call\s+me\s+/i,         // "call me"
+    /^it'?s\s+/i,             // "it's" or "its"
+    /^i\s+am\s+/i,            // "i am"
+    /^name\s+is\s+/i,         // "name is"
+    /^name:\s*/i,             // "name:"
+    /^hi,?\s+i'?m\s+/i,       // "hi I'm" or "hi im"
+    /^hello,?\s+i'?m\s+/i,    // "hello I'm"
+    /^hey,?\s+i'?m\s+/i,      // "hey I'm"
+  ]
+  
+  let extracted = text
+  for (const pattern of patterns) {
+    extracted = extracted.replace(pattern, '')
+  }
+  
+  // Clean up the extracted name
+  extracted = extracted
+    .replace(/[!.?,;]+$/, '')  // Remove trailing punctuation
+    .trim()
+  
+  // Validate the extracted name
+  if (extracted.length < 2 || extracted.length > 50) return null
+  
+  // Check if it still looks like a command or common phrase
+  if (/^(hi|hello|hey|yes|no|maybe|thanks|ok|okay)$/i.test(extracted)) {
+    return null
+  }
+  
+  // Capitalize first letter of each word
+  return extracted
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+async function handleOnboarding(phone: string, message: string, user: any): Promise<string> {
+  const extractedName = extractName(message)
+  
+  if (extractedName) {
+    await memberRepo.updateMemberName(user.id, extractedName)
     
     if (memberRepo.isAdmin(phone)) {
-      return `hey ${name}! 👋 you're set up as an admin.
+      return `hey ${extractedName}! 👋 you're set up as an admin.
 
 📢 "announce [message]" - send to all
 📊 "poll [question]" - ask everyone
 💬 ask me anything about the org`
     }
-    return `hey ${name}! 👋 you're all set. you'll get announcements and polls from the team.`
+    return `hey ${extractedName}! 👋 you're all set. you'll get announcements and polls from the team.`
   }
   
+  // If name extraction failed, ask again with a hint
   return "hey! i'm jarvis, powered by enclave. what's your name?"
 }
 

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getPrisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // Helper to parse dateStr for sorting
 function parseDateForSort(dateStr: string | null): number {
   if (!dateStr) return Infinity;
@@ -94,4 +96,3 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to build tree' }, { status: 500 });
   }
 }
-

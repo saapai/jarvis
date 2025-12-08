@@ -108,7 +108,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         message,
         userName: user.name,
         isAdmin: memberRepo.isAdmin(phone),
-        classification
+        classification,
+        recentMessages
       })
       console.log(`[DraftWrite] Result: ${actionResult.response.substring(0, 50)}...`)
       if (actionResult.newDraft) {

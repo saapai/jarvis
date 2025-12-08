@@ -20,13 +20,19 @@ export interface DraftActionInput {
   userName: string | null
   isAdmin: boolean
   classification: ClassificationResult
+  recentMessages?: Array<{
+    direction: 'inbound' | 'outbound'
+    text: string
+    createdAt: Date
+    meta?: { action?: string; draftContent?: string } | null
+  }>
 }
 
 /**
  * Handle draft write/edit action
  */
 export async function handleDraftWrite(input: DraftActionInput): Promise<ActionResult> {
-  const { phone, message, userName, classification } = input
+  const { phone, message, userName, classification, recentMessages } = input
   
   const draftType = classification.subtype || 'announcement'
   const existingDraft = await draftRepo.getActiveDraft(phone)
@@ -35,7 +41,11 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   
   // Case 1: No existing draft - determine if we have content or need to ask
   if (!existingDraft) {
-    const content = extractContent(message, draftType)
+    const content = await resolveDraftContent({
+      message,
+      draftType,
+      recentMessages
+    })
     console.log(`[DraftWrite] Extracted content: "${content}"`)
     
     // If message was just a command without content, ask for it
@@ -82,7 +92,15 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   
   // Case 2: Existing draft in 'drafting' state (waiting for content)
   if (existingDraft.status === 'drafting' && !existingDraft.content) {
-    const content = formatContent(message.trim(), existingDraft.type)
+    const content = formatContent(
+      await resolveDraftContent({
+        message,
+        draftType: existingDraft.type,
+        previousContent: existingDraft.content || undefined,
+        recentMessages
+      }),
+      existingDraft.type
+    )
     
     // Update draft in DB
     await draftRepo.updateDraftByPhone(phone, { draftText: content })
@@ -107,7 +125,17 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   
   // Case 3: Existing draft in 'ready' state - user is editing
   if (existingDraft.status === 'ready') {
-    const editedContent = applyEdit(existingDraft.content, message, existingDraft.type)
+    // Try LLM-based resolution first, fall back to rule-based edit
+    const llmEdited = await resolveDraftContent({
+      message,
+      draftType: existingDraft.type,
+      previousContent: existingDraft.content,
+      recentMessages
+    })
+    
+    const editedContent = llmEdited && llmEdited.trim().length > 0
+      ? formatContent(llmEdited, existingDraft.type)
+      : applyEdit(existingDraft.content, message, existingDraft.type)
     
     // Update draft in DB
     await draftRepo.updateDraftByPhone(phone, { draftText: editedContent })
@@ -277,6 +305,79 @@ function applyToneModification(content: string, tone: string, type: DraftType): 
     
     default:
       return content
+  }
+}
+
+
+// ============================================
+// LLM-ASSISTED CONTENT RESOLUTION
+// ============================================
+
+interface ResolveDraftContentParams {
+  message: string
+  draftType: DraftType
+  previousContent?: string
+  recentMessages?: Array<{
+    direction: 'inbound' | 'outbound'
+    text: string
+    createdAt: Date
+    meta?: { action?: string; draftContent?: string } | null
+  }>
+}
+
+/**
+ * Resolve the intended draft content using recent context and LLM.
+ * Falls back to pattern-based extraction if LLM is unavailable.
+ */
+async function resolveDraftContent(params: ResolveDraftContentParams): Promise<string> {
+  const { message, draftType, previousContent, recentMessages } = params
+  
+  // Fallback to simple extractor if no API key
+  if (!process.env.OPENAI_API_KEY) {
+    return extractContent(message, draftType)
+  }
+  
+  // Build a small conversation window (last 4 user messages)
+  const history = (recentMessages || [])
+    .filter(m => m.direction === 'inbound')
+    .slice(-4)
+    .map(m => m.text)
+  
+  const systemPrompt = `You are helping to draft a ${draftType} message.
+- Use only the latest user instruction to produce the final text to send.
+- If the user revises the message (e.g., "actually make it say X"), replace previous content with X.
+- Return ONLY the final text to send. No quotes, no extra wording.`
+  
+  const userPrompt = `
+Conversation (newest last):
+${history.map((h, i) => `${i + 1}. ${h}`).join('\n') || '(no history)'}
+
+Most recent instruction: "${message}"
+Previous draft content: "${previousContent || '(none)'}"
+
+Provide the exact text that should be sent.`
+  
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.2,
+      max_tokens: 120
+    })
+    
+    const content = completion.choices[0].message.content?.trim() || ''
+    if (!content) return extractContent(message, draftType)
+    
+    return formatContent(content, draftType)
+  } catch (error) {
+    console.error('[DraftWrite] LLM extraction failed, falling back:', error)
+    return extractContent(message, draftType)
   }
 }
 

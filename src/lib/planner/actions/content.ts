@@ -68,6 +68,19 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
         }
       }
       
+      // If query is vague, provide a concise summary across top results
+      if (isVagueQuery(message) && results.length > 1) {
+        const summary = summarizeResults(results.slice(0, 3))
+        return {
+          action: 'content_query',
+          response: applyPersonality({
+            baseResponse: summary,
+            userMessage: message,
+            userName
+          })
+        }
+      }
+      
       // Format top result as response
       const topResult = results[0]
       const response = formatContentResponse(topResult, message)
@@ -187,6 +200,25 @@ function formatContentResponse(result: ContentResult, query: string): string {
   
   // Fallback: return first 200 chars
   return body.substring(0, 200) + '...'
+}
+
+/**
+ * Determine if a query is vague/broad and would benefit from a summary.
+ */
+function isVagueQuery(message: string): boolean {
+  const lower = message.toLowerCase()
+  const vagueStarters = /(what is|tell me about|give me info on|what's|whats|who is|summarize|overview)/i
+  const words = lower.split(/\s+/).filter(Boolean)
+  const keywordCount = words.filter(w => w.length > 3).length
+  return vagueStarters.test(lower) || keywordCount <= 3
+}
+
+/**
+ * Summarize multiple results into a concise bullet response.
+ */
+function summarizeResults(results: ContentResult[]): string {
+  const bullets = results.map(r => `• ${r.body}`).join('\n')
+  return `here's the quick rundown:\n${bullets}`
 }
 
 /**

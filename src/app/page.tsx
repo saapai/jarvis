@@ -65,13 +65,13 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Green & purple primary palette; yellow used sparingly elsewhere
+// Green & yellow palette; yellow used for contrast on green and vice versa
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[#2a9d8f]',
-  professional: 'text-[#2a9d8f]',
-  events: 'text-[#2a9d8f]',
-  pledging: 'text-[#7c5ce6]',
-  meetings: 'text-[#7c5ce6]',
+  social: 'text-[var(--accent-contrast)]',       // green card -> yellow text
+  professional: 'text-[var(--accent-contrast)]', // green card -> yellow text
+  events: 'text-[var(--accent-contrast)]',       // green card -> yellow text
+  pledging: 'text-[var(--accent)]',              // yellow card -> green text
+  meetings: 'text-[var(--accent)]',              // yellow card -> green text
   other: 'text-[var(--text-tertiary)]',
 };
 
@@ -79,9 +79,19 @@ const CATEGORY_BG: Record<string, string> = {
   social: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
   professional: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
   events: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
-  pledging: 'bg-[rgba(124,92,230,0.14)] border-[rgba(124,92,230,0.42)] backdrop-blur-sm',
-  meetings: 'bg-[rgba(124,92,230,0.14)] border-[rgba(124,92,230,0.42)] backdrop-blur-sm',
+  pledging: 'bg-[rgba(212,168,85,0.14)] border-[rgba(212,168,85,0.42)] backdrop-blur-sm',
+  meetings: 'bg-[rgba(212,168,85,0.14)] border-[rgba(212,168,85,0.42)] backdrop-blur-sm',
   other: 'bg-[rgba(255,255,255,0.04)] border-[var(--border)]/70 backdrop-blur-sm',
+};
+
+// Time/tag colors inverse of card background
+const TAG_COLORS: Record<string, string> = {
+  social: 'text-[var(--accent-contrast)]',      // green bg -> yellow tag
+  professional: 'text-[var(--accent-contrast)]',
+  events: 'text-[var(--accent-contrast)]',
+  pledging: 'text-[var(--accent)]',             // yellow bg -> green tag
+  meetings: 'text-[var(--accent)]',
+  other: 'text-[var(--accent-contrast)]',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -166,7 +176,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
-            <div className="w-2 h-2 rounded-full bg-[#7c5ce6] animate-pulse-subtle" />
+            <div className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse-subtle" />
             <span className="text-sm text-[var(--text-secondary)]">system online</span>
           </div>
           
@@ -852,7 +862,7 @@ function DumpTab() {
                                 {subcategory}
                               </span>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[var(--accent-contrast)]">@{mainFact.timeRef}</span>
+                                <span className={`text-xs ${TAG_COLORS[mainFact.category]}`}>@{mainFact.timeRef}</span>
                               )}
                               <span className="text-xs text-[var(--text-tertiary)]">({groupFacts.length})</span>
                             </div>
@@ -910,7 +920,7 @@ function DumpTab() {
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       <span className={CATEGORY_COLORS[fact.category]}>{fact.category}</span>
                       {fact.timeRef && (
-                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--accent-contrast)] hover:underline">
+                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className={`${TAG_COLORS[fact.category]} hover:underline`}>
                           @{fact.timeRef}
                         </button>
                       )}

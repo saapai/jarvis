@@ -66,21 +66,21 @@ interface BreadcrumbItem {
 // ============================================
 
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[#813772]',        // posy
-  professional: 'text-[#062f4f]',  // ink
-  pledging: 'text-[#b82601]',      // embers
-  events: 'text-[#c44d32]',        // embers light
-  meetings: 'text-[#3f4d63]',      // muted ink
-  other: 'text-[#6b7280]',
+  social: 'text-[#51e2f5]',        // teal
+  professional: 'text-[#90f9ef]',  // mint
+  pledging: 'text-[#ffa8b6]',      // pink
+  events: 'text-[#edf7f6]',        // soft white
+  meetings: 'text-[#a28089]',      // mauve
+  other: 'text-[#7a6a72]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[#813772]/10 border-[#813772]/25',
-  professional: 'bg-[#062f4f]/10 border-[#062f4f]/25',
-  pledging: 'bg-[#b82601]/10 border-[#b82601]/25',
-  events: 'bg-[#c44d32]/10 border-[#c44d32]/25',
-  meetings: 'bg-[#3f4d63]/10 border-[#3f4d63]/25',
-  other: 'bg-[#6b7280]/10 border-[#6b7280]/25',
+  social: 'bg-[#51e2f5]/15 border-[#51e2f5]/30',
+  professional: 'bg-[#90f9ef]/15 border-[#90f9ef]/30',
+  pledging: 'bg-[#ffa8b6]/15 border-[#ffa8b6]/30',
+  events: 'bg-[#edf7f6]/40 border-[#edf7f6]/70',
+  meetings: 'bg-[#a28089]/15 border-[#a28089]/30',
+  other: 'bg-[#7a6a72]/15 border-[#7a6a72]/30',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

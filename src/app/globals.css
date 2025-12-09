@@ -5,34 +5,34 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Lush-inspired palette */
-  --bg-primary: #000000;      /* black */
-  --bg-secondary: #062f4f;    /* ink */
-  --bg-tertiary: #041f39;
-  --bg-hover: #0a3b62;
-  --bg-active: #0d4672;
-  --bg-elevated: #0b3558;
+  /* Minimal pastel palette */
+  --bg-primary: #a28089;      /* mauve */
+  --bg-secondary: #edf7f6;    /* soft white */
+  --bg-tertiary: #90f9ef;     /* mint wash */
+  --bg-hover: #d8eaeb;
+  --bg-active: #c6e3e5;
+  --bg-elevated: #f5fbfa;
   
-  --text-primary: #f5f7fb;
-  --text-secondary: #c9d2df;
-  --text-tertiary: #9aa7ba;
-  --text-muted: #6b7280;
+  --text-primary: #1f1a1d;
+  --text-secondary: #5b4e55;
+  --text-tertiary: #7a6a72;
+  --text-muted: #9c8c93;
   
-  --accent: #813772;          /* posy */
-  --accent-dim: #6a2d61;
-  --accent-glow: rgba(129, 55, 114, 0.18);
+  --accent: #51e2f5;          /* bright teal */
+  --accent-dim: #90f9ef;      /* mint */
+  --accent-glow: rgba(81, 226, 245, 0.18);
   
-  --border: #0f2944;
-  --border-subtle: #0b233a;
-  --border-active: #1b3d60;
+  --border: #cdbcc2;
+  --border-subtle: #e5dce0;
+  --border-active: #90f9ef;
   
-  /* Category colors (aligned to palette) */
-  --cat-social: #813772;      /* posy */
-  --cat-professional: #062f4f;/* ink */
-  --cat-pledging: #b82601;    /* embers */
-  --cat-events: #c44d32;      /* embers light */
-  --cat-meetings: #3f4d63;    /* muted ink */
-  --cat-other: #6b7280;
+  /* Category colors aligned to palette */
+  --cat-social: #51e2f5;      /* teal */
+  --cat-professional: #90f9ef;/* mint */
+  --cat-pledging: #ffa8b6;    /* pink */
+  --cat-events: #edf7f6;      /* soft white */
+  --cat-meetings: #a28089;    /* mauve */
+  --cat-other: #7a6a72;
   
   --transition-fast: 120ms;
   --transition-normal: 200ms;

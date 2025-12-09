@@ -65,13 +65,13 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Green & yellow palette; yellow used for contrast on green and vice versa
+// Green & yellow palette; cards use own color, tags invert for contrast
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[var(--accent-contrast)]',       // green card -> yellow text
-  professional: 'text-[var(--accent-contrast)]', // green card -> yellow text
-  events: 'text-[var(--accent-contrast)]',       // green card -> yellow text
-  pledging: 'text-[var(--accent)]',              // yellow card -> green text
-  meetings: 'text-[var(--accent)]',              // yellow card -> green text
+  social: 'text-[var(--accent)]',          // card text matches card color
+  professional: 'text-[var(--accent)]',
+  events: 'text-[var(--accent)]',
+  pledging: 'text-[var(--accent-secondary)]',
+  meetings: 'text-[var(--accent-secondary)]',
   other: 'text-[var(--text-tertiary)]',
 };
 
@@ -92,6 +92,16 @@ const TAG_COLORS: Record<string, string> = {
   pledging: 'text-[var(--accent)]',             // yellow bg -> green tag
   meetings: 'text-[var(--accent)]',
   other: 'text-[var(--accent-contrast)]',
+};
+
+// Body text color for expanded content (yellow cards use yellow text)
+const BODY_COLORS: Record<string, string> = {
+  social: 'text-[var(--text-primary)]',
+  professional: 'text-[var(--text-primary)]',
+  events: 'text-[var(--text-primary)]',
+  pledging: 'text-[var(--accent-secondary)]',
+  meetings: 'text-[var(--accent-secondary)]',
+  other: 'text-[var(--text-primary)]',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -879,7 +889,7 @@ function DumpTab() {
                             {groupFacts.map((fact) => (
                               <div key={fact.id} className="text-sm">
                                 {fact.sourceText && (
-                                  <p className="text-[var(--text-primary)] leading-relaxed mb-3">
+                                  <p className={`${BODY_COLORS[fact.category] || 'text-[var(--text-primary)]'} leading-relaxed mb-3`}>
                                     <HighlightedText 
                                       text={fact.sourceText} 
                                       entities={fact.entities}
@@ -910,7 +920,7 @@ function DumpTab() {
                 {/* Ungrouped facts */}
                 {groupedFacts.ungrouped.map((fact) => (
                   <div key={fact.id} className={`p-4 rounded-lg border ${CATEGORY_BG[fact.category] || CATEGORY_BG.other} animate-slide-in`}>
-                    <p className="text-sm text-[var(--text-primary)] leading-relaxed mb-3">
+                    <p className={`${BODY_COLORS[fact.category] || 'text-[var(--text-primary)]'} text-sm leading-relaxed mb-3`}>
                       <HighlightedText 
                         text={fact.sourceText || fact.content} 
                         entities={fact.entities}

@@ -10,6 +10,7 @@
 export type ActionType = 
   | 'draft_write'      // Create or edit announcement/poll draft
   | 'draft_send'       // Send out an existing draft
+  | 'poll_response'    // Reply to an active poll
   | 'content_query'    // Questions about org content (events, meetings, etc.)
   | 'capability_query' // Questions about Jarvis/Enclave capabilities
   | 'chat'             // Banter, insults, random conversation
@@ -60,6 +61,7 @@ export interface ClassificationContext {
   activeDraft: Draft | null
   isAdmin: boolean
   userName: string | null
+  hasActivePoll?: boolean
 }
 
 // ============================================

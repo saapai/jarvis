@@ -1,11 +1,13 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions", "pgVector"]
 }
 
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  extensions = [pgvector(schema: "public")]
 }
 
 model Upload {
@@ -29,6 +31,7 @@ model Fact {
   timeRef     String?  // "tomorrow", "November 8th", "every Wednesday"
   dateStr     String?  // Parsed date: "2024-11-08", "recurring:wednesday"
   entities    String   // JSON array of entities
+  embedding   Float[]? @db.Vector(1536)
   
   parentId  String?
   parent    Fact?    @relation("FactTree", fields: [parentId], references: [id])

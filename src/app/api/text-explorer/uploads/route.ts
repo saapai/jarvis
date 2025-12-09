@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrisma } from '@/lib/prisma';
+import { enforceRateLimit } from '../rateLimit';
 
 export const dynamic = 'force-dynamic';
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req)
+  if (rateLimited) return rateLimited
   try {
     const prisma = await getPrisma();
     const uploads = await prisma.upload.findMany({
@@ -30,6 +33,8 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req)
+  if (rateLimited) return rateLimited
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
@@ -50,5 +55,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete upload' }, { status: 500 });
   }
 }
+
 
 

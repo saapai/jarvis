@@ -7,10 +7,12 @@ SMS-powered organizational assistant with LLM-based intent classification, weigh
 - **SMS Announcements** - Broadcast messages to all subscribers with draft/edit/send workflow
 - **Polls** - Create polls with yes/no/maybe responses, tracked in normalized database tables
 - **Text Explorer** - Upload documents and extract structured facts with AI
-- **Smart Q&A** - Users can text questions and get answers from the knowledge base
+- **Smart Q&A** - Users can text questions and get answers from the knowledge base (semantic search via pgvector + OpenAI embeddings)
 - **LLM Routing** - OpenAI-powered intent classification with conversation context
 - **Personality Engine** - Jarvis's sassy personality applied to all responses
 - **Conversation History** - Weighted message history for better context understanding
+- **Poll Replies Captured** - Active poll responses are parsed and persisted automatically
+- **API Guardrails** - Text Explorer endpoints are rate-limited per IP
 
 ## Architecture
 
@@ -72,6 +74,10 @@ npm install
 npx prisma migrate dev --name supabase-init
 npm run dev
 ```
+
+#### pgvector setup (embeddings for semantic search)
+- Enable the `pgvector` extension on your Postgres instance.
+- Run the new Prisma migration to add the `embedding` vector column to `Fact` (after updating `DATABASE_URL`): `npx prisma migrate dev --name add-fact-embeddings`
 
 ### 2. Environment Variables
 
@@ -195,6 +201,62 @@ npx prisma generate
 ```bash
 git push origin main
 # or
+vercel deploy --prod
+```
+
+## Commands Reference
+
+| Command | Who | What it does |
+|---------|-----|--------------|
+| `announce [msg]` | Admin | Send message to everyone |
+| `poll [question]` | Admin | Ask everyone a question |
+| `STOP` | Anyone | Unsubscribe |
+| `START` | Anyone | Re-subscribe |
+| `HELP` | Anyone | Show commands |
+| Any question | Anyone | Search knowledge base |
+
+vercel deploy --prod
+```
+
+## Commands Reference
+
+| Command | Who | What it does |
+|---------|-----|--------------|
+| `announce [msg]` | Admin | Send message to everyone |
+| `poll [question]` | Admin | Ask everyone a question |
+| `STOP` | Anyone | Unsubscribe |
+| `START` | Anyone | Re-subscribe |
+| `HELP` | Anyone | Show commands |
+| Any question | Anyone | Search knowledge base |
+
+vercel deploy --prod
+```
+
+## Commands Reference
+
+| Command | Who | What it does |
+|---------|-----|--------------|
+| `announce [msg]` | Admin | Send message to everyone |
+| `poll [question]` | Admin | Ask everyone a question |
+| `STOP` | Anyone | Unsubscribe |
+| `START` | Anyone | Re-subscribe |
+| `HELP` | Anyone | Show commands |
+| Any question | Anyone | Search knowledge base |
+
+vercel deploy --prod
+```
+
+## Commands Reference
+
+| Command | Who | What it does |
+|---------|-----|--------------|
+| `announce [msg]` | Admin | Send message to everyone |
+| `poll [question]` | Admin | Ask everyone a question |
+| `STOP` | Anyone | Unsubscribe |
+| `START` | Anyone | Re-subscribe |
+| `HELP` | Anyone | Show commands |
+| Any question | Anyone | Search knowledge base |
+
 vercel deploy --prod
 ```
 

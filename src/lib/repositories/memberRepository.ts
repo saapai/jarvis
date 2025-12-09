@@ -53,7 +53,7 @@ export async function updateMemberName(
   recordId: string,
   name: string
 ): Promise<boolean> {
-  return await updateUser(recordId, { 
+  return await updateUser(recordId, {
     Name: name,
     Needs_Name: false
   })
@@ -75,11 +75,11 @@ export async function setOptedOut(
 export function isAdmin(phone: string): boolean {
   const admins = process.env.ADMIN_PHONE_NUMBERS || ''
   const adminList = admins.split(',').map(p => p.trim()).filter(Boolean)
-  
-  // Normalize phone for comparison
+
   const normalizePhone = (p: string) => p.replace(/[^\d]/g, '').slice(-10)
   const normalized = normalizePhone(phone)
-  
+
   return adminList.some(admin => normalizePhone(admin) === normalized)
 }
+
 

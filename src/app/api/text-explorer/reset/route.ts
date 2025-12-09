@@ -1,8 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getPrisma } from '@/lib/prisma';
+import { enforceRateLimit } from '../rateLimit';
 
 export const dynamic = 'force-dynamic';
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req);
+  if (rateLimited) return rateLimited;
+
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Not allowed' }, { status: 403 });
   }

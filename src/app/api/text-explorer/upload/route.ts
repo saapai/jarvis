@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processUpload, llmClient, textExplorerRepository } from '@/text-explorer';
+import { enforceRateLimit } from '../rateLimit';
 
 export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req);
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await req.json();
     const { name, rawText } = body;
@@ -31,6 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to process upload' }, { status: 500 });
   }
 }
+
 
 
 

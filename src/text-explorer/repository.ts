@@ -25,6 +25,7 @@ export const textExplorerRepository: TextExplorerRepository = {
             timeRef: fact.timeRef,
             dateStr: fact.dateStr,
             entities: JSON.stringify(fact.entities),
+            embedding: fact.embedding && fact.embedding.length > 0 ? fact.embedding : null,
           },
         })
       )

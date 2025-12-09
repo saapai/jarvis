@@ -66,21 +66,21 @@ interface BreadcrumbItem {
 // ============================================
 
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[#4ade80]',
-  professional: 'text-[#60a5fa]',
-  pledging: 'text-[#f472b6]',
-  events: 'text-[#fbbf24]',
-  meetings: 'text-[#a78bfa]',
+  social: 'text-[#813772]',        // posy
+  professional: 'text-[#062f4f]',  // ink
+  pledging: 'text-[#b82601]',      // embers
+  events: 'text-[#c44d32]',        // embers light
+  meetings: 'text-[#3f4d63]',      // muted ink
   other: 'text-[#6b7280]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[#4ade80]/10 border-[#4ade80]/20',
-  professional: 'bg-[#60a5fa]/10 border-[#60a5fa]/20',
-  pledging: 'bg-[#f472b6]/10 border-[#f472b6]/20',
-  events: 'bg-[#fbbf24]/10 border-[#fbbf24]/20',
-  meetings: 'bg-[#a78bfa]/10 border-[#a78bfa]/20',
-  other: 'bg-[#6b7280]/10 border-[#6b7280]/20',
+  social: 'bg-[#813772]/10 border-[#813772]/25',
+  professional: 'bg-[#062f4f]/10 border-[#062f4f]/25',
+  pledging: 'bg-[#b82601]/10 border-[#b82601]/25',
+  events: 'bg-[#c44d32]/10 border-[#c44d32]/25',
+  meetings: 'bg-[#3f4d63]/10 border-[#3f4d63]/25',
+  other: 'bg-[#6b7280]/10 border-[#6b7280]/25',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

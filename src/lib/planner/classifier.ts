@@ -11,6 +11,7 @@ import {
   WeightedTurn,
   Draft
 } from './types'
+import { parsePollResponse } from './pollResponseParser'
 
 // ============================================
 // PATTERN-BASED FAST PATH (no LLM needed)
@@ -28,7 +29,7 @@ interface PatternMatch {
  */
 function patternMatch(message: string, context: ClassificationContext): PatternMatch | null {
   const lower = message.toLowerCase().trim()
-  const { activeDraft } = context
+  const { activeDraft, hasActivePoll } = context
   
   // ============================================
   // SEND COMMANDS (highest priority when draft exists)
@@ -48,6 +49,13 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
     }
   }
   
+  // ============================================
+  // POLL RESPONSES (when a poll is active)
+  // ============================================
+  if (hasActivePoll && looksLikePollReply(lower)) {
+    return { action: 'poll_response', confidence: 0.9 }
+  }
+
   // ============================================
   // ANNOUNCEMENT INTENT
   // ============================================
@@ -174,7 +182,7 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
  * Build the classification prompt with weighted history
  */
 function buildClassificationPrompt(context: ClassificationContext): string {
-  const { currentMessage, history, activeDraft, isAdmin, userName } = context
+  const { currentMessage, history, activeDraft, isAdmin, userName, hasActivePoll } = context
   
   // Build weighted history context
   let historyContext = ''
@@ -192,12 +200,14 @@ function buildClassificationPrompt(context: ClassificationContext): string {
     draftContext = `\n\nActive draft:\n- Type: ${activeDraft.type}\n- Status: ${activeDraft.status}\n- Content: "${activeDraft.content || '(empty)'}"\n`
   }
   
+  const pollContext = `\n\nActive poll: ${hasActivePoll ? 'yes' : 'no'}\n`
+
   const prompt = `You are classifying the intent of an SMS message to Jarvis, a sassy AI assistant for an organization.
 
 User info:
 - Name: ${userName || 'Unknown'}
 - Is admin: ${isAdmin}
-${historyContext}${draftContext}
+${historyContext}${draftContext}${pollContext}
 
 Current message: "${currentMessage}"
 
@@ -220,7 +230,7 @@ Consider:
 
 Respond with JSON only:
 {
-  "action": "draft_write" | "draft_send" | "content_query" | "capability_query" | "chat",
+  "action": "draft_write" | "draft_send" | "poll_response" | "content_query" | "capability_query" | "chat",
   "confidence": 0.0-1.0,
   "subtype": "announcement" | "poll" | null,
   "reasoning": "brief explanation"
@@ -360,6 +370,15 @@ export function looksLikeCommand(message: string): boolean {
  */
 export function isShortResponse(message: string): boolean {
   return message.trim().length <= 20
+}
+
+/**
+ * Check if a message likely represents a poll reply.
+ * Uses existing poll response parser for consistent semantics.
+ */
+function looksLikePollReply(message: string): boolean {
+  const parsed = parsePollResponse(message)
+  return parsed.response === 'Yes' || parsed.response === 'No' || parsed.response === 'Maybe'
 }
 
 /**

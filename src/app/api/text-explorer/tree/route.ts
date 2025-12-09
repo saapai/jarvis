@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getPrisma } from '@/lib/prisma';
+import { enforceRateLimit } from '../rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,9 @@ function parseDateForSort(dateStr: string | null): number {
   return isNaN(date.getTime()) ? Infinity : date.getTime();
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req)
+  if (rateLimited) return rateLimited
   try {
     const prisma = await getPrisma();
     const facts = await prisma.fact.findMany({

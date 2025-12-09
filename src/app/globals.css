@@ -5,33 +5,33 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Monkeytype-inspired palette */
-  --bg-primary: #0c0c0c;
-  --bg-secondary: #141414;
-  --bg-tertiary: #1a1a1a;
-  --bg-hover: #222222;
-  --bg-active: #2a2a2a;
-  --bg-elevated: #1e1e1e;
+  /* Lush-inspired palette */
+  --bg-primary: #000000;      /* black */
+  --bg-secondary: #062f4f;    /* ink */
+  --bg-tertiary: #041f39;
+  --bg-hover: #0a3b62;
+  --bg-active: #0d4672;
+  --bg-elevated: #0b3558;
   
-  --text-primary: #d1d0c5;
-  --text-secondary: #646669;
-  --text-tertiary: #4a4a4a;
-  --text-muted: #3a3a3a;
+  --text-primary: #f5f7fb;
+  --text-secondary: #c9d2df;
+  --text-tertiary: #9aa7ba;
+  --text-muted: #6b7280;
   
-  --accent: #e2b714;
-  --accent-dim: #b89a0f;
-  --accent-glow: rgba(226, 183, 20, 0.15);
+  --accent: #813772;          /* posy */
+  --accent-dim: #6a2d61;
+  --accent-glow: rgba(129, 55, 114, 0.18);
   
-  --border: #2c2c2c;
-  --border-subtle: #1f1f1f;
-  --border-active: #3a3a3a;
+  --border: #0f2944;
+  --border-subtle: #0b233a;
+  --border-active: #1b3d60;
   
-  /* Category colors */
-  --cat-social: #4ade80;
-  --cat-professional: #60a5fa;
-  --cat-pledging: #f472b6;
-  --cat-events: #fbbf24;
-  --cat-meetings: #a78bfa;
+  /* Category colors (aligned to palette) */
+  --cat-social: #813772;      /* posy */
+  --cat-professional: #062f4f;/* ink */
+  --cat-pledging: #b82601;    /* embers */
+  --cat-events: #c44d32;      /* embers light */
+  --cat-meetings: #3f4d63;    /* muted ink */
   --cat-other: #6b7280;
   
   --transition-fast: 120ms;

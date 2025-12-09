@@ -8,6 +8,7 @@ export interface ExtractedFact {
   timeRef: string | null;
   dateStr: string | null;
   entities: string[];
+  embedding?: number[];
 }
 
 export interface ProcessResult {
@@ -35,6 +36,7 @@ export interface FactNode {
   uploadName?: string;
   createdAt?: string;
 }
+
 
 
 

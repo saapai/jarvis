@@ -11,7 +11,7 @@ import * as convRepo from '@/lib/repositories/conversationRepository'
 import * as pollRepo from '@/lib/repositories/pollRepository'
 import * as memberRepo from '@/lib/repositories/memberRepository'
 import type { ActionResult } from '@/lib/planner/types'
-import { getPrisma } from '@/lib/prisma'
+import { routeContentSearch } from '@/text-explorer/router'
 
 export async function POST(request: NextRequest) {
   try {
@@ -83,6 +83,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   const history = buildWeightedHistoryFromMessages(recentMessages)
   const convState = await convRepo.getConversationState(phone)
   const activeDraft = await draftRepo.getActiveDraft(phone)
+  const activePoll = await pollRepo.getActivePoll()
   
   // 6. Classify intent using LLM
   const context = {
@@ -90,7 +91,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     history,
     activeDraft,
     isAdmin: memberRepo.isAdmin(phone),
-    userName: user.name
+    userName: user.name,
+    hasActivePoll: Boolean(activePoll)
   }
   
   const classification = await classifyIntent(context)
@@ -143,6 +145,16 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         recentMessages
       })
       console.log(`[ContentQuery] Result: ${actionResult.response.substring(0, 50)}...`)
+      break
+
+    case 'poll_response':
+      console.log(`[PollResponse] Recording poll response...`)
+      actionResult = await actions.handlePollResponse({
+        phone,
+        message,
+        userName: user.name
+      })
+      console.log(`[PollResponse] Result: ${actionResult.response.substring(0, 50)}...`)
       break
     
     case 'capability_query':
@@ -386,55 +398,7 @@ interface ContentResult {
 }
 
 async function searchFactsDatabase(query: string): Promise<ContentResult[]> {
-  const prisma = await getPrisma()
-  
-  // Extract keywords
-  const keywords = query
-    .toLowerCase()
-    .replace(/[?!.,]/g, '')
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with'].includes(w))
-  
-  if (keywords.length === 0) return []
-  
-  // Search facts
-  const facts = await prisma.fact.findMany({
-    where: {
-      OR: [
-        ...keywords.map(kw => ({ content: { contains: kw, mode: 'insensitive' as const } })),
-        ...keywords.map(kw => ({ sourceText: { contains: kw, mode: 'insensitive' as const } })),
-        ...keywords.map(kw => ({ subcategory: { contains: kw, mode: 'insensitive' as const } })),
-        ...keywords.map(kw => ({ entities: { contains: kw, mode: 'insensitive' as const } })),
-      ]
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-  })
-  
-  if (facts.length === 0) return []
-  
-  // Score facts by keyword matches
-  const scoredFacts = facts.map(fact => {
-    let score = 0
-    const searchText = `${fact.content} ${fact.sourceText || ''} ${fact.subcategory || ''} ${fact.entities}`.toLowerCase()
-    
-    for (const kw of keywords) {
-      if (searchText.includes(kw)) score++
-    }
-    
-    // Format response
-    let body = `📋 ${fact.content}`
-    if (fact.timeRef) body += `\n⏰ ${fact.timeRef}`
-    if (fact.subcategory) body += `\n📁 ${fact.subcategory}`
-    
-    return {
-      title: fact.subcategory || fact.category,
-      body,
-      score
-    }
-  })
-  
-  return scoredFacts.sort((a, b) => b.score - a.score)
+  return routeContentSearch(query)
 }
 
 // ============================================

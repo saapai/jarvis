@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrisma } from '@/lib/prisma';
+import { enforceRateLimit } from '../rateLimit';
 
 export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req);
+  if (rateLimited) return rateLimited;
+
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get('category');

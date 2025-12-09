@@ -28,7 +28,8 @@ import {
   handleContentQuery,
   handleCapabilityQuery,
   handleChat,
-  handleEmptyMessage
+  handleEmptyMessage,
+  handlePollResponse
 } from './actions'
 
 // ============================================
@@ -46,6 +47,7 @@ export interface PlannerInput {
   // Required for sending drafts
   sendAnnouncement?: (content: string, senderPhone: string) => Promise<number>
   sendPoll?: (question: string, senderPhone: string) => Promise<number>
+  hasActivePoll?: boolean
 }
 
 export interface PlannerResult {
@@ -100,7 +102,8 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
     history: weightedHistory,
     activeDraft,
     isAdmin: user.isAdmin,
-    userName: user.name
+    userName: user.name,
+    hasActivePoll: input.hasActivePoll ?? false
   }
   
   // Classify intent
@@ -155,6 +158,14 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
         message,
         userName: user.name,
         searchContent
+      })
+      break
+
+    case 'poll_response':
+      result = await handlePollResponse({
+        phone,
+        message,
+        userName: user.name
       })
       break
     

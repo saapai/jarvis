@@ -5,37 +5,40 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Dark base with teal primary and deep red secondary */
-  --bg-primary: #0b0b0d;
-  --bg-secondary: #111118;
-  --bg-tertiary: #161924;
-  --bg-hover: #1f2433;
-  --bg-active: #262d3f;
-  --bg-elevated: #131722;
+  /* Dark base with teal primary and deep red secondary (lighter overlays for translucence) */
+  --bg-primary: #0f1116;
+  --bg-secondary: rgba(17, 24, 35, 0.92);
+  --bg-tertiary: rgba(26, 34, 48, 0.88);
+  --bg-hover: rgba(36, 46, 64, 0.75);
+  --bg-active: rgba(45, 58, 80, 0.85);
+  --bg-elevated: rgba(20, 26, 36, 0.9);
   
-  --text-primary: #f2f3f7;
-  --text-secondary: #c8cbd5;
-  --text-tertiary: #9498a6;
-  --text-muted: #6b7080;
+  --text-primary: #f4f6fb;
+  --text-secondary: #cfd3df;
+  --text-tertiary: #9da3b3;
+  --text-muted: #757c8d;
   
-  --accent: #062f4f;           /* teal primary */
-  --accent-dim: #0a3f69;
-  --accent-glow: rgba(6, 47, 79, 0.25);
-  --accent-secondary: #b82601; /* deep red secondary */
-  --accent-secondary-dim: #922102;
-  --accent-secondary-glow: rgba(184, 38, 1, 0.25);
+  --accent: #1f8dbf;             /* brighter teal */
+  --accent-dim: #0f5f8a;
+  --accent-glow: rgba(31, 141, 191, 0.3);
+  --accent-surface: rgba(31, 141, 191, 0.18);
   
-  --border: #222735;
-  --border-subtle: #181c28;
-  --border-active: #2f3648;
+  --accent-secondary: #c7361c;   /* deep red/orange */
+  --accent-secondary-dim: #9e2c16;
+  --accent-secondary-glow: rgba(199, 54, 28, 0.28);
+  --accent-secondary-surface: rgba(199, 54, 28, 0.16);
+  
+  --border: #252c3b;
+  --border-subtle: #1b202d;
+  --border-active: #33405a;
   
   /* Category colors simplified to primary/secondary tones */
-  --cat-social: #062f4f;
-  --cat-professional: #0a3f69;
-  --cat-pledging: #b82601;
-  --cat-events: #922102;
-  --cat-meetings: #2f3648;
-  --cat-other: #6b7080;
+  --cat-social: var(--accent);
+  --cat-professional: #0f5f8a;
+  --cat-pledging: var(--accent-secondary);
+  --cat-events: #9e2c16;
+  --cat-meetings: #2f3748;
+  --cat-other: #757c8d;
   
   --transition-fast: 120ms;
   --transition-normal: 200ms;

@@ -65,27 +65,27 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-const PRIMARY = '#062f4f' // teal
-const PRIMARY_MID = '#0a3f69'
-const SECONDARY = '#b82601' // deep red
-const SECONDARY_MID = '#922102'
+const PRIMARY = '#1f8dbf' // bright teal
+const PRIMARY_MID = '#0f5f8a'
+const SECONDARY = '#c7361c' // deep red
+const SECONDARY_MID = '#9e2c16'
 
 const CATEGORY_COLORS: Record<string, string> = {
   social: `text-[${PRIMARY}]`,
   professional: `text-[${PRIMARY_MID}]`,
-  events: `text-[${PRIMARY}]`,
+  events: `text-[${SECONDARY}]`,
   pledging: `text-[${SECONDARY}]`,
-  meetings: `text-[${SECONDARY_MID}]`,
+  meetings: `text-[${PRIMARY_MID}]`,
   other: 'text-[var(--text-tertiary)]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: `bg-[${PRIMARY}]/15 border-[${PRIMARY}]/35`,
-  professional: `bg-[${PRIMARY_MID}]/15 border-[${PRIMARY_MID}]/35`,
-  events: `bg-[${PRIMARY}]/10 border-[${PRIMARY}]/25`,
-  pledging: `bg-[${SECONDARY}]/15 border-[${SECONDARY}]/35`,
-  meetings: `bg-[${SECONDARY_MID}]/15 border-[${SECONDARY_MID}]/35`,
-  other: 'bg-[var(--border)]/40 border-[var(--border-active)]/60',
+  social: `bg-[${PRIMARY}]/18 border-[${PRIMARY}]/35`,
+  professional: `bg-[${PRIMARY_MID}]/18 border-[${PRIMARY_MID}]/35`,
+  events: `bg-[${SECONDARY}]/16 border-[${SECONDARY}]/35`,
+  pledging: `bg-[${SECONDARY}]/16 border-[${SECONDARY}]/35`,
+  meetings: `bg-[${PRIMARY_MID}]/14 border-[${PRIMARY_MID}]/30`,
+  other: 'bg-[var(--border)]/40 border-[var(--border-active)]/50',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

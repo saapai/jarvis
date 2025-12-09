@@ -76,12 +76,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[#2a9d8f]/12 border-[#2a9d8f]/40',
-  professional: 'bg-[#2a9d8f]/12 border-[#2a9d8f]/40',
-  events: 'bg-[#2a9d8f]/12 border-[#2a9d8f]/40',
-  pledging: 'bg-[#d4a855]/12 border-[#d4a855]/40',
-  meetings: 'bg-[#d4a855]/12 border-[#d4a855]/40',
-  other: 'bg-[var(--border)]/50 border-[var(--border-active)]/60',
+  social: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.35)] backdrop-blur-sm',
+  professional: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.35)] backdrop-blur-sm',
+  events: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.35)] backdrop-blur-sm',
+  pledging: 'bg-[rgba(212,168,85,0.12)] border-[rgba(212,168,85,0.35)] backdrop-blur-sm',
+  meetings: 'bg-[rgba(212,168,85,0.12)] border-[rgba(212,168,85,0.35)] backdrop-blur-sm',
+  other: 'bg-[rgba(255,255,255,0.04)] border-[var(--border)]/70 backdrop-blur-sm',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -236,7 +236,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
               <p className="text-[var(--text-secondary)]">poll who&apos;s coming to the event on friday?</p>
             </div>
             <p className="text-xs text-[var(--text-tertiary)] mt-2">
-              → users can reply yes/no/maybe with notes like &quot;yes but running late&quot;
+              → users can reply yes/no/maybe with notes like "yes but running late"
             </p>
           </div>
         </div>
@@ -263,7 +263,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             <div className="text-3xl mb-3">🤖</div>
             <h3 className="font-semibold mb-1">smart parsing</h3>
             <p className="text-sm text-[var(--text-secondary)]">
-              understands &quot;ya but running 15 late&quot; as yes + note
+              understands "ya but running 15 late" as yes + note
             </p>
           </div>
           

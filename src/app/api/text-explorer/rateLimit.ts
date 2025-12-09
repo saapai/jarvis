@@ -14,9 +14,8 @@ function getClientKey(req: NextRequest): string {
   if (forwarded) {
     return forwarded.split(',')[0]?.trim() || 'unknown'
   }
-  // NextRequest ip is optional depending on runtime
-  // @ts-expect-error: ip exists in node runtime
-  return (req.ip as string) || 'unknown'
+  // NextRequest.ip is only available in the node runtime
+  return (req as any).ip || 'unknown'
 }
 
 export function enforceRateLimit(

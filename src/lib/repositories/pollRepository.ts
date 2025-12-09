@@ -116,13 +116,14 @@ export async function savePollResponse(
   })
 
   if (existing) {
-    return prisma.pollResponse.update({
+    const updated = await prisma.pollResponse.update({
       where: { pollId_phoneNumber: { pollId, phoneNumber } },
       data: { response, notes }
     })
+    return normalizePollResponse(updated)
   }
 
-  return prisma.pollResponse.create({
+  const created = await prisma.pollResponse.create({
     data: {
       pollId,
       phoneNumber,
@@ -130,6 +131,8 @@ export async function savePollResponse(
       notes
     }
   })
+
+  return normalizePollResponse(created)
 }
 
 /**
@@ -137,10 +140,12 @@ export async function savePollResponse(
  */
 export async function getPollResponses(pollId: string): Promise<PollResponse[]> {
   const prisma = await getPrisma()
-  return prisma.pollResponse.findMany({
+  const responses = await prisma.pollResponse.findMany({
     where: { pollId },
     orderBy: { createdAt: 'asc' }
   })
+
+  return responses.map(normalizePollResponse)
 }
 
 /**
@@ -180,4 +185,28 @@ export async function deactivatePoll(pollId: string): Promise<void> {
     where: { id: pollId },
     data: { isActive: false }
   })
+}
+
+function normalizePollResponse(record: {
+  id: string
+  createdAt: Date
+  updatedAt: Date
+  phoneNumber: string
+  response: string
+  pollId: string
+  notes: string | null
+}): PollResponse {
+  const resp = record.response.toLowerCase()
+  const normalized: 'Yes' | 'No' | 'Maybe' =
+    resp === 'yes' ? 'Yes' : resp === 'no' ? 'No' : 'Maybe'
+
+  return {
+    id: record.id,
+    pollId: record.pollId,
+    phoneNumber: record.phoneNumber,
+    response: normalized,
+    notes: record.notes,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt
+  }
 }

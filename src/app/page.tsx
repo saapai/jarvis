@@ -76,11 +76,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
-  professional: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
-  events: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
-  pledging: 'bg-[rgba(212,168,85,0.14)] border-[rgba(212,168,85,0.42)] backdrop-blur-sm',
-  meetings: 'bg-[rgba(212,168,85,0.14)] border-[rgba(212,168,85,0.42)] backdrop-blur-sm',
+  social: 'bg-[rgba(42,157,143,0.2)] border-[rgba(42,157,143,0.32)] backdrop-blur-sm',
+  professional: 'bg-[rgba(42,157,143,0.2)] border-[rgba(42,157,143,0.32)] backdrop-blur-sm',
+  events: 'bg-[rgba(42,157,143,0.2)] border-[rgba(42,157,143,0.32)] backdrop-blur-sm',
+  pledging: 'bg-[rgba(212,168,85,0.22)] border-[rgba(212,168,85,0.32)] backdrop-blur-sm',
+  meetings: 'bg-[rgba(212,168,85,0.22)] border-[rgba(212,168,85,0.32)] backdrop-blur-sm',
   other: 'bg-[rgba(255,255,255,0.04)] border-[var(--border)]/70 backdrop-blur-sm',
 };
 
@@ -99,8 +99,8 @@ const BODY_COLORS: Record<string, string> = {
   social: 'text-[var(--text-primary)]',
   professional: 'text-[var(--text-primary)]',
   events: 'text-[var(--text-primary)]',
-  pledging: 'text-[var(--accent-secondary)]',
-  meetings: 'text-[var(--accent-secondary)]',
+  pledging: 'text-[var(--text-primary)]',
+  meetings: 'text-[var(--text-primary)]',
   other: 'text-[var(--text-primary)]',
 };
 
@@ -113,11 +113,15 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 function HighlightedText({ 
   text, 
   entities, 
-  onEntityClick 
+  onEntityClick,
+  highlightClass,
+  highlightBgClass,
 }: { 
   text: string; 
   entities: string[]; 
   onEntityClick: (entity: string) => void;
+  highlightClass?: string;
+  highlightBgClass?: string;
 }) {
   if (!text || entities.length === 0) {
     return <span>{text}</span>;
@@ -143,7 +147,7 @@ function HighlightedText({
             <button
               key={i}
               onClick={() => onEntityClick(part.toLowerCase())}
-              className="text-[var(--accent)] hover:underline cursor-pointer bg-[var(--accent)]/10 px-0.5 rounded"
+              className={`${highlightClass || 'text-[var(--accent)]'} hover:underline cursor-pointer ${highlightBgClass || 'bg-[var(--accent)]/10'} px-0.5 rounded`}
             >
               {part}
             </button>
@@ -894,6 +898,8 @@ function DumpTab() {
                                       text={fact.sourceText} 
                                       entities={fact.entities}
                                       onEntityClick={(e) => navigateTo('entity', e, e)}
+                                      highlightClass={['pledging','meetings'].includes(fact.category) ? 'text-[var(--accent-secondary)]' : 'text-[var(--accent)]'}
+                                      highlightBgClass={['pledging','meetings'].includes(fact.category) ? 'bg-[var(--accent-secondary)]/10' : 'bg-[var(--accent)]/10'}
                                     />
                                   </p>
                                 )}

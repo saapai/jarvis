@@ -19,29 +19,31 @@
   --text-tertiary: #6a6a6a;
   --text-muted: #4a4a4a;
 
-  /* Teal/patina green - primary accent */
+  /* Primary: teal/green; Secondary: royal purple; Yellow kept only for tiny hits */
   --accent: #2a9d8f;
   --accent-dim: #1f7a6f;
-  --accent-glow: rgba(42, 157, 143, 0.2);
+  --accent-glow: rgba(42, 157, 143, 0.22);
   --accent-surface: rgba(42, 157, 143, 0.12);
 
-  /* Gold/yellow - secondary accent */
-  --accent-secondary: #d4a855;
-  --accent-secondary-dim: #b8923f;
-  --accent-secondary-glow: rgba(212, 168, 85, 0.2);
-  --accent-secondary-surface: rgba(212, 168, 85, 0.12);
+  --accent-secondary: #7c5ce6;
+  --accent-secondary-dim: #5e45b8;
+  --accent-secondary-glow: rgba(124, 92, 230, 0.25);
+  --accent-secondary-surface: rgba(124, 92, 230, 0.14);
+
+  /* Minimal yellow accent (sparingly used, e.g., underscores) */
+  --accent-contrast: #d4a855;
 
   /* Subtle borders */
   --border: #1a1a1a;
   --border-subtle: #141414;
   --border-active: #2a2a2a;
 
-  /* Category colors - teal for events, gold for meetings */
+  /* Category colors - green / purple two-tone */
   --cat-events: #2a9d8f;
-  --cat-meetings: #d4a855;
+  --cat-meetings: #7c5ce6;
   --cat-social: #2a9d8f;
   --cat-professional: #1f7a6f;
-  --cat-pledging: #d4a855;
+  --cat-pledging: #7c5ce6;
   --cat-other: #6a6a6a;
 
   /* Smooth transitions */

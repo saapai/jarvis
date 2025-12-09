@@ -65,22 +65,22 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Teal for events/social, Gold for meetings/pledging
+// Green & purple primary palette; yellow used sparingly elsewhere
 const CATEGORY_COLORS: Record<string, string> = {
   social: 'text-[#2a9d8f]',
   professional: 'text-[#2a9d8f]',
   events: 'text-[#2a9d8f]',
-  pledging: 'text-[#d4a855]',
-  meetings: 'text-[#d4a855]',
+  pledging: 'text-[#7c5ce6]',
+  meetings: 'text-[#7c5ce6]',
   other: 'text-[var(--text-tertiary)]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.35)] backdrop-blur-sm',
-  professional: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.35)] backdrop-blur-sm',
-  events: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.35)] backdrop-blur-sm',
-  pledging: 'bg-[rgba(212,168,85,0.12)] border-[rgba(212,168,85,0.35)] backdrop-blur-sm',
-  meetings: 'bg-[rgba(212,168,85,0.12)] border-[rgba(212,168,85,0.35)] backdrop-blur-sm',
+  social: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
+  professional: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
+  events: 'bg-[rgba(42,157,143,0.12)] border-[rgba(42,157,143,0.38)] backdrop-blur-sm',
+  pledging: 'bg-[rgba(124,92,230,0.14)] border-[rgba(124,92,230,0.42)] backdrop-blur-sm',
+  meetings: 'bg-[rgba(124,92,230,0.14)] border-[rgba(124,92,230,0.42)] backdrop-blur-sm',
   other: 'bg-[rgba(255,255,255,0.04)] border-[var(--border)]/70 backdrop-blur-sm',
 };
 
@@ -166,7 +166,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
-            <div className="w-2 h-2 rounded-full bg-[#2a9d8f] animate-pulse-subtle" />
+            <div className="w-2 h-2 rounded-full bg-[#7c5ce6] animate-pulse-subtle" />
             <span className="text-sm text-[var(--text-secondary)]">system online</span>
           </div>
           
@@ -204,9 +204,9 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         </div>
 
         {/* Admin Commands */}
-        <div className="p-6 rounded-2xl border border-[#d4a855]/40 bg-[var(--bg-secondary)]">
+        <div className="p-6 rounded-2xl border border-[var(--accent-secondary)]/40 bg-[var(--bg-secondary)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <span className="text-[#d4a855]">👑</span> admin commands
+            <span className="text-[var(--accent-secondary)]">👑</span> admin commands
           </h3>
           
           {/* Announcement Format */}
@@ -279,7 +279,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         {/* User Commands */}
         <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <span className="text-[#2a9d8f]">$</span> user commands
+            <span className="text-[var(--accent-secondary)]">$</span> user commands
           </h3>
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--bg-hover)]">
@@ -610,7 +610,7 @@ function DumpTab() {
       <aside className="w-72 border-r border-[var(--border-subtle)] flex flex-col">
         <div className="p-6 border-b border-[var(--border-subtle)]">
           <h1 className="text-lg font-medium text-[var(--text-primary)] tracking-tight">
-            dump<span className="text-[#d4a855]">_</span>
+            dump<span className="text-[var(--accent-contrast)]">_</span>
           </h1>
           <p className="text-xs text-[var(--text-tertiary)] mt-1">{tree?.totalFacts ?? 0} facts</p>
         </div>
@@ -703,11 +703,11 @@ function DumpTab() {
                           key={timeRef.name}
                           onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
                           className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[#d4a855]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--accent-secondary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                           }`}
                         >
                           {isValid && (
-                            <span className="w-12 text-[#d4a855] font-medium">
+                            <span className="w-12 text-[var(--accent-secondary)] font-medium">
                               {MONTHS[date.getMonth()]} {date.getDate()}
                             </span>
                           )}
@@ -852,7 +852,7 @@ function DumpTab() {
                                 {subcategory}
                               </span>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[#d4a855]">@{mainFact.timeRef}</span>
+                                <span className="text-xs text-[var(--accent-secondary)]">@{mainFact.timeRef}</span>
                               )}
                               <span className="text-xs text-[var(--text-tertiary)]">({groupFacts.length})</span>
                             </div>
@@ -910,7 +910,7 @@ function DumpTab() {
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       <span className={CATEGORY_COLORS[fact.category]}>{fact.category}</span>
                       {fact.timeRef && (
-                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[#d4a855] hover:underline">
+                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--accent-secondary)] hover:underline">
                           @{fact.timeRef}
                         </button>
                       )}
@@ -971,7 +971,7 @@ function DumpTab() {
             <div className="animate-fade-in space-y-4">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-medium text-[var(--text-primary)]">
-                  uploads<span className="text-[#d4a855]">_</span>
+                  uploads<span className="text-[var(--accent-contrast)]">_</span>
                 </h2>
                 <button 
                   onClick={() => setShowUpload(true)}

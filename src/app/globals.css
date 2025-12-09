@@ -5,34 +5,37 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Minimal pastel palette */
-  --bg-primary: #a28089;      /* mauve */
-  --bg-secondary: #edf7f6;    /* soft white */
-  --bg-tertiary: #90f9ef;     /* mint wash */
-  --bg-hover: #d8eaeb;
-  --bg-active: #c6e3e5;
-  --bg-elevated: #f5fbfa;
+  /* Dark base with teal primary and deep red secondary */
+  --bg-primary: #0b0b0d;
+  --bg-secondary: #111118;
+  --bg-tertiary: #161924;
+  --bg-hover: #1f2433;
+  --bg-active: #262d3f;
+  --bg-elevated: #131722;
   
-  --text-primary: #1f1a1d;
-  --text-secondary: #5b4e55;
-  --text-tertiary: #7a6a72;
-  --text-muted: #9c8c93;
+  --text-primary: #f2f3f7;
+  --text-secondary: #c8cbd5;
+  --text-tertiary: #9498a6;
+  --text-muted: #6b7080;
   
-  --accent: #51e2f5;          /* bright teal */
-  --accent-dim: #90f9ef;      /* mint */
-  --accent-glow: rgba(81, 226, 245, 0.18);
+  --accent: #062f4f;           /* teal primary */
+  --accent-dim: #0a3f69;
+  --accent-glow: rgba(6, 47, 79, 0.25);
+  --accent-secondary: #b82601; /* deep red secondary */
+  --accent-secondary-dim: #922102;
+  --accent-secondary-glow: rgba(184, 38, 1, 0.25);
   
-  --border: #cdbcc2;
-  --border-subtle: #e5dce0;
-  --border-active: #90f9ef;
+  --border: #222735;
+  --border-subtle: #181c28;
+  --border-active: #2f3648;
   
-  /* Category colors aligned to palette */
-  --cat-social: #51e2f5;      /* teal */
-  --cat-professional: #90f9ef;/* mint */
-  --cat-pledging: #ffa8b6;    /* pink */
-  --cat-events: #edf7f6;      /* soft white */
-  --cat-meetings: #a28089;    /* mauve */
-  --cat-other: #7a6a72;
+  /* Category colors simplified to primary/secondary tones */
+  --cat-social: #062f4f;
+  --cat-professional: #0a3f69;
+  --cat-pledging: #b82601;
+  --cat-events: #922102;
+  --cat-meetings: #2f3648;
+  --cat-other: #6b7080;
   
   --transition-fast: 120ms;
   --transition-normal: 200ms;

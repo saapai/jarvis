@@ -65,22 +65,27 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
+const PRIMARY = '#062f4f' // teal
+const PRIMARY_MID = '#0a3f69'
+const SECONDARY = '#b82601' // deep red
+const SECONDARY_MID = '#922102'
+
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[#51e2f5]',        // teal
-  professional: 'text-[#90f9ef]',  // mint
-  pledging: 'text-[#ffa8b6]',      // pink
-  events: 'text-[#edf7f6]',        // soft white
-  meetings: 'text-[#a28089]',      // mauve
-  other: 'text-[#7a6a72]',
+  social: `text-[${PRIMARY}]`,
+  professional: `text-[${PRIMARY_MID}]`,
+  events: `text-[${PRIMARY}]`,
+  pledging: `text-[${SECONDARY}]`,
+  meetings: `text-[${SECONDARY_MID}]`,
+  other: 'text-[var(--text-tertiary)]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[#51e2f5]/15 border-[#51e2f5]/30',
-  professional: 'bg-[#90f9ef]/15 border-[#90f9ef]/30',
-  pledging: 'bg-[#ffa8b6]/15 border-[#ffa8b6]/30',
-  events: 'bg-[#edf7f6]/40 border-[#edf7f6]/70',
-  meetings: 'bg-[#a28089]/15 border-[#a28089]/30',
-  other: 'bg-[#7a6a72]/15 border-[#7a6a72]/30',
+  social: `bg-[${PRIMARY}]/15 border-[${PRIMARY}]/35`,
+  professional: `bg-[${PRIMARY_MID}]/15 border-[${PRIMARY_MID}]/35`,
+  events: `bg-[${PRIMARY}]/10 border-[${PRIMARY}]/25`,
+  pledging: `bg-[${SECONDARY}]/15 border-[${SECONDARY}]/35`,
+  meetings: `bg-[${SECONDARY_MID}]/15 border-[${SECONDARY_MID}]/35`,
+  other: 'bg-[var(--border)]/40 border-[var(--border-active)]/60',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

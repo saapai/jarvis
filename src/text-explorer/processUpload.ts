@@ -9,14 +9,9 @@ export async function processUpload(
 
   const factsWithEmbeddings = await Promise.all(
     facts.map(async (fact) => {
-      try {
-        const embeddingInput = fact.sourceText || fact.content;
-        const embedding = await embedText(embeddingInput);
-        return { ...fact, embedding };
-      } catch (error) {
-        console.error('Embedding error:', error);
-        return { ...fact, embedding: [] };
-      }
+      const embeddingInput = fact.sourceText || fact.content;
+      const embedding = await embedText(embeddingInput);
+      return { ...fact, embedding };
     })
   );
 

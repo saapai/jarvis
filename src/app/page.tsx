@@ -65,26 +65,21 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-const PRIMARY = '#1f8dbf' // bright teal
-const PRIMARY_MID = '#0f5f8a'
-const SECONDARY = '#c7361c' // deep red
-const SECONDARY_MID = '#9e2c16'
-
 const CATEGORY_COLORS: Record<string, string> = {
-  social: `text-[${PRIMARY}]`,
-  professional: `text-[${PRIMARY_MID}]`,
-  events: `text-[${SECONDARY}]`,
-  pledging: `text-[${SECONDARY}]`,
-  meetings: `text-[${PRIMARY_MID}]`,
+  social: 'text-[#1f8dbf]',
+  professional: 'text-[#0f5f8a]',
+  events: 'text-[#c7361c]',
+  pledging: 'text-[#c7361c]',
+  meetings: 'text-[#0f5f8a]',
   other: 'text-[var(--text-tertiary)]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: `bg-[${PRIMARY}]/18 border-[${PRIMARY}]/35`,
-  professional: `bg-[${PRIMARY_MID}]/18 border-[${PRIMARY_MID}]/35`,
-  events: `bg-[${SECONDARY}]/16 border-[${SECONDARY}]/35`,
-  pledging: `bg-[${SECONDARY}]/16 border-[${SECONDARY}]/35`,
-  meetings: `bg-[${PRIMARY_MID}]/14 border-[${PRIMARY_MID}]/30`,
+  social: 'bg-[#1f8dbf]/18 border-[#1f8dbf]/35',
+  professional: 'bg-[#0f5f8a]/18 border-[#0f5f8a]/35',
+  events: 'bg-[#c7361c]/16 border-[#c7361c]/35',
+  pledging: 'bg-[#c7361c]/16 border-[#c7361c]/35',
+  meetings: 'bg-[#0f5f8a]/14 border-[#0f5f8a]/30',
   other: 'bg-[var(--border)]/40 border-[var(--border-active)]/50',
 };
 
@@ -170,7 +165,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
-            <div className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse-subtle" />
+            <div className="w-2 h-2 rounded-full bg-[#c7361c] animate-pulse-subtle" />
             <span className="text-sm text-[var(--text-secondary)]">system online</span>
           </div>
           
@@ -195,7 +190,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         {/* Phone Number Card */}
         <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-[var(--accent)] flex items-center justify-center text-2xl text-[var(--bg-primary)]">
+            <div className="w-12 h-12 rounded-xl bg-[#c7361c] flex items-center justify-center text-2xl text-white">
               📱
             </div>
             <div>
@@ -208,9 +203,9 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         </div>
 
         {/* Admin Commands */}
-        <div className="p-6 rounded-2xl border border-[var(--accent)]/30 bg-[var(--bg-secondary)]">
+        <div className="p-6 rounded-2xl border border-[#c7361c]/30 bg-[var(--bg-secondary)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <span className="text-[var(--accent)]">👑</span> admin commands
+            <span className="text-[#c7361c]">👑</span> admin commands
           </h3>
           
           {/* Announcement Format */}
@@ -283,7 +278,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         {/* User Commands */}
         <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <span className="text-[var(--accent)]">$</span> user commands
+            <span className="text-[#c7361c]">$</span> user commands
           </h3>
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--bg-hover)]">
@@ -614,7 +609,7 @@ function DumpTab() {
       <aside className="w-72 border-r border-[var(--border-subtle)] flex flex-col">
         <div className="p-6 border-b border-[var(--border-subtle)]">
           <h1 className="text-lg font-medium text-[var(--text-primary)] tracking-tight">
-            dump<span className="text-[var(--accent)]">_</span>
+            dump<span className="text-[#c7361c]">_</span>
           </h1>
           <p className="text-xs text-[var(--text-tertiary)] mt-1">{tree?.totalFacts ?? 0} facts</p>
         </div>
@@ -707,11 +702,11 @@ function DumpTab() {
                           key={timeRef.name}
                           onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
                           className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[#c7361c]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                           }`}
                         >
                           {isValid && (
-                            <span className="w-12 text-[var(--accent)] font-medium">
+                            <span className="w-12 text-[#c7361c] font-medium">
                               {MONTHS[date.getMonth()]} {date.getDate()}
                             </span>
                           )}
@@ -856,7 +851,7 @@ function DumpTab() {
                                 {subcategory}
                               </span>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[var(--accent)]">@{mainFact.timeRef}</span>
+                                <span className="text-xs text-[#c7361c]">@{mainFact.timeRef}</span>
                               )}
                               <span className="text-xs text-[var(--text-tertiary)]">({groupFacts.length})</span>
                             </div>
@@ -914,7 +909,7 @@ function DumpTab() {
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       <span className={CATEGORY_COLORS[fact.category]}>{fact.category}</span>
                       {fact.timeRef && (
-                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--accent)] hover:underline">
+                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[#c7361c] hover:underline">
                           @{fact.timeRef}
                         </button>
                       )}
@@ -975,7 +970,7 @@ function DumpTab() {
             <div className="animate-fade-in space-y-4">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-medium text-[var(--text-primary)]">
-                  uploads<span className="text-[var(--accent)]">_</span>
+                  uploads<span className="text-[#c7361c]">_</span>
                 </h2>
                 <button 
                   onClick={() => setShowUpload(true)}

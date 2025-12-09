@@ -5,44 +5,49 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Dark base with teal primary and deep red secondary (lighter overlays for translucence) */
-  --bg-primary: #0f1116;
-  --bg-secondary: rgba(17, 24, 35, 0.92);
-  --bg-tertiary: rgba(26, 34, 48, 0.88);
-  --bg-hover: rgba(36, 46, 64, 0.75);
-  --bg-active: rgba(45, 58, 80, 0.85);
-  --bg-elevated: rgba(20, 26, 36, 0.9);
-  
-  --text-primary: #f4f6fb;
-  --text-secondary: #cfd3df;
-  --text-tertiary: #9da3b3;
-  --text-muted: #757c8d;
-  
-  --accent: #1f8dbf;             /* brighter teal */
-  --accent-dim: #0f5f8a;
-  --accent-glow: rgba(31, 141, 191, 0.3);
-  --accent-surface: rgba(31, 141, 191, 0.18);
-  
-  --accent-secondary: #c7361c;   /* deep red/orange */
-  --accent-secondary-dim: #9e2c16;
-  --accent-secondary-glow: rgba(199, 54, 28, 0.28);
-  --accent-secondary-surface: rgba(199, 54, 28, 0.16);
-  
-  --border: #252c3b;
-  --border-subtle: #1b202d;
-  --border-active: #33405a;
-  
-  /* Category colors simplified to primary/secondary tones */
-  --cat-social: var(--accent);
-  --cat-professional: #0f5f8a;
-  --cat-pledging: var(--accent-secondary);
-  --cat-events: #9e2c16;
-  --cat-meetings: #2f3748;
-  --cat-other: #757c8d;
-  
-  --transition-fast: 120ms;
-  --transition-normal: 200ms;
-  --transition-slow: 300ms;
+  /* True black base for maximum contrast */
+  --bg-primary: #000000;
+  --bg-secondary: rgba(12, 12, 12, 0.95);
+  --bg-tertiary: rgba(18, 18, 18, 0.92);
+  --bg-hover: rgba(28, 28, 28, 0.8);
+  --bg-active: rgba(36, 36, 36, 0.85);
+  --bg-elevated: rgba(16, 16, 16, 0.96);
+
+  /* Clean text hierarchy */
+  --text-primary: #fafafa;
+  --text-secondary: #a8a8a8;
+  --text-tertiary: #6a6a6a;
+  --text-muted: #4a4a4a;
+
+  /* Teal/patina green - primary accent */
+  --accent: #2a9d8f;
+  --accent-dim: #1f7a6f;
+  --accent-glow: rgba(42, 157, 143, 0.2);
+  --accent-surface: rgba(42, 157, 143, 0.12);
+
+  /* Gold/yellow - secondary accent */
+  --accent-secondary: #d4a855;
+  --accent-secondary-dim: #b8923f;
+  --accent-secondary-glow: rgba(212, 168, 85, 0.2);
+  --accent-secondary-surface: rgba(212, 168, 85, 0.12);
+
+  /* Subtle borders */
+  --border: #1a1a1a;
+  --border-subtle: #141414;
+  --border-active: #2a2a2a;
+
+  /* Category colors - teal for events, gold for meetings */
+  --cat-events: #2a9d8f;
+  --cat-meetings: #d4a855;
+  --cat-social: #2a9d8f;
+  --cat-professional: #1f7a6f;
+  --cat-pledging: #d4a855;
+  --cat-other: #6a6a6a;
+
+  /* Smooth transitions */
+  --transition-fast: 150ms;
+  --transition-normal: 250ms;
+  --transition-slow: 400ms;
 }
 
 * {
@@ -80,7 +85,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--border-active);
   border-radius: 3px;
 }
 
@@ -91,13 +96,14 @@ body {
 a {
   color: var(--accent);
   text-decoration: none;
+  transition: color var(--transition-fast) ease;
 }
 
 a:hover {
-  text-decoration: underline;
+  color: var(--accent-dim);
 }
 
-/* Animations */
+/* Smooth animations */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -106,7 +112,7 @@ a:hover {
 @keyframes slideIn {
   from { 
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to { 
     opacity: 1;
@@ -117,7 +123,7 @@ a:hover {
 @keyframes expandIn {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
@@ -127,7 +133,7 @@ a:hover {
 
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  50% { opacity: 0.5; }
 }
 
 .animate-fade-in {
@@ -143,5 +149,12 @@ a:hover {
 }
 
 .animate-pulse-subtle {
-  animation: pulse-subtle 2s ease-in-out infinite;
+  animation: pulse-subtle 2.5s ease-in-out infinite;
+}
+
+/* Glass/translucent card effect */
+.card-glass {
+  background: rgba(12, 12, 12, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }

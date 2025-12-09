@@ -703,11 +703,11 @@ function DumpTab() {
                           key={timeRef.name}
                           onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
                           className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--accent-secondary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--accent-contrast)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                           }`}
                         >
                           {isValid && (
-                            <span className="w-12 text-[var(--accent-secondary)] font-medium">
+                            <span className="w-12 text-[var(--accent-contrast)] font-medium">
                               {MONTHS[date.getMonth()]} {date.getDate()}
                             </span>
                           )}
@@ -852,7 +852,7 @@ function DumpTab() {
                                 {subcategory}
                               </span>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[var(--accent-secondary)]">@{mainFact.timeRef}</span>
+                                <span className="text-xs text-[var(--accent-contrast)]">@{mainFact.timeRef}</span>
                               )}
                               <span className="text-xs text-[var(--text-tertiary)]">({groupFacts.length})</span>
                             </div>
@@ -910,7 +910,7 @@ function DumpTab() {
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       <span className={CATEGORY_COLORS[fact.category]}>{fact.category}</span>
                       {fact.timeRef && (
-                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--accent-secondary)] hover:underline">
+                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--accent-contrast)] hover:underline">
                           @{fact.timeRef}
                         </button>
                       )}

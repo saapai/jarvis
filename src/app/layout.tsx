@@ -1,5 +1,13 @@
 import type { Metadata } from 'next'
+import { Baumans } from 'next/font/google'
 import './globals.css'
+
+const displayFont = Baumans({
+  subsets: ['latin'],
+  weight: ['400'],
+  display: 'swap',
+  variable: '--font-bauhaus',
+})
 
 export const metadata: Metadata = {
   title: 'Jarvis SMS',
@@ -13,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={displayFont.variable}>{children}</body>
     </html>
   )
 }

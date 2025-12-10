@@ -194,7 +194,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             <span className="text-sm text-[var(--text-secondary)]">system online</span>
           </div>
           
-          <h1 className="text-5xl font-bold tracking-tight">
+          <h1 className="text-5xl font-normal tracking-tight font-bauhaus">
             <span className="text-[var(--accent)]">jarvis</span>
           </h1>
           
@@ -1104,7 +1104,7 @@ export default function Home() {
           </button>
 
           {/* Center: App Name */}
-          <h1 className="text-lg font-semibold tracking-tight">
+          <h1 className="text-lg font-normal tracking-tight font-bauhaus">
             <span className="text-[var(--accent)]">jarvis</span>
           </h1>
 

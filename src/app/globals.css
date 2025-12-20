@@ -118,7 +118,7 @@ a:hover {
   color: var(--accent-dim);
 }
 
-/* Film grain texture overlay */
+/* Film grain texture overlay - analog memory feel */
 .card-texture {
   position: relative;
 }
@@ -130,21 +130,34 @@ a:hover {
   background-image: 
     repeating-linear-gradient(
       0deg,
-      rgba(0, 0, 0, 0.02) 0px,
+      rgba(0, 0, 0, 0.015) 0px,
       transparent 1px,
       transparent 2px,
-      rgba(0, 0, 0, 0.02) 3px
+      rgba(0, 0, 0, 0.015) 3px
     ),
     repeating-linear-gradient(
       90deg,
-      rgba(0, 0, 0, 0.02) 0px,
+      rgba(0, 0, 0, 0.015) 0px,
       transparent 1px,
       transparent 2px,
-      rgba(0, 0, 0, 0.02) 3px
+      rgba(0, 0, 0, 0.015) 3px
     );
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.4;
   mix-blend-mode: overlay;
+}
+
+/* Soft vignette for hero */
+.hero-vignette {
+  position: relative;
+}
+
+.hero-vignette::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
+  pointer-events: none;
 }
 
 /* Smooth animations */

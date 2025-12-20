@@ -189,21 +189,6 @@ function MenuIcon({ className }: { className?: string }) {
   );
 }
 
-function ChevronRightIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
-
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
 
 // ============================================
 // INFO TAB CONTENT
@@ -221,7 +206,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
           </div>
           
           <h1 className="text-5xl font-bold tracking-tight">
-            <span className="text-[var(--accent)]">jarvis</span>
+            <span className="text-[var(--accent)]">enclave</span>
           </h1>
           
           <p className="text-xl text-[var(--text-secondary)]">
@@ -703,21 +688,6 @@ function DumpTab() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex animate-fade-in">
-      {/* Chatbot-style Arrow Toggle Button - positioned on the edge */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`fixed top-1/2 -translate-y-1/2 z-50 w-10 h-20 flex items-center justify-center rounded-r-xl bg-[var(--bg-secondary)] border-r-2 border-y-2 border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10 hover:border-[var(--accent)] transition-all duration-300 shadow-lg backdrop-blur-sm ${
-          sidebarOpen ? 'left-[18rem]' : 'left-0'
-        }`}
-        aria-label="Toggle sidebar"
-      >
-        {sidebarOpen ? (
-          <ChevronLeftIcon className="w-6 h-6" />
-        ) : (
-          <ChevronRightIcon className="w-6 h-6" />
-        )}
-      </button>
-
       {/* Overlay for mobile when sidebar is open */}
       {sidebarOpen && (
         <div
@@ -911,9 +881,17 @@ function DumpTab() {
       </aside>
 
       {/* Main */}
-      <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'ml-0' : 'ml-0'}`}>
+      <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
         <header className="px-8 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-2">
+            {/* Menu Icon Button */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+              aria-label="Toggle sidebar"
+            >
+              <MenuIcon className="w-5 h-5" />
+            </button>
             {breadcrumbs.map((crumb, i) => (
               <div key={i} className="flex items-center gap-2">
                 {i > 0 && <span className="text-[var(--text-tertiary)]">/</span>}
@@ -1218,7 +1196,7 @@ export default function Home() {
 
           {/* Center: App Name */}
           <h1 className="text-lg font-bold tracking-tight">
-            <span className="text-[var(--accent)]">jarvis</span>
+            <span className="text-[var(--accent)]">enclave</span>
           </h1>
 
           {/* Right: Help Icon */}

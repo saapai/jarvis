@@ -503,10 +503,15 @@ function DumpTab() {
       if (res.ok) {
         setUploadText('');
         setShowUpload(false);
-        fetchTree();
-        fetchFacts();
-        fetchAllFacts();
-        fetchUploads();
+        // Wait a bit for database transaction to commit
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Fetch all data in parallel and wait for completion
+        await Promise.all([
+          fetchTree(),
+          fetchFacts(),
+          fetchAllFacts(),
+          fetchUploads(),
+        ]);
       }
     } catch (error) {
       console.error('Upload error:', error);

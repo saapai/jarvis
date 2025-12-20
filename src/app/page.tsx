@@ -273,100 +273,140 @@ function MenuIcon({ className }: { className?: string }) {
 
 function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   return (
-    <main className="min-h-screen flex flex-col animate-fade-in">
-      {/* Hero Section with Image */}
-      <div className="relative h-[60vh] min-h-[500px] flex items-center justify-center overflow-hidden">
-        {/* Background Image */}
+    <main className="min-h-screen flex flex-col animate-fade-in bg-[var(--bg-primary)]">
+      {/* Hero Section - Bold & Clear */}
+      <div className="relative h-[85vh] min-h-[600px] flex items-center justify-center overflow-hidden">
+        {/* Background Image - Full Saturation */}
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
             backgroundImage: 'url(/hero-image.png)',
           }}
-        >
-          {/* Warm overlay matching image tones */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[rgba(219,203,189,0.85)] via-[rgba(219,203,189,0.75)] to-[rgba(219,203,189,0.9)]" />
-        </div>
+        />
         
-        {/* Content */}
-        <div className="relative z-10 text-center px-8 max-w-3xl">
-          <h1 className="text-6xl md:text-7xl font-light tracking-tight mb-4 text-[var(--text-primary)]">
+        {/* Subtle gradient overlay for text readability only */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[rgba(219,203,189,0.3)]" />
+        
+        {/* Content - Album Cover Style */}
+        <div className="relative z-10 text-center px-8 max-w-4xl">
+          <h1 className="text-7xl md:text-8xl lg:text-9xl font-display mb-6 text-[var(--text-primary)] leading-[0.9]">
             enclave
           </h1>
-          <p className="text-lg md:text-xl text-[var(--text-secondary)] font-light mb-8 max-w-xl mx-auto">
-            sms-powered announcements & polls
+          <p className="text-xl md:text-2xl text-[var(--text-secondary)] mb-12 max-w-2xl mx-auto font-light">
+            memory architecture for your community
           </p>
           <button
             onClick={() => onNavigate('dump')}
-            className="px-8 py-3 text-sm font-light tracking-wide text-[var(--bg-primary)] bg-[var(--color-action)] rounded-full hover:opacity-90 transition-all hover:scale-105 inline-flex items-center gap-2"
+            className="px-10 py-4 text-base font-light tracking-wide text-[var(--bg-primary)] bg-[var(--color-action)] rounded-full hover:opacity-90 transition-all hover:scale-105 shadow-lg"
           >
-            get started
+            begin
           </button>
         </div>
       </div>
 
-      {/* Content Section */}
-      <div className="flex-1 bg-[var(--bg-primary)] py-16 px-8">
-        <div className="max-w-4xl mx-auto space-y-12">
-          {/* Phone Number - Minimal */}
-          <div className="text-center">
-            <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider mb-2 font-light">text to activate</p>
-            <p className="text-2xl md:text-3xl text-[var(--text-primary)] font-light tracking-wide">
-              +1 (805) 919-8529
-            </p>
-          </div>
+      {/* Section 1: What Enclave Is */}
+      <section className="py-24 px-8">
+        <div className="max-w-3xl mx-auto text-center space-y-6">
+          <h2 className="text-4xl md:text-5xl font-display text-[var(--text-primary)] mb-4">
+            SMS-powered memory
+          </h2>
+          <p className="text-lg md:text-xl text-[var(--text-secondary)] font-light leading-relaxed max-w-2xl mx-auto">
+            Enclave transforms text messages into structured knowledge. Announcements become memories. Polls become decisions. Conversations become archives.
+          </p>
+        </div>
+      </section>
 
-          {/* Commands - Simplified */}
-          <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            {/* Admin */}
-            <div className="space-y-4">
-              <h3 className="text-sm text-[var(--text-tertiary)] uppercase tracking-wider font-light mb-4">
-                admin commands
-              </h3>
-              <div className="space-y-3">
-                <div className="p-4 rounded-lg bg-[var(--bg-card)] border border-[var(--border-subtle)]">
-                  <p className="text-[var(--color-action)] font-light mb-1">announce</p>
-                  <p className="text-sm text-[var(--text-secondary)] font-light">meeting tonight at <span className="text-[var(--color-time)]">7pm</span></p>
+      {/* Section 2: How It Works - Code Snippet Style */}
+      <section className="py-24 px-8 bg-[var(--bg-card)]">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-display text-[var(--text-primary)] mb-12 text-center">
+            how it works
+          </h2>
+          
+          <div className="space-y-8">
+            {/* Admin Commands */}
+            <div>
+              <p className="text-xs uppercase tracking-widest text-[var(--text-tertiary)] mb-4 font-light">
+                admin
+              </p>
+              <div className="bg-[var(--bg-primary)] rounded-lg p-6 shadow-sm border-l-4 border-l-[var(--color-action)] space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-[var(--color-action)] font-mono text-sm font-medium">$</span>
+                  <div className="flex-1">
+                    <span className="text-[var(--color-action)] font-mono text-sm font-medium">announce</span>
+                    <span className="text-[var(--text-primary)] font-mono text-sm ml-2">meeting tonight at</span>
+                    <span className="text-[var(--color-time)] font-mono text-sm ml-1">7pm</span>
+                  </div>
                 </div>
-                <div className="p-4 rounded-lg bg-[var(--bg-card)] border border-[var(--border-subtle)]">
-                  <p className="text-[var(--color-action)] font-light mb-1">poll</p>
-                  <p className="text-sm text-[var(--text-secondary)] font-light">who&apos;s coming <span className="text-[var(--color-time)]">friday</span>?</p>
+                <div className="flex items-start gap-3">
+                  <span className="text-[var(--color-action)] font-mono text-sm font-medium">$</span>
+                  <div className="flex-1">
+                    <span className="text-[var(--color-action)] font-mono text-sm font-medium">poll</span>
+                    <span className="text-[var(--text-primary)] font-mono text-sm ml-2">who&apos;s coming</span>
+                    <span className="text-[var(--color-time)] font-mono text-sm ml-1">friday</span>
+                    <span className="text-[var(--text-primary)] font-mono text-sm ml-1">?</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* User */}
-            <div className="space-y-4">
-              <h3 className="text-sm text-[var(--text-tertiary)] uppercase tracking-wider font-light mb-4">
-                user commands
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-subtle)]">
-                  <span className="text-[var(--color-action)] font-light">START</span>
-                  <span className="text-[var(--text-tertiary)]">→</span>
-                  <span className="text-[var(--text-secondary)] font-light">opt in</span>
+            {/* User Commands */}
+            <div>
+              <p className="text-xs uppercase tracking-widest text-[var(--text-tertiary)] mb-4 font-light">
+                user
+              </p>
+              <div className="bg-[var(--bg-primary)] rounded-lg p-6 shadow-sm border-l-4 border-l-[var(--color-action)] space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-[var(--color-action)] font-mono text-sm font-medium">START</span>
+                  <span className="text-[var(--text-tertiary)] font-mono text-sm">→</span>
+                  <span className="text-[var(--text-secondary)] font-mono text-sm">opt in</span>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-subtle)]">
-                  <span className="text-[var(--color-action)] font-light">STOP</span>
-                  <span className="text-[var(--text-tertiary)]">→</span>
-                  <span className="text-[var(--text-secondary)] font-light">unsubscribe</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[var(--color-action)] font-mono text-sm font-medium">STOP</span>
+                  <span className="text-[var(--text-tertiary)] font-mono text-sm">→</span>
+                  <span className="text-[var(--text-secondary)] font-mono text-sm">unsubscribe</span>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-subtle)]">
-                  <span className="text-[var(--color-action)] font-light">HELP</span>
-                  <span className="text-[var(--text-tertiary)]">→</span>
-                  <span className="text-[var(--text-secondary)] font-light">commands</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[var(--color-action)] font-mono text-sm font-medium">HELP</span>
+                  <span className="text-[var(--text-tertiary)] font-mono text-sm">→</span>
+                  <span className="text-[var(--text-secondary)] font-mono text-sm">commands</span>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Footer - Minimal */}
-          <div className="text-center pt-8 border-t border-[var(--border-subtle)]">
-            <p className="text-xs text-[var(--text-tertiary)] font-light">
-              powered by enclave × twilio × airtable
-            </p>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* Section 3: Why It Matters */}
+      <section className="py-24 px-8">
+        <div className="max-w-3xl mx-auto text-center space-y-6">
+          <h2 className="text-3xl md:text-4xl font-display text-[var(--text-primary)] mb-4">
+            why it matters
+          </h2>
+          <p className="text-lg text-[var(--text-secondary)] font-light leading-relaxed">
+            Every message is a memory. Every poll is a decision. Every announcement is a moment preserved. Enclave helps your community remember what matters.
+          </p>
+        </div>
+      </section>
+
+      {/* Phone Number - Minimal */}
+      <section className="py-16 px-8 border-t border-[var(--border-subtle)]">
+        <div className="max-w-2xl mx-auto text-center">
+          <p className="text-xs uppercase tracking-widest text-[var(--text-tertiary)] mb-3 font-light">text to activate</p>
+          <p className="text-3xl md:text-4xl text-[var(--text-primary)] font-display">
+            +1 (805) 919-8529
+          </p>
+        </div>
+      </section>
+
+      {/* Footer - Minimal */}
+      <footer className="py-12 px-8 border-t border-[var(--border-subtle)]">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-xs text-[var(--text-tertiary)] font-light">
+            powered by enclave × twilio × airtable
+          </p>
+        </div>
+      </footer>
     </main>
   );
 }

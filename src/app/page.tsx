@@ -76,12 +76,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[rgba(42,157,143,0.2)] border-[rgba(42,157,143,0.32)] backdrop-blur-sm',
-  professional: 'bg-[rgba(42,157,143,0.2)] border-[rgba(42,157,143,0.32)] backdrop-blur-sm',
-  events: 'bg-[rgba(42,157,143,0.2)] border-[rgba(42,157,143,0.32)] backdrop-blur-sm',
-  pledging: 'bg-[rgba(212,168,85,0.22)] border-[rgba(212,168,85,0.32)] backdrop-blur-sm',
-  meetings: 'bg-[rgba(212,168,85,0.22)] border-[rgba(212,168,85,0.32)] backdrop-blur-sm',
-  other: 'bg-[rgba(255,255,255,0.04)] border-[var(--border)]/70 backdrop-blur-sm',
+  social: 'bg-[rgba(42,157,143,0.25)] border-[rgba(42,157,143,0.5)]',
+  professional: 'bg-[rgba(42,157,143,0.25)] border-[rgba(42,157,143,0.5)]',
+  events: 'bg-[rgba(42,157,143,0.25)] border-[rgba(42,157,143,0.5)]',
+  pledging: 'bg-[rgba(212,168,85,0.25)] border-[rgba(212,168,85,0.5)]',
+  meetings: 'bg-[rgba(212,168,85,0.25)] border-[rgba(212,168,85,0.5)]',
+  other: 'bg-[rgba(18,18,18,0.8)] border-[var(--border)]',
 };
 
 // Time/tag colors inverse of card background

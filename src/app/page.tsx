@@ -179,6 +179,16 @@ function HelpIcon({ className }: { className?: string }) {
   );
 }
 
+function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
 // ============================================
 // INFO TAB CONTENT
 // ============================================
@@ -194,8 +204,8 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             <span className="text-sm text-[var(--text-secondary)]">system online</span>
           </div>
           
-          <h1 className="text-5xl font-normal tracking-tight font-bauhaus">
-            <span className="text-[var(--accent)]">enclave</span>
+          <h1 className="text-5xl font-bold tracking-tight">
+            <span className="text-[var(--accent)]">jarvis</span>
           </h1>
           
           <p className="text-xl text-[var(--text-secondary)]">
@@ -361,11 +371,12 @@ function DumpTab() {
   
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    categories: true,
-    timeline: true,
-    entities: true,
-    uploads: true,
+    categories: false,
+    timeline: false,
+    entities: false,
+    uploads: false,
   });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const currentFilter = breadcrumbs[breadcrumbs.length - 1];
 
@@ -450,6 +461,35 @@ function DumpTab() {
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
   useEffect(() => { fetchAllFacts(); }, [fetchAllFacts]);
 
+  // Initial upload of sample text for visualization
+  useEffect(() => {
+    const initialText = `Sigma Eta Pi UCLA – Event Information and Context Study Hall Pledges do Study Hall at Rieber Terrace, 9th Floor Lounge, from 6:30 PM to 12:30 AM every Wednesday. Study Hall is a weekly work session where pledges come together to study, collaborate, and stay accountable for their academic and professional commitments. Creatathon Creatathon will be held on November 8th (time and location TBD). Creatathon is an event hosted by the Vice Presidents of Professional Affairs where pledges and actives work together to create and pitch innovative ideas. After the pitches are presented, actives vote on their favorites. It's one of Sigma Eta Pi's core professional development events, emphasizing creativity, teamwork, and entrepreneurial thinking. Big Little Big Little will be on November 13th (time and location TBD). Big Little is a family bonding tradition within Sigma Eta Pi. Each family—Dark Knight, Crown Royale, Sauce, and Nebula—hosts its own ceremony to welcome new Littles into the family. Afterward, there is a larger celebration for all families together. AD/AG Summons The AD/AG Summons will be on November 6th (time and location TBD). A "Summons" is an event hosted by older pledge classes for the current pledges. The AD/AG Summons combines the Alpha Delta and Alpha Gamma pledge classes, who organize a night of fun, bonding, and challenges for the current pledge class. AE Summons Date TBD. The AE Summons follows the same tradition as AD/AG Summons but is hosted by the Alpha Epsilon pledge class. It's another opportunity for pledges to engage with older classes through interactive, community-building activities. Crossing Crossing will take place on Wednesday at 7 PM (exact date, time, and location TBD). Crossing is the initiation ceremony for the Alpha Eta pledge class, marking the official transition from pledges to active members of Sigma Eta Pi. Big Little Appreciation Big Little Appreciation will be on Wednesday, December 3rd (time and location TBD). Big Little Appreciation is when Littles express gratitude to their Bigs by creating personalized gifts—often including a decorated paddle—and sometimes performing a song, skit, or other creative gesture. It's a celebration of mentorship and connection within the fraternity. Active Meeting Active Meetings occur every Wednesday at 8:00 PM. Attendance is mandatory and tracked. These meetings are usually held at Mahi's apartment (461B Kelton) or Ash's apartment (610 Levering). Active Meetings are the core weekly gathering for members to discuss fraternity updates, plan events, coordinate professional and social activities, and make announcements regarding the pledge process or chapter operations.`;
+
+    const uploadInitialText = async () => {
+      // Only upload if there are no uploads yet
+      if (uploads.length === 0 && !loading) {
+        try {
+          const res = await fetch('/api/text-explorer/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rawText: initialText }),
+          });
+          if (res.ok) {
+            fetchTree();
+            fetchFacts();
+            fetchAllFacts();
+            fetchUploads();
+          }
+        } catch (error) {
+          console.error('Failed to upload initial text:', error);
+        }
+      }
+    };
+
+    uploadInitialText();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
   const handleUpload = async () => {
     if (!uploadText.trim()) return;
     setUploading(true);
@@ -477,9 +517,12 @@ function DumpTab() {
   const navigateTo = (type: FilterType, value: string, label: string, parent?: string) => {
     // Switch to explore view when navigating to a filter
     setViewMode('explore');
+    // Close sidebar on mobile after navigation
+    setSidebarOpen(false);
     
     if (type === 'all') {
       setBreadcrumbs([{ type: 'all', value: '', label: 'all' }]);
+      setExpandedCards({});
     } else if (type === 'subcategory' && parent) {
       setBreadcrumbs([
         { type: 'all', value: '', label: 'all' },
@@ -493,6 +536,20 @@ function DumpTab() {
       ]);
     }
   };
+
+  // Auto-expand cards that match the current filter
+  useEffect(() => {
+    if (currentFilter.type !== 'all' && facts.length > 0) {
+      const cardsToExpand: Record<string, boolean> = {};
+      facts.forEach(fact => {
+        if (fact.subcategory) {
+          const key = fact.subcategory.toLowerCase();
+          cardsToExpand[key] = true;
+        }
+      });
+      setExpandedCards(cardsToExpand);
+    }
+  }, [facts, currentFilter]);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -630,8 +687,40 @@ function DumpTab() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex animate-fade-in">
+      {/* Hamburger Menu Button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className={`fixed top-4 z-50 p-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-300 lg:hidden ${
+          sidebarOpen ? 'left-[19rem]' : 'left-4'
+        }`}
+        aria-label="Toggle sidebar"
+      >
+        <MenuIcon className="w-5 h-5" />
+      </button>
+
+      {/* Overlay for mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-72 border-r border-[var(--border-subtle)] flex flex-col">
+      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:static top-0 left-0 h-full w-72 border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] flex flex-col z-40 transition-transform duration-300`}>
+        {/* Close button for mobile */}
+        {sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden absolute top-4 right-4 p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            aria-label="Close sidebar"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
         <div className="p-6 border-b border-[var(--border-subtle)]">
           <h1 className="text-lg font-medium text-[var(--text-primary)] tracking-tight">
             dump<span className="text-[var(--accent-contrast)]">_</span>
@@ -773,9 +862,9 @@ function DumpTab() {
               {expandedSections.entities && tree.entities.slice(0, 15).map((entity) => (
                 <button
                   key={entity.name}
-                  onClick={() => navigateTo('entity', entity.name, entity.name)}
+                  onClick={() => navigateTo('entity', entity.name.toLowerCase(), entity.name)}
                   className={`w-full text-left px-6 py-1.5 text-sm transition-colors ${
-                    currentFilter.type === 'entity' && currentFilter.value === entity.name ? 'text-[var(--accent)] bg-[var(--accent-glow)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                    currentFilter.type === 'entity' && currentFilter.value.toLowerCase() === entity.name.toLowerCase() ? 'text-[var(--accent)] bg-[var(--accent-glow)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   <span className="opacity-30 mr-2">├─</span>{entity.name}
@@ -897,7 +986,14 @@ function DumpTab() {
                                     <HighlightedText 
                                       text={fact.sourceText} 
                                       entities={fact.entities}
-                                      onEntityClick={(e) => navigateTo('entity', e, e)}
+                                      onEntityClick={(e) => {
+                                        navigateTo('entity', e.toLowerCase(), e);
+                                        // Auto-expand the card when clicking an entity within it
+                                        if (fact.subcategory) {
+                                          const key = fact.subcategory.toLowerCase();
+                                          setExpandedCards(prev => ({ ...prev, [key]: true }));
+                                        }
+                                      }}
                                       highlightClass={['pledging','meetings'].includes(fact.category) ? 'text-[var(--accent-secondary)]' : 'text-[var(--accent)]'}
                                       highlightBgClass={['pledging','meetings'].includes(fact.category) ? 'bg-[var(--accent-secondary)]/10' : 'bg-[var(--accent)]/10'}
                                     />
@@ -907,7 +1003,14 @@ function DumpTab() {
                                   {fact.entities.slice(0, 8).map((entity) => (
                                     <button
                                       key={entity}
-                                      onClick={() => navigateTo('entity', entity.toLowerCase(), entity)}
+                                      onClick={() => {
+                                        navigateTo('entity', entity.toLowerCase(), entity);
+                                        // Auto-expand the card when clicking an entity tag
+                                        if (fact.subcategory) {
+                                          const key = fact.subcategory.toLowerCase();
+                                          setExpandedCards(prev => ({ ...prev, [key]: true }));
+                                        }
+                                      }}
                                       className="text-xs px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
                                     >
                                       #{entity}
@@ -930,7 +1033,10 @@ function DumpTab() {
                       <HighlightedText 
                         text={fact.sourceText || fact.content} 
                         entities={fact.entities}
-                        onEntityClick={(e) => navigateTo('entity', e, e)}
+                        onEntityClick={(e) => {
+                          navigateTo('entity', e.toLowerCase(), e);
+                          // For ungrouped facts, we can't auto-expand but we ensure filtering works
+                        }}
                       />
                     </p>
                     <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -1104,8 +1210,8 @@ export default function Home() {
           </button>
 
           {/* Center: App Name */}
-          <h1 className="text-lg font-normal tracking-tight font-bauhaus">
-            <span className="text-[var(--accent)]">enclave</span>
+          <h1 className="text-lg font-bold tracking-tight">
+            <span className="text-[var(--accent)]">jarvis</span>
           </h1>
 
           {/* Right: Help Icon */}

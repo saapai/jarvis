@@ -475,14 +475,14 @@ function DumpTab() {
         setUploadText('');
         setShowUpload(false);
         // Wait a bit for database transaction to commit
-        await new Promise(resolve => setTimeout(resolve, 500));
-        // Fetch all data in parallel and wait for completion
-        await Promise.all([
-          fetchTree(),
-          fetchFacts(),
-          fetchAllFacts(),
-          fetchUploads(),
-        ]);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Fetch all data sequentially to ensure proper updates
+        await fetchTree();
+        await fetchAllFacts();
+        await fetchFacts();
+        await fetchUploads();
+        // Force a small delay to ensure state updates propagate
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -650,6 +650,15 @@ function DumpTab() {
     }
     return map;
   }, [allFacts, calendarDate]);
+
+  // Force calendar to refresh when allFacts changes
+  useEffect(() => {
+    // This ensures the calendar view re-renders when facts are updated
+    if (viewMode === 'calendar') {
+      // Trigger a re-render by updating calendarDate slightly
+      setCalendarDate(prev => ({ ...prev }));
+    }
+  }, [allFacts.length, viewMode]);
 
   const recurringFacts = useMemo(() => allFacts.filter(f => f.dateStr?.startsWith('recurring:')), [allFacts]);
 

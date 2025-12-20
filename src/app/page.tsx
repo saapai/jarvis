@@ -79,8 +79,8 @@ const CATEGORY_BG: Record<string, string> = {
   social: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
   professional: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
   events: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
-  pledging: 'bg-[rgba(188,156,143,0.35)] border-[rgba(188,156,143,0.6)]',
-  meetings: 'bg-[rgba(188,156,143,0.35)] border-[rgba(188,156,143,0.6)]',
+  pledging: 'bg-[rgba(212,165,160,0.35)] border-[rgba(212,165,160,0.6)]',
+  meetings: 'bg-[rgba(212,165,160,0.35)] border-[rgba(212,165,160,0.6)]',
   other: 'bg-[rgba(90,74,53,0.15)] border-[var(--border)]',
 };
 

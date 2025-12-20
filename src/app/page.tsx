@@ -432,9 +432,19 @@ function DumpTab() {
 
   const fetchAllFacts = useCallback(async () => {
     try {
+      console.log('[Calendar] Fetching all facts...');
       const res = await fetch('/api/text-explorer/facts');
       const data = await res.json();
-      setAllFacts(data.facts ?? []);
+      const facts = data.facts ?? [];
+      console.log('[Calendar] Fetched facts count:', facts.length);
+      console.log('[Calendar] Sample facts with dates:', facts.slice(0, 3).map(f => ({
+        id: f.id,
+        content: f.content?.substring(0, 50),
+        dateStr: f.dateStr,
+        timeRef: f.timeRef,
+        subcategory: f.subcategory
+      })));
+      setAllFacts(facts);
     } catch (error) {
       console.error('Failed to fetch all facts:', error);
     }
@@ -466,26 +476,35 @@ function DumpTab() {
     if (!uploadText.trim()) return;
     setUploading(true);
     try {
+      console.log('[Upload] Starting upload...');
       const res = await fetch('/api/text-explorer/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rawText: uploadText }),
       });
       if (res.ok) {
+        console.log('[Upload] Upload successful, refreshing data...');
         setUploadText('');
         setShowUpload(false);
         // Wait a bit for database transaction to commit
         await new Promise(resolve => setTimeout(resolve, 1000));
-        // Fetch all data sequentially to ensure proper updates
+        console.log('[Upload] Fetching tree...');
         await fetchTree();
+        console.log('[Upload] Fetching all facts...');
         await fetchAllFacts();
+        console.log('[Upload] Fetching filtered facts...');
         await fetchFacts();
+        console.log('[Upload] Fetching uploads...');
         await fetchUploads();
+        console.log('[Upload] All fetches complete. Current allFacts count:', allFacts.length);
         // Force a small delay to ensure state updates propagate
         await new Promise(resolve => setTimeout(resolve, 100));
+        console.log('[Upload] Upload process complete');
+      } else {
+        console.error('[Upload] Upload failed with status:', res.status);
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('[Upload] Upload error:', error);
     } finally {
       setUploading(false);
     }
@@ -616,8 +635,11 @@ function DumpTab() {
 
   // Calendar uses ALL facts, not just filtered ones
   const factsByDate = useMemo(() => {
+    console.log('[Calendar] Computing factsByDate from', allFacts.length, 'facts');
     const map: Record<string, Fact[]> = {};
     const { year } = calendarDate;
+    let factsWithDates = 0;
+    let factsWithoutDates = 0;
     
     for (const fact of allFacts) {
       let dateStr: string | null = null;
@@ -641,13 +663,29 @@ function DumpTab() {
         const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
         const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : year;
         dateStr = parseDateFromTimeRef(fact.timeRef, yearToUse);
+        if (dateStr) {
+          console.log('[Calendar] Parsed timeRef:', fact.timeRef, '->', dateStr);
+        }
       }
       
       if (dateStr) {
         if (!map[dateStr]) map[dateStr] = [];
         map[dateStr].push(fact);
+        factsWithDates++;
+      } else {
+        factsWithoutDates++;
+        if (factsWithoutDates <= 3) {
+          console.log('[Calendar] Fact without date:', {
+            id: fact.id,
+            content: fact.content?.substring(0, 50),
+            dateStr: fact.dateStr,
+            timeRef: fact.timeRef
+          });
+        }
       }
     }
+    console.log('[Calendar] Facts with dates:', factsWithDates, 'without dates:', factsWithoutDates);
+    console.log('[Calendar] Date keys:', Object.keys(map).slice(0, 10));
     return map;
   }, [allFacts, calendarDate]);
 
@@ -660,7 +698,11 @@ function DumpTab() {
     const dayFacts = factsByDate[dateStr] || [];
     const dayOfWeek = new Date(year, month, day).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     const recurring = recurringFacts.filter(f => f.dateStr === `recurring:${dayOfWeek}`);
-    return [...dayFacts, ...recurring];
+    const result = [...dayFacts, ...recurring];
+    if (result.length > 0 && day === new Date().getDate()) {
+      console.log('[Calendar] Facts for today (', dateStr, '):', result.length, result.map(f => f.subcategory || f.content.substring(0, 30)));
+    }
+    return result;
   };
 
   return (

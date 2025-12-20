@@ -275,8 +275,8 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   return (
     <main className="min-h-screen flex flex-col animate-fade-in bg-white">
       {/* Hero Section - Dreamy & Warm */}
-      <div className="relative h-[85vh] min-h-[600px] flex items-center justify-center overflow-hidden">
-        {/* Background Image - Full Saturation */}
+      <div className="relative h-[90vh] min-h-[700px] flex items-center justify-center overflow-hidden">
+        {/* Background Image - Full Saturation, No Overlays */}
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
@@ -284,20 +284,17 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
           }}
         />
         
-        {/* Minimal overlay for text readability only */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white/20" />
-        
         {/* Content - Album Cover Style */}
         <div className="relative z-10 text-center px-8 max-w-4xl">
-          <h1 className="text-7xl md:text-8xl lg:text-9xl font-display mb-6 text-[var(--text-primary)] leading-[0.9]">
+          <h1 className="text-7xl md:text-8xl lg:text-9xl font-display mb-6 text-white drop-shadow-lg leading-[0.9]">
             enclave
           </h1>
-          <p className="text-xl md:text-2xl text-white/95 mb-12 max-w-2xl mx-auto font-light">
+          <p className="text-xl md:text-2xl text-white/95 mb-12 max-w-2xl mx-auto font-light drop-shadow-md">
             memory architecture for your community
           </p>
           <button
             onClick={() => onNavigate('dump')}
-            className="px-10 py-4 text-base font-light tracking-wide text-white bg-[#cf9b42] rounded-full hover:opacity-90 transition-all hover:scale-105 shadow-lg"
+            className="px-10 py-4 text-base font-light tracking-wide text-white bg-[#cf9b42] rounded-full hover:opacity-90 transition-all hover:scale-105 shadow-xl"
           >
             begin
           </button>
@@ -389,11 +386,11 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         </div>
       </section>
 
-      {/* Phone Number - Minimal */}
-      <section className="py-20 px-8 bg-[#fdf9f5] border-t border-[var(--border-subtle)]">
+      {/* Phone Number - Clean & Minimal */}
+      <section className="py-24 px-8 bg-white">
         <div className="max-w-2xl mx-auto text-center">
           <p className="text-xs uppercase tracking-widest text-[var(--text-tertiary)] mb-4 font-light">text to activate</p>
-          <p className="text-3xl md:text-4xl text-[var(--text-primary)] font-display">
+          <p className="text-3xl md:text-4xl text-[var(--color-location)] font-display">
             +1 (805) 919-8529
           </p>
         </div>
@@ -1370,7 +1367,7 @@ export default function Home() {
             {/* Left: CTA */}
             <button
               onClick={() => setActiveTab('dump')}
-              className="p-2 rounded-lg transition-colors text-[var(--text-primary)] hover:text-[var(--color-action)] hover:bg-[var(--bg-hover)]"
+              className="p-2 rounded-lg transition-colors text-white/90 hover:text-white hover:bg-white/10"
               title="Enter"
             >
               <HomeIcon className="w-5 h-5" />

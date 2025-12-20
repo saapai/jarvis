@@ -1314,7 +1314,7 @@ function DumpTab() {
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 bg-[rgba(114,95,69,0.8)] flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
-          <div className="w-full max-w-2xl bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-6 animate-expand-in" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl bg-[var(--bg-primary)] rounded-xl border border-[var(--border)] p-6 animate-expand-in" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-4">dump text<span className="text-[var(--color-rose)]">_</span></h2>
             <textarea
               autoFocus

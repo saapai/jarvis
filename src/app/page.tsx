@@ -462,35 +462,6 @@ function DumpTab() {
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
   useEffect(() => { fetchAllFacts(); }, [fetchAllFacts]);
 
-  // Initial upload of sample text for visualization
-  useEffect(() => {
-    const initialText = `Sigma Eta Pi UCLA – Event Information and Context Study Hall Pledges do Study Hall at Rieber Terrace, 9th Floor Lounge, from 6:30 PM to 12:30 AM every Wednesday. Study Hall is a weekly work session where pledges come together to study, collaborate, and stay accountable for their academic and professional commitments. Creatathon Creatathon will be held on November 8th (time and location TBD). Creatathon is an event hosted by the Vice Presidents of Professional Affairs where pledges and actives work together to create and pitch innovative ideas. After the pitches are presented, actives vote on their favorites. It's one of Sigma Eta Pi's core professional development events, emphasizing creativity, teamwork, and entrepreneurial thinking. Big Little Big Little will be on November 13th (time and location TBD). Big Little is a family bonding tradition within Sigma Eta Pi. Each family—Dark Knight, Crown Royale, Sauce, and Nebula—hosts its own ceremony to welcome new Littles into the family. Afterward, there is a larger celebration for all families together. AD/AG Summons The AD/AG Summons will be on November 6th (time and location TBD). A "Summons" is an event hosted by older pledge classes for the current pledges. The AD/AG Summons combines the Alpha Delta and Alpha Gamma pledge classes, who organize a night of fun, bonding, and challenges for the current pledge class. AE Summons Date TBD. The AE Summons follows the same tradition as AD/AG Summons but is hosted by the Alpha Epsilon pledge class. It's another opportunity for pledges to engage with older classes through interactive, community-building activities. Crossing Crossing will take place on Wednesday at 7 PM (exact date, time, and location TBD). Crossing is the initiation ceremony for the Alpha Eta pledge class, marking the official transition from pledges to active members of Sigma Eta Pi. Big Little Appreciation Big Little Appreciation will be on Wednesday, December 3rd (time and location TBD). Big Little Appreciation is when Littles express gratitude to their Bigs by creating personalized gifts—often including a decorated paddle—and sometimes performing a song, skit, or other creative gesture. It's a celebration of mentorship and connection within the fraternity. Active Meeting Active Meetings occur every Wednesday at 8:00 PM. Attendance is mandatory and tracked. These meetings are usually held at Mahi's apartment (461B Kelton) or Ash's apartment (610 Levering). Active Meetings are the core weekly gathering for members to discuss fraternity updates, plan events, coordinate professional and social activities, and make announcements regarding the pledge process or chapter operations.`;
-
-    const uploadInitialText = async () => {
-      // Only upload if there are no uploads yet
-      if (uploads.length === 0 && !loading) {
-        try {
-          const res = await fetch('/api/text-explorer/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rawText: initialText }),
-          });
-          if (res.ok) {
-            fetchTree();
-            fetchFacts();
-            fetchAllFacts();
-            fetchUploads();
-          }
-        } catch (error) {
-          console.error('Failed to upload initial text:', error);
-        }
-      }
-    };
-
-    uploadInitialText();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
-
   const handleUpload = async () => {
     if (!uploadText.trim()) return;
     setUploading(true);

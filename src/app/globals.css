@@ -5,46 +5,47 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* True black base for maximum contrast */
-  --bg-primary: #000000;
-  --bg-secondary: rgba(12, 12, 12, 0.95);
-  --bg-tertiary: rgba(18, 18, 18, 0.92);
-  --bg-hover: rgba(28, 28, 28, 0.8);
-  --bg-active: rgba(36, 36, 36, 0.85);
-  --bg-elevated: rgba(16, 16, 16, 0.96);
+  /* Retro cream base */
+  --bg-primary: #DBCBBD;
+  --bg-secondary: rgba(219, 203, 189, 0.95);
+  --bg-tertiary: rgba(219, 203, 189, 0.92);
+  --bg-hover: rgba(219, 203, 189, 0.8);
+  --bg-active: rgba(219, 203, 189, 0.85);
+  --bg-elevated: rgba(219, 203, 189, 0.96);
 
-  /* Clean text hierarchy */
-  --text-primary: #fafafa;
-  --text-secondary: #a8a8a8;
-  --text-tertiary: #6a6a6a;
-  --text-muted: #4a4a4a;
+  /* Dark brown text hierarchy */
+  --text-primary: #725F45;
+  --text-secondary: rgba(114, 95, 69, 0.8);
+  --text-tertiary: rgba(114, 95, 69, 0.6);
+  --text-muted: rgba(114, 95, 69, 0.4);
 
-  /* Primary: teal/green; Secondary: yellow */
-  --accent: #2a9d8f;
-  --accent-dim: #1f7a6f;
-  --accent-glow: rgba(42, 157, 143, 0.22);
-  --accent-surface: rgba(42, 157, 143, 0.12);
+  /* Primary: blue (replaces green) */
+  --accent: #8EB2C9;
+  --accent-dim: #6B9AB8;
+  --accent-glow: rgba(142, 178, 201, 0.22);
+  --accent-surface: rgba(142, 178, 201, 0.12);
 
-  --accent-secondary: #d4a855;
-  --accent-secondary-dim: #b8923f;
-  --accent-secondary-glow: rgba(212, 168, 85, 0.25);
-  --accent-secondary-surface: rgba(212, 168, 85, 0.14);
+  /* Secondary: pink (replaces yellow) */
+  --accent-secondary: #BC9C8F;
+  --accent-secondary-dim: #A8897A;
+  --accent-secondary-glow: rgba(188, 156, 143, 0.25);
+  --accent-secondary-surface: rgba(188, 156, 143, 0.14);
 
-  /* Yellow accent kept for highlights/underscores */
-  --accent-contrast: #d4a855;
+  /* Pink accent for highlights/underscores */
+  --accent-contrast: #BC9C8F;
 
   /* Subtle borders */
-  --border: #1a1a1a;
-  --border-subtle: #141414;
-  --border-active: #2a2a2a;
+  --border: rgba(114, 95, 69, 0.2);
+  --border-subtle: rgba(114, 95, 69, 0.15);
+  --border-active: rgba(114, 95, 69, 0.3);
 
-  /* Category colors - green / yellow two-tone */
-  --cat-events: #2a9d8f;
-  --cat-meetings: #d4a855;
-  --cat-social: #2a9d8f;
-  --cat-professional: #1f7a6f;
-  --cat-pledging: #d4a855;
-  --cat-other: #6a6a6a;
+  /* Category colors - blue / pink two-tone */
+  --cat-events: #8EB2C9;
+  --cat-meetings: #BC9C8F;
+  --cat-social: #8EB2C9;
+  --cat-professional: #6B9AB8;
+  --cat-pledging: #BC9C8F;
+  --cat-other: rgba(114, 95, 69, 0.6);
 
   /* Smooth transitions */
   --transition-fast: 150ms;

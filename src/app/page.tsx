@@ -65,7 +65,7 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Green & yellow palette; cards use own color, tags invert for contrast
+// Blue & pink palette; cards use own color, tags invert for contrast
 const CATEGORY_COLORS: Record<string, string> = {
   social: 'text-[var(--accent)]',          // card text matches card color
   professional: 'text-[var(--accent)]',
@@ -76,22 +76,22 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[rgba(42,157,143,0.25)] border-[rgba(42,157,143,0.5)]',
-  professional: 'bg-[rgba(42,157,143,0.25)] border-[rgba(42,157,143,0.5)]',
-  events: 'bg-[rgba(42,157,143,0.25)] border-[rgba(42,157,143,0.5)]',
-  pledging: 'bg-[rgba(212,168,85,0.25)] border-[rgba(212,168,85,0.5)]',
-  meetings: 'bg-[rgba(212,168,85,0.25)] border-[rgba(212,168,85,0.5)]',
-  other: 'bg-[rgba(18,18,18,0.8)] border-[var(--border)]',
+  social: 'bg-[rgba(142,178,201,0.25)] border-[rgba(142,178,201,0.5)]',
+  professional: 'bg-[rgba(142,178,201,0.25)] border-[rgba(142,178,201,0.5)]',
+  events: 'bg-[rgba(142,178,201,0.25)] border-[rgba(142,178,201,0.5)]',
+  pledging: 'bg-[rgba(188,156,143,0.25)] border-[rgba(188,156,143,0.5)]',
+  meetings: 'bg-[rgba(188,156,143,0.25)] border-[rgba(188,156,143,0.5)]',
+  other: 'bg-[rgba(114,95,69,0.1)] border-[var(--border)]',
 };
 
 // Time/tag colors inverse of card background
 const TAG_COLORS: Record<string, string> = {
-  social: 'text-[var(--accent-contrast)]',      // green bg -> yellow tag
-  professional: 'text-[var(--accent-contrast)]',
-  events: 'text-[var(--accent-contrast)]',
-  pledging: 'text-[var(--accent)]',             // yellow bg -> green tag
+  social: 'text-[var(--accent-secondary)]',      // blue bg -> pink tag
+  professional: 'text-[var(--accent-secondary)]',
+  events: 'text-[var(--accent-secondary)]',
+  pledging: 'text-[var(--accent)]',             // pink bg -> blue tag
   meetings: 'text-[var(--accent)]',
-  other: 'text-[var(--accent-contrast)]',
+  other: 'text-[var(--accent-secondary)]',
 };
 
 // Body text color for expanded content (yellow cards use yellow text)

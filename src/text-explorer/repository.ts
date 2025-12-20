@@ -14,30 +14,64 @@ export const textExplorerRepository: TextExplorerRepository = {
 
   async createFacts({ uploadId, facts }) {
     const prisma = await getPrisma();
+    
+    // Check if embedding column exists
+    const columnExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'Fact' 
+        AND column_name = 'embedding'
+      ) as exists
+    `;
+    
+    const hasEmbeddingColumn = columnExists[0]?.exists ?? false;
+    
     await prisma.$transaction(
       facts.map((fact) => {
-        const embedding = fact.embedding && fact.embedding.length === VECTOR_DIMENSION
+        const hasEmbedding = hasEmbeddingColumn && fact.embedding && fact.embedding.length === VECTOR_DIMENSION;
+        const embedding = hasEmbedding
           ? fact.embedding
           : Array.from({ length: VECTOR_DIMENSION }, () => 0);
 
         // Insert via raw SQL to handle pgvector column
-        return prisma.$executeRawUnsafe(
-          `
-          INSERT INTO "Fact" 
-            (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", entities, embedding)
-          VALUES 
-            (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9::vector)
-          `,
-          uploadId,
-          fact.content,
-          fact.sourceText,
-          fact.category,
-          fact.subcategory,
-          fact.timeRef,
-          fact.dateStr,
-          JSON.stringify(fact.entities),
-          `[${embedding.join(',')}]`
-        );
+        if (hasEmbeddingColumn && hasEmbedding) {
+          return prisma.$executeRawUnsafe(
+            `
+            INSERT INTO "Fact" 
+              (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", entities, embedding)
+            VALUES 
+              (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9::vector)
+            `,
+            uploadId,
+            fact.content,
+            fact.sourceText,
+            fact.category,
+            fact.subcategory,
+            fact.timeRef,
+            fact.dateStr,
+            JSON.stringify(fact.entities),
+            `[${embedding.join(',')}]`
+          );
+        } else {
+          // Insert without embedding column
+          return prisma.$executeRawUnsafe(
+            `
+            INSERT INTO "Fact" 
+              (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", entities)
+            VALUES 
+              (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+            `,
+            uploadId,
+            fact.content,
+            fact.sourceText,
+            fact.category,
+            fact.subcategory,
+            fact.timeRef,
+            fact.dateStr,
+            JSON.stringify(fact.entities)
+          );
+        }
       })
     );
   },

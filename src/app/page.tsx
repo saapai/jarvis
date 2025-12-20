@@ -1405,11 +1405,7 @@ export default function Home() {
             {/* Right: Help Icon */}
             <button
               onClick={() => setActiveTab('info')}
-              className={`p-2 rounded-lg transition-colors ${
-                activeTab === 'info' 
-                  ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-              }`}
+              className="p-2 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
               title="How It Works"
             >
               <HelpIcon className="w-5 h-5" />

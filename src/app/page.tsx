@@ -1094,9 +1094,6 @@ function DumpTab() {
                               {mainFact.timeRef && (
                                 <span className="text-xs text-[var(--color-time)] font-medium">@{mainFact.timeRef}</span>
                               )}
-                              {mainFact.entities.some(e => ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge'].some(loc => e.includes(loc))) && (
-                                <span className="text-xs text-[var(--color-location)] font-medium">📍</span>
-                              )}
                               <span className="text-xs text-[var(--text-tertiary)]">({groupFacts.length})</span>
                             </div>
                             <p className="text-sm text-[var(--text-primary)] font-light">{mainFact.content}</p>

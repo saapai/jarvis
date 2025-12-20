@@ -226,7 +226,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         {/* Phone Number Card */}
         <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-[#2a9d8f] flex items-center justify-center text-2xl text-black">
+            <div className="w-12 h-12 rounded-xl bg-[var(--accent)] flex items-center justify-center text-2xl text-[var(--bg-primary)]">
               📱
             </div>
             <div>
@@ -747,7 +747,7 @@ function DumpTab() {
       {/* Overlay for mobile when sidebar is open */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          className="fixed inset-0 bg-[rgba(114,95,69,0.5)] z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -1201,7 +1201,7 @@ function DumpTab() {
 
       {/* Upload Modal */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
+        <div className="fixed inset-0 bg-[rgba(114,95,69,0.8)] flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
           <div className="w-full max-w-2xl bg-[var(--bg-secondary)] rounded-xl border border-[var(--border)] p-6 animate-expand-in" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-medium text-[var(--text-primary)] mb-4">dump text<span className="text-[var(--accent)]">_</span></h2>
             <textarea

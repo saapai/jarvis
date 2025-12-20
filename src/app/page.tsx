@@ -189,6 +189,22 @@ function MenuIcon({ className }: { className?: string }) {
   );
 }
 
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
 // ============================================
 // INFO TAB CONTENT
 // ============================================
@@ -376,7 +392,7 @@ function DumpTab() {
     entities: false,
     uploads: false,
   });
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Collapsed by default
 
   const currentFilter = breadcrumbs[breadcrumbs.length - 1];
 
@@ -687,18 +703,22 @@ function DumpTab() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex animate-fade-in">
-      {/* Hamburger Menu Button */}
+      {/* Chatbot-style Arrow Toggle Button - positioned on the edge */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`fixed top-4 z-50 p-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all duration-300 lg:hidden ${
-          sidebarOpen ? 'left-[19rem]' : 'left-4'
+        className={`fixed top-1/2 -translate-y-1/2 z-50 w-10 h-20 flex items-center justify-center rounded-r-xl bg-[var(--bg-secondary)] border-r-2 border-y-2 border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10 hover:border-[var(--accent)] transition-all duration-300 shadow-lg backdrop-blur-sm ${
+          sidebarOpen ? 'left-[18rem]' : 'left-0'
         }`}
         aria-label="Toggle sidebar"
       >
-        <MenuIcon className="w-5 h-5" />
+        {sidebarOpen ? (
+          <ChevronLeftIcon className="w-6 h-6" />
+        ) : (
+          <ChevronRightIcon className="w-6 h-6" />
+        )}
       </button>
 
-      {/* Overlay for mobile */}
+      {/* Overlay for mobile when sidebar is open */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 lg:hidden"
@@ -707,20 +727,7 @@ function DumpTab() {
       )}
 
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:static top-0 left-0 h-full w-72 border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] flex flex-col z-40 transition-transform duration-300`}>
-        {/* Close button for mobile */}
-        {sidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden absolute top-4 right-4 p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-            aria-label="Close sidebar"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        )}
+      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] flex flex-col z-40 transition-transform duration-300`}>
         <div className="p-6 border-b border-[var(--border-subtle)]">
           <h1 className="text-lg font-medium text-[var(--text-primary)] tracking-tight">
             dump<span className="text-[var(--accent-contrast)]">_</span>
@@ -904,7 +911,7 @@ function DumpTab() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'ml-0' : 'ml-0'}`}>
         <header className="px-8 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             {breadcrumbs.map((crumb, i) => (

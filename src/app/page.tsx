@@ -66,24 +66,22 @@ interface BreadcrumbItem {
 // ============================================
 
 // Semantic card system - cream cards with colored left borders
-// Organic material-based card backgrounds with soft gradients
+// Disciplined gradient archetypes - only 3 total
+// Reduced intensity 50-70%, shared directionality
+const WARM_WASH = 'bg-gradient-to-br from-[rgba(206,96,135,0.06)] to-[rgba(207,155,66,0.05)]'; // Pink → Yellow
+const COOL_WASH = 'bg-gradient-to-br from-[rgba(52,124,147,0.06)] to-[rgba(30,86,55,0.05)]'; // Blue → Green
+const NEUTRAL_WASH = 'bg-gradient-to-br from-[rgba(253,249,245,0.98)] to-[rgba(82,79,59,0.04)]'; // Cream → Olive
+
 const getCardStyle = (category: string): string => {
-  // Two-tone gradients blending colors organically
-  // Colors desaturated 30-40%, applied with texture
-  if (['pledging', 'meetings'].includes(category)) {
-    // Pink + Blue blend (sunset-reflective sand + ocean-washed paper)
-    return 'bg-gradient-to-br from-[rgba(206,96,135,0.14)] via-[rgba(206,96,135,0.10)] to-[rgba(52,124,147,0.18)] border border-[rgba(206,96,135,0.25)] backdrop-blur-[2px] shadow-sm';
+  // Only 3 archetypes - controlled variation, not chaos
+  if (['pledging', 'meetings', 'social'].includes(category)) {
+    return `${WARM_WASH} border border-[rgba(206,96,135,0.12)]`;
   }
-  if (['social', 'events'].includes(category)) {
-    // Green + Yellow blend (olive notebook + warm kraft paper)
-    return 'bg-gradient-to-br from-[rgba(30,86,55,0.18)] via-[rgba(30,86,55,0.12)] to-[rgba(207,155,66,0.15)] border border-[rgba(30,86,55,0.25)] backdrop-blur-[2px] shadow-sm';
+  if (['events', 'professional'].includes(category)) {
+    return `${COOL_WASH} border border-[rgba(52,124,147,0.12)]`;
   }
-  if (['professional'].includes(category)) {
-    // Blue + Green blend (ocean-washed paper + mossy texture)
-    return 'bg-gradient-to-br from-[rgba(52,124,147,0.18)] via-[rgba(52,124,147,0.12)] to-[rgba(30,86,55,0.15)] border border-[rgba(52,124,147,0.25)] backdrop-blur-[2px] shadow-sm';
-  }
-  // Default: soft cream with subtle green wash
-  return 'bg-gradient-to-br from-[rgba(253,249,245,0.95)] to-[rgba(30,86,55,0.08)] border border-[rgba(114,95,69,0.15)] backdrop-blur-[1px] shadow-sm';
+  // Default: neutral wash
+  return `${NEUTRAL_WASH} border border-[rgba(114,95,69,0.12)]`;
 };
 
 const CATEGORY_BG: Record<string, string> = {
@@ -94,6 +92,9 @@ const CATEGORY_BG: Record<string, string> = {
   meetings: getCardStyle('meetings'),
   other: getCardStyle('other'),
 };
+
+// Add texture class to cards
+const CARD_CLASS = 'card-texture shadow-sm backdrop-blur-[1px]';
 
 // Body text color for expanded content (yellow cards use yellow text)
 const BODY_COLORS: Record<string, string> = {
@@ -1080,7 +1081,7 @@ function DumpTab() {
                   
                   return (
                     <div key={subcategory} className="animate-slide-in">
-                      <div className={`rounded-lg ${CATEGORY_BG[mainFact.category] || CATEGORY_BG.other} overflow-hidden`}>
+                      <div className={`rounded-lg ${CATEGORY_BG[mainFact.category] || CATEGORY_BG.other} ${CARD_CLASS} overflow-hidden`}>
                         {/* Header */}
                         <button
                           onClick={() => toggleCard(subcategory)}
@@ -1096,7 +1097,7 @@ function DumpTab() {
                               )}
                               <span className="text-xs text-[var(--text-tertiary)]">({groupFacts.length})</span>
                             </div>
-                            <p className="text-sm text-[var(--text-primary)] font-light">{mainFact.content}</p>
+                            <p className="text-sm text-[var(--text-primary)] font-light leading-relaxed">{mainFact.content}</p>
                           </div>
                           <span className={`text-[var(--text-tertiary)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                             ▾
@@ -1153,7 +1154,7 @@ function DumpTab() {
                 
                 {/* Ungrouped facts */}
                 {groupedFacts.ungrouped.map((fact) => (
-                  <div key={fact.id} className={`p-4 rounded-lg ${CATEGORY_BG[fact.category] || CATEGORY_BG.other} animate-slide-in`}>
+                  <div key={fact.id} className={`p-4 rounded-lg ${CATEGORY_BG[fact.category] || CATEGORY_BG.other} ${CARD_CLASS} animate-slide-in`}>
                     <p className="text-[var(--text-primary)] text-sm leading-relaxed mb-3 font-light">
                       <HighlightedText 
                         text={fact.sourceText || fact.content} 
@@ -1203,14 +1204,12 @@ function DumpTab() {
                               const hasPeople = fact.entities.length > 0 && !hasLocation;
                               const hasTime = fact.timeRef || fact.dateStr;
                               
-                              // Organic material-based gradients
-                              const cardGradient = hasLocation 
-                                ? 'bg-gradient-to-br from-[rgba(30,86,55,0.15)] to-[rgba(207,155,66,0.12)] border-[rgba(30,86,55,0.2)]'
+                              // Use disciplined archetypes only
+                              const cardGradient = hasLocation || hasTime
+                                ? `${COOL_WASH} border border-[rgba(52,124,147,0.12)]`
                                 : hasPeople 
-                                ? 'bg-gradient-to-br from-[rgba(206,96,135,0.12)] to-[rgba(52,124,147,0.15)] border-[rgba(206,96,135,0.2)]'
-                                : hasTime
-                                ? 'bg-gradient-to-br from-[rgba(52,124,147,0.15)] to-[rgba(30,86,55,0.12)] border-[rgba(52,124,147,0.2)]'
-                                : 'bg-gradient-to-br from-[rgba(253,249,245,0.9)] to-[rgba(30,86,55,0.08)] border-[rgba(114,95,69,0.15)]';
+                                ? `${WARM_WASH} border border-[rgba(206,96,135,0.12)]`
+                                : `${NEUTRAL_WASH} border border-[rgba(114,95,69,0.12)]`;
                               
                               return (
                                 <div 
@@ -1244,11 +1243,11 @@ function DumpTab() {
                         ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'hall'].some(loc => e.includes(loc))
                       );
                       const hasPeople = fact.entities.length > 0 && !hasLocation;
-                      const cardGradient = hasLocation 
-                        ? 'bg-gradient-to-br from-[rgba(30,86,55,0.15)] to-[rgba(207,155,66,0.12)] border-[rgba(30,86,55,0.2)]'
+                      const cardGradient = hasLocation
+                        ? `${COOL_WASH} border border-[rgba(52,124,147,0.12)]`
                         : hasPeople 
-                        ? 'bg-gradient-to-br from-[rgba(206,96,135,0.12)] to-[rgba(52,124,147,0.15)] border-[rgba(206,96,135,0.2)]'
-                        : 'bg-gradient-to-br from-[rgba(52,124,147,0.15)] to-[rgba(30,86,55,0.12)] border-[rgba(52,124,147,0.2)]';
+                        ? `${WARM_WASH} border border-[rgba(206,96,135,0.12)]`
+                        : `${COOL_WASH} border border-[rgba(52,124,147,0.12)]`;
                       
                       return (
                         <div key={fact.id} className={`text-xs px-2 py-1 rounded ${cardGradient} border backdrop-blur-[1px]`}>

@@ -16,11 +16,11 @@
   --bg-active: rgba(253, 249, 245, 0.95);
   --bg-elevated: rgba(253, 249, 245, 1);
 
-  /* Dark brown text hierarchy */
-  --text-primary: #725F45;
-  --text-secondary: rgba(114, 95, 69, 0.85);
-  --text-tertiary: rgba(114, 95, 69, 0.7);
-  --text-muted: rgba(114, 95, 69, 0.5);
+  /* Locked text colors - 1-2 tones for body text */
+  --text-primary: #524f3b; /* Dark olive */
+  --text-secondary: #8a7b69; /* Muted brown */
+  --text-tertiary: rgba(138, 123, 105, 0.7);
+  --text-muted: rgba(138, 123, 105, 0.5);
 
   /* Semantic color system - ink, not paint */
   /* Blue → Time data */
@@ -116,6 +116,35 @@ a {
 
 a:hover {
   color: var(--accent-dim);
+}
+
+/* Film grain texture overlay */
+.card-texture {
+  position: relative;
+}
+
+.card-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.02) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.02) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.02) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.02) 3px
+    );
+  pointer-events: none;
+  opacity: 0.6;
+  mix-blend-mode: overlay;
 }
 
 /* Smooth animations */

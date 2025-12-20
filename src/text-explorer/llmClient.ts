@@ -5,7 +5,10 @@ const ROOT_CATEGORIES: RootCategory[] = ['social', 'professional', 'pledging', '
 
 export const llmClient: LLMClient = {
   async extractFacts(text: string): Promise<ExtractedFact[]> {
-    const currentYear = new Date().getFullYear();
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // 1-12
+    const currentDay = today.getDate();
     
     try {
       const completion = await openai.chat.completions.create({
@@ -16,17 +19,26 @@ export const llmClient: LLMClient = {
             role: 'system',
             content: `You are an information extractor. Split the text into logical sections/topics and extract facts.
 
+Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
+
 For each distinct topic/section in the text, create ONE fact entry with:
 1. content: A brief 1-2 sentence summary of the key points
 2. sourceText: The FULL original text for that section (preserve exact wording)
 3. category: One of: social, professional, pledging, events, meetings, other
 4. subcategory: The specific event/topic name (e.g., "Study Hall", "Creatathon", "Big Little")
-5. timeRef: The exact time reference ("November 8th", "every Wednesday at 8:00 PM")
+5. timeRef: The exact time reference ("November 8th", "every Wednesday at 8:00 PM", "January 15th")
 6. dateStr: Parse to date format:
-   - Specific dates: "${currentYear}-MM-DD" (e.g., "${currentYear}-11-08")
+   - Specific dates WITHOUT year: If the date would be in the past (before today), use ${currentYear + 1}, otherwise use ${currentYear}
+     Examples: "January 8th" -> "${currentYear + 1}-01-08" (if today is December), "March 15th" -> "${currentYear + 1}-03-15" (if today is December)
+   - Specific dates WITH year: Use the year specified (e.g., "November 8th, 2025" -> "${currentYear}-11-08")
    - Recurring: "recurring:dayname" (e.g., "recurring:wednesday")
    - TBD/unknown: null
 7. entities: ALL important entities (people, places, groups, concepts, locations, times)
+
+CRITICAL RULE FOR DATES:
+- If a date without a year would be in the PAST relative to today, assume it's for NEXT YEAR (${currentYear + 1})
+- If a date without a year is in the FUTURE relative to today, use THIS YEAR (${currentYear})
+- Always ensure dates are in the future unless explicitly stated otherwise
 
 IMPORTANT RULES:
 - Group related sentences about the same topic into ONE fact
@@ -77,6 +89,10 @@ Return JSON: { "facts": [...] }`,
     }
   },
 };
+
+
+
+
 
 
 

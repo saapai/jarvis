@@ -601,6 +601,11 @@ function DumpTab() {
     const monthAbbrevs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
                          'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
     
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // 1-12
+    const currentDay = today.getDate();
+    
     // Try full month names first
     for (let i = 0; i < monthNames.length; i++) {
       if (lower.includes(monthNames[i])) {
@@ -610,7 +615,23 @@ function DumpTab() {
           const day = parseInt(dayMatch[1], 10);
           if (day >= 1 && day <= 31) {
             const month = i + 1;
-            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            let dateYear = year;
+            
+            // If no explicit year in timeRef, check if date is in the past
+            if (!timeRef.match(/\b(20\d{2})\b/)) {
+              const parsedDate = new Date(year, month - 1, day);
+              const todayStart = new Date(currentYear, currentMonth - 1, currentDay);
+              todayStart.setHours(0, 0, 0, 0);
+              
+              // If parsed date is in the past, use next year
+              if (parsedDate < todayStart) {
+                dateYear = currentYear + 1;
+              } else {
+                dateYear = currentYear;
+              }
+            }
+            
+            return `${dateYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           }
         }
       }
@@ -624,7 +645,23 @@ function DumpTab() {
           const day = parseInt(dayMatch[1], 10);
           if (day >= 1 && day <= 31) {
             const month = i + 1;
-            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            let dateYear = year;
+            
+            // If no explicit year in timeRef, check if date is in the past
+            if (!timeRef.match(/\b(20\d{2})\b/)) {
+              const parsedDate = new Date(year, month - 1, day);
+              const todayStart = new Date(currentYear, currentMonth - 1, currentDay);
+              todayStart.setHours(0, 0, 0, 0);
+              
+              // If parsed date is in the past, use next year
+              if (parsedDate < todayStart) {
+                dateYear = currentYear + 1;
+              } else {
+                dateYear = currentYear;
+              }
+            }
+            
+            return `${dateYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           }
         }
       }

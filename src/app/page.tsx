@@ -437,7 +437,7 @@ function DumpTab() {
       const data = await res.json();
       const facts = data.facts ?? [];
       console.log('[Calendar] Fetched facts count:', facts.length);
-      console.log('[Calendar] Sample facts with dates:', facts.slice(0, 3).map(f => ({
+      console.log('[Calendar] Sample facts with dates:', facts.slice(0, 3).map((f: Fact) => ({
         id: f.id,
         content: f.content?.substring(0, 50),
         dateStr: f.dateStr,

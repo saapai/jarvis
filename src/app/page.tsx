@@ -279,22 +279,29 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   return (
     <main className="min-h-screen flex flex-col animate-fade-in bg-white">
       {/* Hero Section - Ritualistic with vignette */}
-      <div className="relative h-[20vh] min-h-[200px] flex items-center justify-center overflow-hidden hero-vignette bg-[var(--bg-primary)]">
+      <div className="relative h-[25vh] min-h-[250px] flex items-center justify-center overflow-hidden hero-vignette">
+        {/* Background Image with soft vignette */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: 'url(/hero-image.png)',
+          }}
+        />
         {/* Soft vignette overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-primary)] opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-primary)] opacity-70" />
         
         {/* Content - Ritualistic */}
         <div className="relative z-10 text-center px-8 max-w-4xl w-full">
           {/* Timestamp in mono */}
-          <p className="text-xs text-[var(--text-tertiary)] mb-3 font-mono tracking-wider">
+          <p className="text-xs text-white/80 mb-3 font-mono tracking-wider drop-shadow-sm">
             Winter Week 10 · SEP Lore
           </p>
           {/* Large title */}
-          <h1 className="text-6xl md:text-7xl font-display mb-2 text-[var(--text-primary)] leading-[0.9]">
+          <h1 className="text-6xl md:text-7xl font-display mb-2 text-white drop-shadow-lg leading-[0.9]">
             Enclave
           </h1>
           {/* Thin green underline - highlighter streak */}
-          <div className="w-32 h-1 bg-[var(--color-green)] mx-auto mb-8 opacity-60" />
+          <div className="w-32 h-1 bg-[var(--color-green)] mx-auto mb-8 opacity-80" />
         </div>
       </div>
 
@@ -1330,11 +1337,11 @@ function DumpTab() {
                 }
               }}
               rows={12}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-sm text-[var(--text-primary)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:border-[var(--color-time)] transition-colors"
+              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] text-sm text-[var(--text-body)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:border-[var(--color-green)] transition-colors font-mono"
             />
             <div className="mt-4 flex justify-end gap-3">
               <button onClick={() => setShowUpload(false)} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">cancel</button>
-              <button onClick={handleUpload} disabled={uploading || !uploadText.trim()} className="px-6 py-2 text-sm font-medium text-[var(--bg-primary)] bg-[var(--color-action)] rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button onClick={handleUpload} disabled={uploading || !uploadText.trim()} className="px-6 py-2 text-sm font-mono text-[var(--bg-primary)] bg-[var(--color-yellow)] rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
                 {uploading ? 'extracting...' : 'extract facts'}
               </button>
             </div>

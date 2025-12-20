@@ -66,25 +66,33 @@ interface BreadcrumbItem {
 // ============================================
 
 // Semantic card system - cream cards with colored left borders
-const getCardBorderColor = (category: string): string => {
-  // Determine dominant semantic color based on category
-  // People-driven categories get pink, time-driven get blue, etc.
-  if (['pledging', 'meetings', 'social'].includes(category)) {
-    return 'border-l-[var(--color-people)]'; // Pink for people-driven
+// Organic material-based card backgrounds with soft gradients
+const getCardStyle = (category: string): string => {
+  // Two-tone gradients blending colors organically
+  // Colors desaturated 30-40%, applied with texture
+  if (['pledging', 'meetings'].includes(category)) {
+    // Pink + Blue blend (sunset-reflective sand + ocean-washed paper)
+    return 'bg-gradient-to-br from-[rgba(206,96,135,0.14)] via-[rgba(206,96,135,0.10)] to-[rgba(52,124,147,0.18)] border border-[rgba(206,96,135,0.25)] backdrop-blur-[2px] shadow-sm';
   }
-  if (['events', 'professional'].includes(category)) {
-    return 'border-l-[var(--color-time)]'; // Blue for time-driven
+  if (['social', 'events'].includes(category)) {
+    // Green + Yellow blend (olive notebook + warm kraft paper)
+    return 'bg-gradient-to-br from-[rgba(30,86,55,0.18)] via-[rgba(30,86,55,0.12)] to-[rgba(207,155,66,0.15)] border border-[rgba(30,86,55,0.25)] backdrop-blur-[2px] shadow-sm';
   }
-  return 'border-l-[var(--border)]';
+  if (['professional'].includes(category)) {
+    // Blue + Green blend (ocean-washed paper + mossy texture)
+    return 'bg-gradient-to-br from-[rgba(52,124,147,0.18)] via-[rgba(52,124,147,0.12)] to-[rgba(30,86,55,0.15)] border border-[rgba(52,124,147,0.25)] backdrop-blur-[2px] shadow-sm';
+  }
+  // Default: soft cream with subtle green wash
+  return 'bg-gradient-to-br from-[rgba(253,249,245,0.95)] to-[rgba(30,86,55,0.08)] border border-[rgba(114,95,69,0.15)] backdrop-blur-[1px] shadow-sm';
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
-  professional: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
-  events: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
-  pledging: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
-  meetings: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
-  other: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
+  social: getCardStyle('social'),
+  professional: getCardStyle('professional'),
+  events: getCardStyle('events'),
+  pledging: getCardStyle('pledging'),
+  meetings: getCardStyle('meetings'),
+  other: getCardStyle('other'),
 };
 
 // Body text color for expanded content (yellow cards use yellow text)
@@ -1072,7 +1080,7 @@ function DumpTab() {
                   
                   return (
                     <div key={subcategory} className="animate-slide-in">
-                      <div className={`rounded-lg ${CATEGORY_BG[mainFact.category] || CATEGORY_BG.other} ${getCardBorderColor(mainFact.category)} border-l-4 overflow-hidden`}>
+                      <div className={`rounded-lg ${CATEGORY_BG[mainFact.category] || CATEGORY_BG.other} overflow-hidden`}>
                         {/* Header */}
                         <button
                           onClick={() => toggleCard(subcategory)}
@@ -1148,7 +1156,7 @@ function DumpTab() {
                 
                 {/* Ungrouped facts */}
                 {groupedFacts.ungrouped.map((fact) => (
-                  <div key={fact.id} className={`p-4 rounded-lg ${CATEGORY_BG[fact.category] || CATEGORY_BG.other} ${getCardBorderColor(fact.category)} border-l-4 animate-slide-in`}>
+                  <div key={fact.id} className={`p-4 rounded-lg ${CATEGORY_BG[fact.category] || CATEGORY_BG.other} animate-slide-in`}>
                     <p className="text-[var(--text-primary)] text-sm leading-relaxed mb-3 font-light">
                       <HighlightedText 
                         text={fact.sourceText || fact.content} 
@@ -1191,26 +1199,26 @@ function DumpTab() {
                           <div className={`text-xs mb-1 ${isToday ? 'text-[var(--color-time)] font-medium' : 'text-[var(--text-tertiary)]'}`}>{day}</div>
                           <div className="space-y-1">
                             {dayFacts.slice(0, 3).map((fact) => {
-                              // Determine semantic color based on fact content
+                              // Determine organic gradient based on fact content
                               const hasLocation = fact.entities.some(e => 
                                 ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'hall'].some(loc => e.includes(loc))
                               );
                               const hasPeople = fact.entities.length > 0 && !hasLocation;
                               const hasTime = fact.timeRef || fact.dateStr;
                               
-                              // Determine border color - prioritize location (green), then people (pink), then time (blue)
-                              const borderColor = hasLocation 
-                                ? 'border-l-[var(--color-location)]' 
+                              // Organic material-based gradients
+                              const cardGradient = hasLocation 
+                                ? 'bg-gradient-to-br from-[rgba(30,86,55,0.15)] to-[rgba(207,155,66,0.12)] border-[rgba(30,86,55,0.2)]'
                                 : hasPeople 
-                                ? 'border-l-[var(--color-people)]'
+                                ? 'bg-gradient-to-br from-[rgba(206,96,135,0.12)] to-[rgba(52,124,147,0.15)] border-[rgba(206,96,135,0.2)]'
                                 : hasTime
-                                ? 'border-l-[var(--color-time)]'
-                                : 'border-l-[var(--border)]';
+                                ? 'bg-gradient-to-br from-[rgba(52,124,147,0.15)] to-[rgba(30,86,55,0.12)] border-[rgba(52,124,147,0.2)]'
+                                : 'bg-gradient-to-br from-[rgba(253,249,245,0.9)] to-[rgba(30,86,55,0.08)] border-[rgba(114,95,69,0.15)]';
                               
                               return (
                                 <div 
                                   key={fact.id} 
-                                  className={`text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] ${borderColor} border-l-2 truncate`}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded ${cardGradient} border backdrop-blur-[1px] truncate`}
                                   title={fact.content}
                                 >
                                   <span className="text-[var(--text-primary)]">
@@ -1239,14 +1247,14 @@ function DumpTab() {
                         ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'hall'].some(loc => e.includes(loc))
                       );
                       const hasPeople = fact.entities.length > 0 && !hasLocation;
-                      const borderColor = hasLocation 
-                        ? 'border-l-[var(--color-location)]' 
+                      const cardGradient = hasLocation 
+                        ? 'bg-gradient-to-br from-[rgba(30,86,55,0.15)] to-[rgba(207,155,66,0.12)] border-[rgba(30,86,55,0.2)]'
                         : hasPeople 
-                        ? 'border-l-[var(--color-people)]'
-                        : 'border-l-[var(--color-time)]';
+                        ? 'bg-gradient-to-br from-[rgba(206,96,135,0.12)] to-[rgba(52,124,147,0.15)] border-[rgba(206,96,135,0.2)]'
+                        : 'bg-gradient-to-br from-[rgba(52,124,147,0.15)] to-[rgba(30,86,55,0.12)] border-[rgba(52,124,147,0.2)]';
                       
                       return (
-                        <div key={fact.id} className={`text-xs px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] ${borderColor} border-l-2`}>
+                        <div key={fact.id} className={`text-xs px-2 py-1 rounded ${cardGradient} border backdrop-blur-[1px]`}>
                           <span className="text-[var(--color-time)] font-medium">{fact.dateStr?.replace('recurring:', '')}</span>
                           <span className="mx-1.5 text-[var(--text-tertiary)]">·</span>
                           <span className="text-[var(--color-people)]">{fact.subcategory || fact.content.slice(0, 30)}</span>

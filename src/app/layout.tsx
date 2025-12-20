@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
-import { Baumans } from 'next/font/google'
+import { Playfair_Display } from 'next/font/google'
 import './globals.css'
 
-const displayFont = Baumans({
+const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
-  weight: ['400'],
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
-  variable: '--font-bauhaus',
+  variable: '--font-playfair',
 })
 
 export const metadata: Metadata = {
@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={displayFont.variable}>{children}</body>
+      <body className={playfairDisplay.variable}>{children}</body>
     </html>
   )
 }

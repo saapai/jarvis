@@ -29,13 +29,14 @@ export const textExplorerRepository: TextExplorerRepository = {
     
     await prisma.$transaction(
       facts.map((fact) => {
-        const hasEmbedding = hasEmbeddingColumn && fact.embedding && fact.embedding.length === VECTOR_DIMENSION;
-        const embedding = hasEmbedding
+        const factEmbedding = fact.embedding && fact.embedding.length === VECTOR_DIMENSION
           ? fact.embedding
-          : Array.from({ length: VECTOR_DIMENSION }, () => 0);
+          : null;
+        const hasEmbedding = hasEmbeddingColumn && factEmbedding !== null;
+        const embedding = factEmbedding ?? Array.from({ length: VECTOR_DIMENSION }, () => 0);
 
         // Insert via raw SQL to handle pgvector column
-        if (hasEmbeddingColumn && hasEmbedding) {
+        if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
           return prisma.$executeRawUnsafe(
             `
             INSERT INTO "Fact" 
@@ -51,7 +52,7 @@ export const textExplorerRepository: TextExplorerRepository = {
             fact.timeRef,
             fact.dateStr,
             JSON.stringify(fact.entities),
-            `[${embedding.join(',')}]`
+            `[${factEmbedding.join(',')}]`
           );
         } else {
           // Insert without embedding column

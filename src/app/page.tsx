@@ -1363,41 +1363,60 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      {/* Global Navigation Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-primary)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-          {/* Left: Home Icon */}
-          <button
-            onClick={() => setActiveTab('dump')}
-            className={`p-2 rounded-lg transition-colors ${
-              activeTab === 'dump' 
-                ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-            }`}
-            title="Text Explorer"
-          >
-            <HomeIcon className="w-5 h-5" />
-          </button>
+      {/* Global Navigation Header - Simplified for Landing */}
+      {activeTab === 'info' ? (
+        <header className="fixed top-0 left-0 right-0 z-40 bg-transparent">
+          <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
+            {/* Left: Logo */}
+            <h1 className="text-xl font-display tracking-tight">
+              <span className="text-[var(--text-primary)]">enclave</span>
+            </h1>
 
-          {/* Center: App Name */}
-          <h1 className="text-lg font-light tracking-tight">
-            <span className="text-[var(--text-primary)]">enclave</span>
-          </h1>
+            {/* Right: CTA */}
+            <button
+              onClick={() => setActiveTab('dump')}
+              className="px-6 py-2 text-sm font-light text-[var(--text-primary)] hover:text-[var(--color-action)] transition-colors"
+            >
+              enter
+            </button>
+          </div>
+        </header>
+      ) : (
+        <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-primary)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
+          <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+            {/* Left: Home Icon */}
+            <button
+              onClick={() => setActiveTab('dump')}
+              className={`p-2 rounded-lg transition-colors ${
+                activeTab === 'dump' 
+                  ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+              }`}
+              title="Text Explorer"
+            >
+              <HomeIcon className="w-5 h-5" />
+            </button>
 
-          {/* Right: Help Icon */}
-          <button
-            onClick={() => setActiveTab('info')}
-            className={`p-2 rounded-lg transition-colors ${
-              activeTab === 'info' 
-                ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-            }`}
-            title="How It Works"
-          >
-            <HelpIcon className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
+            {/* Center: App Name */}
+            <h1 className="text-lg font-light tracking-tight">
+              <span className="text-[var(--text-primary)]">enclave</span>
+            </h1>
+
+            {/* Right: Help Icon */}
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`p-2 rounded-lg transition-colors ${
+                activeTab === 'info' 
+                  ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+              }`}
+              title="How It Works"
+            >
+              <HelpIcon className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Content Area - offset for fixed header */}
       <div className="pt-14">

@@ -1366,8 +1366,8 @@ export default function Home() {
       {/* Global Navigation Header - Simplified for Landing */}
       {activeTab === 'info' ? (
         <header className="fixed top-0 left-0 right-0 z-40 bg-transparent">
-          <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-end">
-            {/* Right: CTA */}
+          <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-start">
+            {/* Left: CTA */}
             <button
               onClick={() => setActiveTab('dump')}
               className="p-2 rounded-lg transition-colors text-[var(--text-primary)] hover:text-[var(--color-action)] hover:bg-[var(--bg-hover)]"

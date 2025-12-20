@@ -107,40 +107,75 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 function parseSemanticText(text: string, entities: string[]): Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> {
   const parts: Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> = [];
   
-  // Time patterns
+  if (!text) return [{ text, type: 'text' }];
+  
+  // Time patterns - more specific to avoid overlaps
   const timePattern = /(@?\w+day|@?\w+day\s+\d+(?:st|nd|rd|th)?|@?\d{1,2}:\d{2}\s*(?:AM|PM)|@?\d{1,2}:\d{2}|@?\w+\s+\d+(?:st|nd|rd|th)?|@every\s+\w+day)/gi;
   
   // Location patterns (common building/place words)
   const locationPattern = /\b(Rieber Terrace|Kelton|Levering|apartment|lounge|floor|room|building|terrace|hall)\b/gi;
   
-  // People/entities
-  const peoplePattern = new RegExp(`\\b(${entities.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'gi');
+  // People/entities - sort by length descending to match longest first
+  const sortedEntities = [...entities].sort((a, b) => b.length - a.length);
+  const peoplePattern = sortedEntities.length > 0 
+    ? new RegExp(`\\b(${sortedEntities.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'gi')
+    : null;
   
-  let lastIndex = 0;
-  const matches: Array<{ index: number; length: number; type: 'time' | 'location' | 'people' }> = [];
+  const matches: Array<{ index: number; endIndex: number; type: 'time' | 'location' | 'people'; text: string }> = [];
   
-  // Find all matches
+  // Find all matches with their positions
   let match;
+  const usedRanges = new Set<string>();
+  
+  // Helper to check if range overlaps with existing matches
+  const addMatch = (index: number, length: number, type: 'time' | 'location' | 'people', matchedText: string) => {
+    const endIndex = index + length;
+    const rangeKey = `${index}-${endIndex}`;
+    
+    // Check for overlaps - if this range overlaps with any existing match, skip it
+    const overlaps = matches.some(m => 
+      (index >= m.index && index < m.endIndex) || 
+      (endIndex > m.index && endIndex <= m.endIndex) ||
+      (index <= m.index && endIndex >= m.endIndex)
+    );
+    
+    if (!overlaps && !usedRanges.has(rangeKey)) {
+      matches.push({ index, endIndex, type, text: matchedText });
+      usedRanges.add(rangeKey);
+    }
+  };
+  
+  // Find time matches
+  timePattern.lastIndex = 0;
   while ((match = timePattern.exec(text)) !== null) {
-    matches.push({ index: match.index, length: match[0].length, type: 'time' });
+    addMatch(match.index, match[0].length, 'time', match[0]);
   }
+  
+  // Find location matches
+  locationPattern.lastIndex = 0;
   while ((match = locationPattern.exec(text)) !== null) {
-    matches.push({ index: match.index, length: match[0].length, type: 'location' });
+    addMatch(match.index, match[0].length, 'location', match[0]);
   }
-  while ((match = peoplePattern.exec(text)) !== null) {
-    matches.push({ index: match.index, length: match[0].length, type: 'people' });
+  
+  // Find people/entity matches (prioritize longest matches first)
+  if (peoplePattern) {
+    peoplePattern.lastIndex = 0;
+    while ((match = peoplePattern.exec(text)) !== null) {
+      addMatch(match.index, match[0].length, 'people', match[0]);
+    }
   }
   
   // Sort by index
   matches.sort((a, b) => a.index - b.index);
   
-  // Build parts array
+  // Build parts array without overlaps
+  let lastIndex = 0;
   for (const m of matches) {
     if (m.index > lastIndex) {
       parts.push({ text: text.slice(lastIndex, m.index), type: 'text' });
     }
-    parts.push({ text: text.slice(m.index, m.index + m.length), type: m.type });
-    lastIndex = m.index + m.length;
+    parts.push({ text: m.text, type: m.type });
+    lastIndex = m.endIndex;
   }
   
   if (lastIndex < text.length) {
@@ -1118,11 +1153,38 @@ function DumpTab() {
                         <>
                           <div className={`text-xs mb-1 ${isToday ? 'text-[var(--color-time)] font-medium' : 'text-[var(--text-tertiary)]'}`}>{day}</div>
                           <div className="space-y-1">
-                            {dayFacts.slice(0, 3).map((fact) => (
-                              <div key={fact.id} className="text-[10px] px-1.5 py-0.5 rounded truncate bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-primary)]" title={fact.content}>
-                                {fact.subcategory || fact.content.slice(0, 20)}
-                              </div>
-                            ))}
+                            {dayFacts.slice(0, 3).map((fact) => {
+                              // Determine semantic color based on fact content
+                              const hasLocation = fact.entities.some(e => 
+                                ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'hall'].some(loc => e.includes(loc))
+                              );
+                              const hasPeople = fact.entities.length > 0 && !hasLocation;
+                              const hasTime = fact.timeRef || fact.dateStr;
+                              
+                              // Determine border color - prioritize location (green), then people (pink), then time (blue)
+                              const borderColor = hasLocation 
+                                ? 'border-l-[var(--color-location)]' 
+                                : hasPeople 
+                                ? 'border-l-[var(--color-people)]'
+                                : hasTime
+                                ? 'border-l-[var(--color-time)]'
+                                : 'border-l-[var(--border)]';
+                              
+                              return (
+                                <div 
+                                  key={fact.id} 
+                                  className={`text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] ${borderColor} border-l-2 truncate`}
+                                  title={fact.content}
+                                >
+                                  <span className="text-[var(--text-primary)]">
+                                    {fact.subcategory || fact.content.slice(0, 20)}
+                                  </span>
+                                  {fact.timeRef && (
+                                    <span className="text-[var(--color-time)] ml-1">@{fact.timeRef.slice(0, 8)}</span>
+                                  )}
+                                </div>
+                              );
+                            })}
                             {dayFacts.length > 3 && <div className="text-[10px] text-[var(--text-tertiary)]">+{dayFacts.length - 3}</div>}
                           </div>
                         </>
@@ -1135,13 +1197,25 @@ function DumpTab() {
                 <div className="mt-6 p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)]">
                   <h3 className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-3">↻ recurring</h3>
                   <div className="flex flex-wrap gap-2">
-                    {recurringFacts.map(fact => (
-                      <div key={fact.id} className="text-xs px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)]">
-                        <span className="text-[var(--color-time)] font-medium">{fact.dateStr?.replace('recurring:', '')}</span>
-                        <span className="mx-1.5 text-[var(--text-tertiary)]">·</span>
-                        <span className="text-[var(--color-people)]">{fact.subcategory || fact.content.slice(0, 30)}</span>
-                      </div>
-                    ))}
+                    {recurringFacts.map(fact => {
+                      const hasLocation = fact.entities.some(e => 
+                        ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'hall'].some(loc => e.includes(loc))
+                      );
+                      const hasPeople = fact.entities.length > 0 && !hasLocation;
+                      const borderColor = hasLocation 
+                        ? 'border-l-[var(--color-location)]' 
+                        : hasPeople 
+                        ? 'border-l-[var(--color-people)]'
+                        : 'border-l-[var(--color-time)]';
+                      
+                      return (
+                        <div key={fact.id} className={`text-xs px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] ${borderColor} border-l-2`}>
+                          <span className="text-[var(--color-time)] font-medium">{fact.dateStr?.replace('recurring:', '')}</span>
+                          <span className="mx-1.5 text-[var(--text-tertiary)]">·</span>
+                          <span className="text-[var(--color-people)]">{fact.subcategory || fact.content.slice(0, 30)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

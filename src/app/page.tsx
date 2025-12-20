@@ -1153,6 +1153,14 @@ function DumpTab() {
               placeholder="paste or type text here..."
               value={uploadText}
               onChange={(e) => setUploadText(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  if (!uploading && uploadText.trim()) {
+                    handleUpload();
+                  }
+                }
+              }}
               rows={12}
               className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] text-sm text-[var(--text-primary)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:border-[var(--accent)] transition-colors"
             />

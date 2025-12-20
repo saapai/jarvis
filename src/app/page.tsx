@@ -817,7 +817,7 @@ function DumpTab() {
                     }`}
                   >
                     {!cat.subcategories.length && <span className="opacity-30 mr-2">├─</span>}
-                    <span className={CATEGORY_COLORS[cat.name] || ''}>{cat.name}</span>
+                    <span>{cat.name}</span>
                     <span className="text-[var(--text-tertiary)] ml-2 text-xs">{cat.count}</span>
                   </button>
                 </div>

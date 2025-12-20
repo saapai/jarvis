@@ -651,14 +651,6 @@ function DumpTab() {
     return map;
   }, [allFacts, calendarDate]);
 
-  // Force calendar to refresh when allFacts changes
-  useEffect(() => {
-    // This ensures the calendar view re-renders when facts are updated
-    if (viewMode === 'calendar') {
-      // Trigger a re-render by updating calendarDate slightly
-      setCalendarDate(prev => ({ ...prev }));
-    }
-  }, [allFacts.length, viewMode]);
 
   const recurringFacts = useMemo(() => allFacts.filter(f => f.dateStr?.startsWith('recurring:')), [allFacts]);
 
@@ -1029,7 +1021,7 @@ function DumpTab() {
                   <div key={day} className="text-center text-xs text-[var(--text-tertiary)] py-2">{day}</div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1" key={`calendar-${allFacts.length}-${calendarDate.year}-${calendarDate.month}`}>
                 {calendarDays.map((day, i) => {
                   const dayFacts = day ? getFactsForDay(day) : [];
                   const isToday = day && new Date().getDate() === day && new Date().getMonth() === calendarDate.month && new Date().getFullYear() === calendarDate.year;

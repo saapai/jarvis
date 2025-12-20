@@ -19,20 +19,20 @@
   --text-tertiary: rgba(90, 74, 53, 0.7);
   --text-muted: rgba(90, 74, 53, 0.5);
 
-  /* Primary: blue (replaces green) - more saturated */
-  --accent: #6B9AB8;
-  --accent-dim: #5A8AA5;
-  --accent-glow: rgba(107, 154, 184, 0.3);
-  --accent-surface: rgba(107, 154, 184, 0.2);
+  /* Primary: blue - soft, dreamy pastel sky-blue */
+  --accent: #8EB2C9;
+  --accent-dim: #7BA3BC;
+  --accent-glow: rgba(142, 178, 201, 0.25);
+  --accent-surface: rgba(142, 178, 201, 0.15);
 
-  /* Secondary: pink (replaces yellow) - more saturated */
-  --accent-secondary: #A8897A;
-  --accent-secondary-dim: #957766;
-  --accent-secondary-glow: rgba(168, 137, 122, 0.3);
-  --accent-secondary-surface: rgba(168, 137, 122, 0.2);
+  /* Secondary: pink - dusty rose / muted petal tone */
+  --accent-secondary: #BC9C8F;
+  --accent-secondary-dim: #AB8A7D;
+  --accent-secondary-glow: rgba(188, 156, 143, 0.25);
+  --accent-secondary-surface: rgba(188, 156, 143, 0.15);
 
   /* Pink accent for highlights/underscores */
-  --accent-contrast: #A8897A;
+  --accent-contrast: #BC9C8F;
 
   /* Stronger borders */
   --border: rgba(90, 74, 53, 0.4);
@@ -43,7 +43,7 @@
   --cat-events: #8EB2C9;
   --cat-meetings: #BC9C8F;
   --cat-social: #8EB2C9;
-  --cat-professional: #6B9AB8;
+  --cat-professional: #8EB2C9;
   --cat-pledging: #BC9C8F;
   --cat-other: rgba(114, 95, 69, 0.6);
 

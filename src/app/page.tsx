@@ -65,22 +65,22 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Blue & pink palette; cards use darker text for contrast
+// Blue & pink palette; cards use dark text for contrast but keep soft feel
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[#4A6B85]',          // darker blue for contrast
-  professional: 'text-[#4A6B85]',
-  events: 'text-[#4A6B85]',
-  pledging: 'text-[#8B6B5A]',        // darker pink/brown for contrast
-  meetings: 'text-[#8B6B5A]',
+  social: 'text-[var(--text-primary)]',          // dark brown for readability
+  professional: 'text-[var(--text-primary)]',
+  events: 'text-[var(--text-primary)]',
+  pledging: 'text-[var(--text-primary)]',        // dark brown for readability
+  meetings: 'text-[var(--text-primary)]',
   other: 'text-[var(--text-primary)]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[rgba(107,154,184,0.4)] border-[rgba(107,154,184,0.7)]',
-  professional: 'bg-[rgba(107,154,184,0.4)] border-[rgba(107,154,184,0.7)]',
-  events: 'bg-[rgba(107,154,184,0.4)] border-[rgba(107,154,184,0.7)]',
-  pledging: 'bg-[rgba(168,137,122,0.4)] border-[rgba(168,137,122,0.7)]',
-  meetings: 'bg-[rgba(168,137,122,0.4)] border-[rgba(168,137,122,0.7)]',
+  social: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
+  professional: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
+  events: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
+  pledging: 'bg-[rgba(188,156,143,0.35)] border-[rgba(188,156,143,0.6)]',
+  meetings: 'bg-[rgba(188,156,143,0.35)] border-[rgba(188,156,143,0.6)]',
   other: 'bg-[rgba(90,74,53,0.15)] border-[var(--border)]',
 };
 
@@ -206,7 +206,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
           </div>
           
           <h1 className="text-5xl font-bold tracking-tight">
-            <span className="text-[var(--accent)]">enclave</span>
+            <span className="text-[var(--text-primary)]">enclave</span>
           </h1>
           
           <p className="text-xl text-[var(--text-secondary)]">
@@ -1260,7 +1260,7 @@ export default function Home() {
 
           {/* Center: App Name */}
           <h1 className="text-lg font-bold tracking-tight">
-            <span className="text-[var(--accent)]">enclave</span>
+            <span className="text-[var(--text-primary)]">enclave</span>
           </h1>
 
           {/* Right: Help Icon */}

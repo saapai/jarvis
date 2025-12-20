@@ -7,37 +7,37 @@
 :root {
   /* Retro cream base */
   --bg-primary: #DBCBBD;
-  --bg-secondary: rgba(219, 203, 189, 0.95);
-  --bg-tertiary: rgba(219, 203, 189, 0.92);
-  --bg-hover: rgba(219, 203, 189, 0.8);
-  --bg-active: rgba(219, 203, 189, 0.85);
-  --bg-elevated: rgba(219, 203, 189, 0.96);
+  --bg-secondary: rgba(219, 203, 189, 1);
+  --bg-tertiary: rgba(219, 203, 189, 0.98);
+  --bg-hover: rgba(219, 203, 189, 0.9);
+  --bg-active: rgba(219, 203, 189, 0.95);
+  --bg-elevated: rgba(219, 203, 189, 1);
 
-  /* Dark brown text hierarchy */
-  --text-primary: #725F45;
-  --text-secondary: rgba(114, 95, 69, 0.8);
-  --text-tertiary: rgba(114, 95, 69, 0.6);
-  --text-muted: rgba(114, 95, 69, 0.4);
+  /* Dark brown text hierarchy - increased contrast */
+  --text-primary: #5A4A35;
+  --text-secondary: rgba(90, 74, 53, 0.85);
+  --text-tertiary: rgba(90, 74, 53, 0.7);
+  --text-muted: rgba(90, 74, 53, 0.5);
 
-  /* Primary: blue (replaces green) */
-  --accent: #8EB2C9;
-  --accent-dim: #6B9AB8;
-  --accent-glow: rgba(142, 178, 201, 0.22);
-  --accent-surface: rgba(142, 178, 201, 0.12);
+  /* Primary: blue (replaces green) - more saturated */
+  --accent: #6B9AB8;
+  --accent-dim: #5A8AA5;
+  --accent-glow: rgba(107, 154, 184, 0.3);
+  --accent-surface: rgba(107, 154, 184, 0.2);
 
-  /* Secondary: pink (replaces yellow) */
-  --accent-secondary: #BC9C8F;
-  --accent-secondary-dim: #A8897A;
-  --accent-secondary-glow: rgba(188, 156, 143, 0.25);
-  --accent-secondary-surface: rgba(188, 156, 143, 0.14);
+  /* Secondary: pink (replaces yellow) - more saturated */
+  --accent-secondary: #A8897A;
+  --accent-secondary-dim: #957766;
+  --accent-secondary-glow: rgba(168, 137, 122, 0.3);
+  --accent-secondary-surface: rgba(168, 137, 122, 0.2);
 
   /* Pink accent for highlights/underscores */
-  --accent-contrast: #BC9C8F;
+  --accent-contrast: #A8897A;
 
-  /* Subtle borders */
-  --border: rgba(114, 95, 69, 0.2);
-  --border-subtle: rgba(114, 95, 69, 0.15);
-  --border-active: rgba(114, 95, 69, 0.3);
+  /* Stronger borders */
+  --border: rgba(90, 74, 53, 0.4);
+  --border-subtle: rgba(90, 74, 53, 0.3);
+  --border-active: rgba(90, 74, 53, 0.5);
 
   /* Category colors - blue / pink two-tone */
   --cat-events: #8EB2C9;

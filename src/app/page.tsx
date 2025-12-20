@@ -65,23 +65,23 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Blue & pink palette; cards use own color, tags invert for contrast
+// Blue & pink palette; cards use darker text for contrast
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[var(--accent)]',          // card text matches card color
-  professional: 'text-[var(--accent)]',
-  events: 'text-[var(--accent)]',
-  pledging: 'text-[var(--accent-secondary)]',
-  meetings: 'text-[var(--accent-secondary)]',
-  other: 'text-[var(--text-tertiary)]',
+  social: 'text-[#4A6B85]',          // darker blue for contrast
+  professional: 'text-[#4A6B85]',
+  events: 'text-[#4A6B85]',
+  pledging: 'text-[#8B6B5A]',        // darker pink/brown for contrast
+  meetings: 'text-[#8B6B5A]',
+  other: 'text-[var(--text-primary)]',
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[rgba(142,178,201,0.25)] border-[rgba(142,178,201,0.5)]',
-  professional: 'bg-[rgba(142,178,201,0.25)] border-[rgba(142,178,201,0.5)]',
-  events: 'bg-[rgba(142,178,201,0.25)] border-[rgba(142,178,201,0.5)]',
-  pledging: 'bg-[rgba(188,156,143,0.25)] border-[rgba(188,156,143,0.5)]',
-  meetings: 'bg-[rgba(188,156,143,0.25)] border-[rgba(188,156,143,0.5)]',
-  other: 'bg-[rgba(114,95,69,0.1)] border-[var(--border)]',
+  social: 'bg-[rgba(107,154,184,0.4)] border-[rgba(107,154,184,0.7)]',
+  professional: 'bg-[rgba(107,154,184,0.4)] border-[rgba(107,154,184,0.7)]',
+  events: 'bg-[rgba(107,154,184,0.4)] border-[rgba(107,154,184,0.7)]',
+  pledging: 'bg-[rgba(168,137,122,0.4)] border-[rgba(168,137,122,0.7)]',
+  meetings: 'bg-[rgba(168,137,122,0.4)] border-[rgba(168,137,122,0.7)]',
+  other: 'bg-[rgba(90,74,53,0.15)] border-[var(--border)]',
 };
 
 // Time/tag colors inverse of card background

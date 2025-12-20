@@ -65,33 +65,26 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Blue & pink palette; cards use dark text for contrast but keep soft feel
-const CATEGORY_COLORS: Record<string, string> = {
-  social: 'text-[var(--text-primary)]',          // dark brown for readability
-  professional: 'text-[var(--text-primary)]',
-  events: 'text-[var(--text-primary)]',
-  pledging: 'text-[var(--text-primary)]',        // dark brown for readability
-  meetings: 'text-[var(--text-primary)]',
-  other: 'text-[var(--text-primary)]',
+// Semantic card system - cream cards with colored left borders
+const getCardBorderColor = (category: string): string => {
+  // Determine dominant semantic color based on category
+  // People-driven categories get pink, time-driven get blue, etc.
+  if (['pledging', 'meetings', 'social'].includes(category)) {
+    return 'border-l-[var(--color-people)]'; // Pink for people-driven
+  }
+  if (['events', 'professional'].includes(category)) {
+    return 'border-l-[var(--color-time)]'; // Blue for time-driven
+  }
+  return 'border-l-[var(--border)]';
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  social: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
-  professional: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
-  events: 'bg-[rgba(142,178,201,0.35)] border-[rgba(142,178,201,0.6)]',
-  pledging: 'bg-[rgba(212,165,160,0.35)] border-[rgba(212,165,160,0.6)]',
-  meetings: 'bg-[rgba(212,165,160,0.35)] border-[rgba(212,165,160,0.6)]',
-  other: 'bg-[rgba(90,74,53,0.15)] border-[var(--border)]',
-};
-
-// Time/tag colors inverse of card background
-const TAG_COLORS: Record<string, string> = {
-  social: 'text-[var(--accent-secondary)]',      // blue bg -> pink tag
-  professional: 'text-[var(--accent-secondary)]',
-  events: 'text-[var(--accent-secondary)]',
-  pledging: 'text-[var(--accent)]',             // pink bg -> blue tag
-  meetings: 'text-[var(--accent)]',
-  other: 'text-[var(--accent-secondary)]',
+  social: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
+  professional: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
+  events: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
+  pledging: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
+  meetings: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
+  other: 'bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm',
 };
 
 // Body text color for expanded content (yellow cards use yellow text)
@@ -110,6 +103,53 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // COMPONENTS
 // ============================================
 
+// Semantic text parser - colors times, locations, people
+function parseSemanticText(text: string, entities: string[]): Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> {
+  const parts: Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> = [];
+  
+  // Time patterns
+  const timePattern = /(@?\w+day|@?\w+day\s+\d+(?:st|nd|rd|th)?|@?\d{1,2}:\d{2}\s*(?:AM|PM)|@?\d{1,2}:\d{2}|@?\w+\s+\d+(?:st|nd|rd|th)?|@every\s+\w+day)/gi;
+  
+  // Location patterns (common building/place words)
+  const locationPattern = /\b(Rieber Terrace|Kelton|Levering|apartment|lounge|floor|room|building|terrace|hall)\b/gi;
+  
+  // People/entities
+  const peoplePattern = new RegExp(`\\b(${entities.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'gi');
+  
+  let lastIndex = 0;
+  const matches: Array<{ index: number; length: number; type: 'time' | 'location' | 'people' }> = [];
+  
+  // Find all matches
+  let match;
+  while ((match = timePattern.exec(text)) !== null) {
+    matches.push({ index: match.index, length: match[0].length, type: 'time' });
+  }
+  while ((match = locationPattern.exec(text)) !== null) {
+    matches.push({ index: match.index, length: match[0].length, type: 'location' });
+  }
+  while ((match = peoplePattern.exec(text)) !== null) {
+    matches.push({ index: match.index, length: match[0].length, type: 'people' });
+  }
+  
+  // Sort by index
+  matches.sort((a, b) => a.index - b.index);
+  
+  // Build parts array
+  for (const m of matches) {
+    if (m.index > lastIndex) {
+      parts.push({ text: text.slice(lastIndex, m.index), type: 'text' });
+    }
+    parts.push({ text: text.slice(m.index, m.index + m.length), type: m.type });
+    lastIndex = m.index + m.length;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push({ text: text.slice(lastIndex), type: 'text' });
+  }
+  
+  return parts.length > 0 ? parts : [{ text, type: 'text' }];
+}
+
 function HighlightedText({ 
   text, 
   entities, 
@@ -123,37 +163,39 @@ function HighlightedText({
   highlightClass?: string;
   highlightBgClass?: string;
 }) {
-  if (!text || entities.length === 0) {
-    return <span>{text}</span>;
-  }
-
-  const sortedEntities = [...entities].sort((a, b) => b.length - a.length);
+  if (!text) return <span>{text}</span>;
   
-  const pattern = sortedEntities
-    .map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|');
+  const semanticParts = parseSemanticText(text, entities);
   
-  if (!pattern) return <span>{text}</span>;
-  
-  const regex = new RegExp(`(${pattern})`, 'gi');
-  const parts = text.split(regex);
-
   return (
     <>
-      {parts.map((part, i) => {
-        const isEntity = sortedEntities.some(e => e.toLowerCase() === part.toLowerCase());
-        if (isEntity) {
+      {semanticParts.map((part, i) => {
+        if (part.type === 'time') {
+          return (
+            <span key={i} className="text-[var(--color-time)] font-medium">
+              {part.text}
+            </span>
+          );
+        }
+        if (part.type === 'location') {
+          return (
+            <span key={i} className="text-[var(--color-location)] font-medium">
+              {part.text}
+            </span>
+          );
+        }
+        if (part.type === 'people') {
           return (
             <button
               key={i}
-              onClick={() => onEntityClick(part.toLowerCase())}
-              className={`${highlightClass || 'text-[var(--accent)]'} hover:underline cursor-pointer ${highlightBgClass || 'bg-[var(--accent)]/10'} px-0.5 rounded`}
+              onClick={() => onEntityClick(part.text.toLowerCase())}
+              className="text-[var(--color-people)] hover:underline cursor-pointer font-medium"
             >
-              {part}
+              {part.text}
             </button>
           );
         }
-        return <Fragment key={i}>{part}</Fragment>;
+        return <Fragment key={i}>{part.text}</Fragment>;
       })}
     </>
   );
@@ -200,12 +242,12 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
       <div className="max-w-2xl w-full space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
-            <div className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse-subtle" />
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)]">
+            <div className="w-2 h-2 rounded-full bg-[var(--color-action)] animate-pulse-subtle" />
             <span className="text-sm text-[var(--text-secondary)]">system online</span>
           </div>
           
-          <h1 className="text-5xl font-bold tracking-tight">
+          <h1 className="text-5xl font-light tracking-tight">
             <span className="text-[var(--text-primary)]">enclave</span>
           </h1>
           
@@ -216,7 +258,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
           {/* Get Started Button */}
           <button
             onClick={() => onNavigate('dump')}
-            className="mt-4 px-8 py-3 text-sm font-medium text-[var(--bg-primary)] bg-[var(--accent)] rounded-lg hover:bg-[var(--accent-dim)] transition-colors inline-flex items-center gap-2"
+            className="mt-4 px-8 py-3 text-sm font-medium text-[var(--bg-primary)] bg-[var(--color-action)] rounded-lg hover:opacity-90 transition-colors inline-flex items-center gap-2"
           >
             <HomeIcon className="w-4 h-4" />
             get started
@@ -224,9 +266,9 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         </div>
 
         {/* Phone Number Card */}
-        <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+        <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-[var(--accent)] flex items-center justify-center text-2xl text-[var(--bg-primary)]">
+            <div className="w-12 h-12 rounded-xl bg-[var(--color-time)] flex items-center justify-center text-2xl text-[var(--bg-primary)]">
               📱
             </div>
             <div>
@@ -239,9 +281,9 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         </div>
 
         {/* Admin Commands */}
-        <div className="p-6 rounded-2xl border border-[var(--accent-secondary)]/40 bg-[var(--bg-secondary)]">
+        <div className="p-6 rounded-2xl border-l-4 border-l-[var(--color-action)] border border-[var(--border-subtle)] bg-[var(--bg-card)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <span className="text-[var(--accent-secondary)]">👑</span> admin commands
+            <span className="text-[var(--color-action)]">👑</span> admin commands
           </h3>
           
           {/* Announcement Format */}
@@ -250,8 +292,8 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
               <span className="text-xl">📢</span>
               <span className="font-medium text-[var(--text-primary)]">send an announcement</span>
             </div>
-            <div className="bg-[var(--bg-primary)] rounded-lg p-4 text-sm border border-[var(--border-subtle)]">
-              <p className="text-[var(--accent)]">announce</p>
+            <div className="bg-[var(--bg-card)] rounded-lg p-4 text-sm border border-[var(--border-subtle)]">
+              <p className="text-[var(--color-action)] font-medium">announce</p>
               <p className="text-[var(--text-secondary)] mt-1">announce meeting tonight at 7pm in the main room</p>
             </div>
             <p className="text-xs text-[var(--text-tertiary)] mt-2">
@@ -265,8 +307,8 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
               <span className="text-xl">📊</span>
               <span className="font-medium text-[var(--text-primary)]">create a poll</span>
             </div>
-            <div className="bg-[var(--bg-primary)] rounded-lg p-4 text-sm border border-[var(--border-subtle)]">
-              <p className="text-[var(--accent)]">poll</p>
+            <div className="bg-[var(--bg-card)] rounded-lg p-4 text-sm border border-[var(--border-subtle)]">
+              <p className="text-[var(--color-action)] font-medium">poll</p>
               <p className="text-[var(--text-secondary)] mt-1">poll active meeting tonight?</p>
               <p className="text-[var(--text-secondary)]">poll who&apos;s coming to the event on friday?</p>
             </div>
@@ -278,7 +320,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
 
         {/* Features Grid */}
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:border-[var(--accent)] transition-colors">
+          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--border)] transition-colors">
             <div className="text-3xl mb-3">📢</div>
             <h3 className="font-semibold mb-1">announcements</h3>
             <p className="text-sm text-[var(--text-secondary)]">
@@ -286,7 +328,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             </p>
           </div>
           
-          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:border-[var(--accent)] transition-colors">
+          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--border)] transition-colors">
             <div className="text-3xl mb-3">📊</div>
             <h3 className="font-semibold mb-1">polls</h3>
             <p className="text-sm text-[var(--text-secondary)]">
@@ -294,7 +336,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             </p>
           </div>
           
-          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:border-[var(--accent)] transition-colors">
+          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--border)] transition-colors">
             <div className="text-3xl mb-3">🤖</div>
             <h3 className="font-semibold mb-1">smart parsing</h3>
             <p className="text-sm text-[var(--text-secondary)]">
@@ -302,7 +344,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             </p>
           </div>
           
-          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:border-[var(--accent)] transition-colors">
+          <div className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--border)] transition-colors">
             <div className="text-3xl mb-3">🔄</div>
             <h3 className="font-semibold mb-1">airtable sync</h3>
             <p className="text-sm text-[var(--text-secondary)]">
@@ -312,23 +354,23 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         </div>
 
         {/* User Commands */}
-        <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+        <div className="p-6 rounded-2xl border-l-4 border-l-[var(--color-action)] border border-[var(--border-subtle)] bg-[var(--bg-card)]">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <span className="text-[var(--accent-secondary)]">$</span> user commands
+            <span className="text-[var(--color-action)]">$</span> user commands
           </h3>
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--bg-hover)]">
-              <span className="text-[var(--accent)]">START</span>
+              <span className="text-[var(--color-action)] font-medium">START</span>
               <span className="text-[var(--text-tertiary)]">→</span>
               <span className="text-[var(--text-secondary)]">opt in to receive messages</span>
             </div>
             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--bg-hover)]">
-              <span className="text-[var(--accent)]">STOP</span>
+              <span className="text-[var(--color-action)] font-medium">STOP</span>
               <span className="text-[var(--text-tertiary)]">→</span>
               <span className="text-[var(--text-secondary)]">unsubscribe from all messages</span>
             </div>
             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--bg-hover)]">
-              <span className="text-[var(--accent)]">HELP</span>
+              <span className="text-[var(--color-action)] font-medium">HELP</span>
               <span className="text-[var(--text-tertiary)]">→</span>
               <span className="text-[var(--text-secondary)]">see available commands</span>
             </div>
@@ -769,8 +811,8 @@ function DumpTab() {
       {/* Sidebar */}
       <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] flex flex-col z-40 transition-transform duration-300`}>
         <div className="p-6 border-b border-[var(--border-subtle)]">
-          <h1 className="text-lg font-medium text-[var(--text-primary)] tracking-tight">
-            dump<span className="text-[var(--accent-contrast)]">_</span>
+          <h1 className="text-lg font-light text-[var(--text-primary)] tracking-tight">
+            dump<span className="text-[var(--color-action)]">_</span>
           </h1>
           <p className="text-xs text-[var(--text-tertiary)] mt-1">{tree?.totalFacts ?? 0} facts</p>
         </div>
@@ -783,7 +825,7 @@ function DumpTab() {
               onClick={() => setViewMode(mode)}
               className={`flex-1 px-2 py-2 text-xs font-medium rounded transition-colors ${
                 viewMode === mode
-                  ? 'bg-[var(--accent)] text-[var(--bg-primary)]'
+                  ? 'bg-[var(--color-time)] text-[var(--bg-primary)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
@@ -798,7 +840,7 @@ function DumpTab() {
           <button
             onClick={() => navigateTo('all', '', 'all')}
             className={`w-full text-left px-6 py-2 text-sm transition-colors ${
-              currentFilter.type === 'all' ? 'text-[var(--accent)] bg-[var(--accent-glow)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+              currentFilter.type === 'all' ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
             }`}
           >
             <span className="opacity-50 mr-2">~</span>all
@@ -821,7 +863,7 @@ function DumpTab() {
                   <button
                     onClick={() => navigateTo('category', cat.name, cat.name)}
                     className={`flex-1 text-left ${cat.subcategories.length > 0 ? 'pl-1' : 'pl-6'} pr-6 py-1.5 text-sm transition-colors ${
-                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'text-[var(--accent)] bg-[var(--accent-glow)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'text-[var(--color-people)] bg-[var(--color-people-light)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                     }`}
                   >
                     {!cat.subcategories.length && <span className="opacity-30 mr-2">├─</span>}
@@ -834,7 +876,7 @@ function DumpTab() {
                     key={sub.name}
                     onClick={() => navigateTo('subcategory', sub.name, sub.name, cat.name)}
                     className={`w-full text-left pl-12 pr-6 py-1 text-sm transition-colors ${
-                      currentFilter.type === 'subcategory' && currentFilter.value === sub.name ? 'text-[var(--accent)] bg-[var(--accent-glow)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                      currentFilter.type === 'subcategory' && currentFilter.value === sub.name ? 'text-[var(--color-people)] bg-[var(--color-people-light)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                     }`}
                   >
                     <span className="opacity-30 mr-2">└─</span>{sub.name}
@@ -884,7 +926,7 @@ function DumpTab() {
                             key={timeRef.name}
                             onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
                             className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                              currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--color-time)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                             }`}
                           >
                             <span className="w-12 text-[var(--text-tertiary)]">↻</span>
@@ -944,7 +986,7 @@ function DumpTab() {
         </nav>
 
         <div className="p-4 border-t border-[var(--border-subtle)]">
-          <button onClick={() => setShowUpload(true)} className="w-full px-4 py-2.5 text-sm font-medium text-[var(--bg-primary)] bg-[var(--accent)] rounded hover:bg-[var(--accent-dim)] transition-colors">
+          <button onClick={() => setShowUpload(true)} className="w-full px-4 py-2.5 text-sm font-medium text-[var(--bg-primary)] bg-[var(--color-action)] rounded hover:opacity-90 transition-colors">
             + dump text
           </button>
         </div>
@@ -970,7 +1012,7 @@ function DumpTab() {
                     if (i === 0) navigateTo('all', '', 'all');
                     else if (i === 1 && crumb.type === 'category') navigateTo('category', crumb.value, crumb.label);
                   }}
-                  className={`text-sm ${i === breadcrumbs.length - 1 ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--accent)]'}`}
+                  className={`text-sm ${i === breadcrumbs.length - 1 ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--color-time)]'}`}
                 >
                   {crumb.label}
                 </button>
@@ -981,9 +1023,9 @@ function DumpTab() {
           
           {viewMode === 'calendar' && (
             <div className="flex items-center gap-4">
-              <button onClick={() => setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })} className="text-[var(--text-secondary)] hover:text-[var(--accent)] px-2">←</button>
+              <button onClick={() => setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })} className="text-[var(--text-secondary)] hover:text-[var(--color-time)] px-2">←</button>
               <span className="text-sm text-[var(--text-primary)] min-w-[120px] text-center">{MONTHS[calendarDate.month]} {calendarDate.year}</span>
-              <button onClick={() => setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 })} className="text-[var(--text-secondary)] hover:text-[var(--accent)] px-2">→</button>
+              <button onClick={() => setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 })} className="text-[var(--text-secondary)] hover:text-[var(--color-time)] px-2">→</button>
             </div>
           )}
         </header>
@@ -997,7 +1039,7 @@ function DumpTab() {
             facts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center">
                 <p className="text-[var(--text-tertiary)]">no facts yet</p>
-                <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--accent)] hover:underline">dump some text</button>
+                <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--color-action)] hover:underline">dump some text</button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -1008,23 +1050,26 @@ function DumpTab() {
                   
                   return (
                     <div key={subcategory} className="animate-slide-in">
-                      <div className={`rounded-lg border ${CATEGORY_BG[mainFact.category] || CATEGORY_BG.other} overflow-hidden`}>
+                      <div className={`rounded-lg ${CATEGORY_BG[mainFact.category] || CATEGORY_BG.other} ${getCardBorderColor(mainFact.category)} border-l-4 overflow-hidden`}>
                         {/* Header */}
                         <button
                           onClick={() => toggleCard(subcategory)}
-                          className="w-full p-4 text-left flex items-start justify-between gap-4 hover:bg-white/5 transition-colors"
+                          className="w-full p-4 text-left flex items-start justify-between gap-4 hover:bg-[var(--bg-hover)] transition-colors"
                         >
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <span className={`text-sm font-medium ${CATEGORY_COLORS[mainFact.category]}`}>
+                              <span className="text-sm font-medium text-[var(--color-people)]">
                                 {subcategory}
                               </span>
                               {mainFact.timeRef && (
-                                <span className={`text-xs ${TAG_COLORS[mainFact.category]}`}>@{mainFact.timeRef}</span>
+                                <span className="text-xs text-[var(--color-time)] font-medium">@{mainFact.timeRef}</span>
+                              )}
+                              {mainFact.entities.some(e => ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge'].some(loc => e.includes(loc))) && (
+                                <span className="text-xs text-[var(--color-location)] font-medium">📍</span>
                               )}
                               <span className="text-xs text-[var(--text-tertiary)]">({groupFacts.length})</span>
                             </div>
-                            <p className="text-sm text-[var(--text-primary)]">{mainFact.content}</p>
+                            <p className="text-sm text-[var(--text-primary)] font-light">{mainFact.content}</p>
                           </div>
                           <span className={`text-[var(--text-tertiary)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                             ▾
@@ -1033,11 +1078,11 @@ function DumpTab() {
                         
                         {/* Expanded content */}
                         {isExpanded && (
-                          <div className="border-t border-white/10 p-4 space-y-4 animate-slide-in">
+                          <div className="border-t border-[var(--border-subtle)] p-4 space-y-4 animate-slide-in">
                             {groupFacts.map((fact) => (
                               <div key={fact.id} className="text-sm">
                                 {fact.sourceText && (
-                                  <p className={`${BODY_COLORS[fact.category] || 'text-[var(--text-primary)]'} leading-relaxed mb-3`}>
+                                  <p className="text-[var(--text-primary)] leading-relaxed mb-3 font-light">
                                     <HighlightedText 
                                       text={fact.sourceText} 
                                       entities={fact.entities}
@@ -1049,8 +1094,6 @@ function DumpTab() {
                                           setExpandedCards(prev => ({ ...prev, [key]: true }));
                                         }
                                       }}
-                                      highlightClass={['pledging','meetings'].includes(fact.category) ? 'text-[var(--accent-secondary)]' : 'text-[var(--accent)]'}
-                                      highlightBgClass={['pledging','meetings'].includes(fact.category) ? 'bg-[var(--accent-secondary)]/10' : 'bg-[var(--accent)]/10'}
                                     />
                                   </p>
                                 )}
@@ -1066,7 +1109,7 @@ function DumpTab() {
                                           setExpandedCards(prev => ({ ...prev, [key]: true }));
                                         }
                                       }}
-                                      className="text-xs px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
+                                      className="text-xs px-2 py-0.5 rounded bg-[var(--color-people-light)] text-[var(--color-people)] hover:bg-[var(--color-people-light)] transition-colors font-medium"
                                     >
                                       #{entity}
                                     </button>
@@ -1083,8 +1126,8 @@ function DumpTab() {
                 
                 {/* Ungrouped facts */}
                 {groupedFacts.ungrouped.map((fact) => (
-                  <div key={fact.id} className={`p-4 rounded-lg border ${CATEGORY_BG[fact.category] || CATEGORY_BG.other} animate-slide-in`}>
-                    <p className={`${BODY_COLORS[fact.category] || 'text-[var(--text-primary)]'} text-sm leading-relaxed mb-3`}>
+                  <div key={fact.id} className={`p-4 rounded-lg ${CATEGORY_BG[fact.category] || CATEGORY_BG.other} ${getCardBorderColor(fact.category)} border-l-4 animate-slide-in`}>
+                    <p className="text-[var(--text-primary)] text-sm leading-relaxed mb-3 font-light">
                       <HighlightedText 
                         text={fact.sourceText || fact.content} 
                         entities={fact.entities}
@@ -1095,9 +1138,9 @@ function DumpTab() {
                       />
                     </p>
                     <div className="flex flex-wrap items-center gap-3 text-xs">
-                      <span className={CATEGORY_COLORS[fact.category]}>{fact.category}</span>
+                      <span className="text-[var(--text-tertiary)] uppercase tracking-wide">{fact.category}</span>
                       {fact.timeRef && (
-                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className={`${TAG_COLORS[fact.category]} hover:underline`}>
+                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--color-time)] hover:underline font-medium">
                           @{fact.timeRef}
                         </button>
                       )}
@@ -1120,13 +1163,13 @@ function DumpTab() {
                   const isToday = day && new Date().getDate() === day && new Date().getMonth() === calendarDate.month && new Date().getFullYear() === calendarDate.year;
                   
                   return (
-                    <div key={i} className={`min-h-[100px] p-2 rounded-lg border transition-colors ${day ? 'border-[var(--border-subtle)] hover:border-[var(--border)] bg-[var(--bg-secondary)]' : 'border-transparent'} ${isToday ? 'ring-1 ring-[var(--accent)]' : ''}`}>
+                    <div key={i} className={`min-h-[100px] p-2 rounded-lg border transition-colors ${day ? 'border-[var(--border-subtle)] hover:border-[var(--border)] bg-[var(--bg-card)]' : 'border-transparent'} ${isToday ? 'ring-1 ring-[var(--color-time)]' : ''}`}>
                       {day && (
                         <>
-                          <div className={`text-xs mb-1 ${isToday ? 'text-[var(--accent)] font-medium' : 'text-[var(--text-tertiary)]'}`}>{day}</div>
+                          <div className={`text-xs mb-1 ${isToday ? 'text-[var(--color-time)] font-medium' : 'text-[var(--text-tertiary)]'}`}>{day}</div>
                           <div className="space-y-1">
                             {dayFacts.slice(0, 3).map((fact) => (
-                              <div key={fact.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate ${CATEGORY_BG[fact.category]} ${CATEGORY_COLORS[fact.category]}`} title={fact.content}>
+                              <div key={fact.id} className="text-[10px] px-1.5 py-0.5 rounded truncate bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-primary)]" title={fact.content}>
                                 {fact.subcategory || fact.content.slice(0, 20)}
                               </div>
                             ))}
@@ -1139,14 +1182,14 @@ function DumpTab() {
                 })}
               </div>
               {recurringFacts.length > 0 && (
-                <div className="mt-6 p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+                <div className="mt-6 p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)]">
                   <h3 className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-3">↻ recurring</h3>
                   <div className="flex flex-wrap gap-2">
                     {recurringFacts.map(fact => (
-                      <div key={fact.id} className={`text-xs px-2 py-1 rounded ${CATEGORY_BG[fact.category]}`}>
-                        <span className="text-[var(--text-secondary)]">{fact.dateStr?.replace('recurring:', '')}</span>
+                      <div key={fact.id} className="text-xs px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)]">
+                        <span className="text-[var(--color-time)] font-medium">{fact.dateStr?.replace('recurring:', '')}</span>
                         <span className="mx-1.5 text-[var(--text-tertiary)]">·</span>
-                        <span className={CATEGORY_COLORS[fact.category]}>{fact.subcategory || fact.content.slice(0, 30)}</span>
+                        <span className="text-[var(--color-people)]">{fact.subcategory || fact.content.slice(0, 30)}</span>
                       </div>
                     ))}
                   </div>
@@ -1158,11 +1201,11 @@ function DumpTab() {
             <div className="animate-fade-in space-y-4">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-medium text-[var(--text-primary)]">
-                  uploads<span className="text-[var(--accent-contrast)]">_</span>
+                  uploads<span className="text-[var(--color-action)]">_</span>
                 </h2>
                 <button 
                   onClick={() => setShowUpload(true)}
-                  className="px-4 py-2 text-sm font-medium text-[var(--bg-primary)] bg-[var(--accent)] rounded hover:bg-[var(--accent-dim)] transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-[var(--bg-primary)] bg-[var(--color-action)] rounded hover:opacity-90 transition-colors"
                 >
                   + new upload
                 </button>
@@ -1180,7 +1223,7 @@ function DumpTab() {
                   {uploads.map((upload) => (
                     <div 
                       key={upload.id} 
-                      className="p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:border-[var(--border)] transition-colors"
+                      className="p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--border)] transition-colors"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
@@ -1216,8 +1259,8 @@ function DumpTab() {
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 bg-[rgba(114,95,69,0.8)] flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
-          <div className="w-full max-w-2xl bg-[var(--bg-secondary)] rounded-xl border border-[var(--border)] p-6 animate-expand-in" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-4">dump text<span className="text-[var(--accent)]">_</span></h2>
+          <div className="w-full max-w-2xl bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-6 animate-expand-in" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-4">dump text<span className="text-[var(--color-time)]">_</span></h2>
             <textarea
               autoFocus
               placeholder="paste or type text here..."
@@ -1232,11 +1275,11 @@ function DumpTab() {
                 }
               }}
               rows={12}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] text-sm text-[var(--text-primary)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:border-[var(--accent)] transition-colors"
+              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-sm text-[var(--text-primary)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:border-[var(--color-time)] transition-colors"
             />
             <div className="mt-4 flex justify-end gap-3">
               <button onClick={() => setShowUpload(false)} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">cancel</button>
-              <button onClick={handleUpload} disabled={uploading || !uploadText.trim()} className="px-6 py-2 text-sm font-medium text-[var(--bg-primary)] bg-[var(--accent)] rounded hover:bg-[var(--accent-dim)] disabled:opacity-50 disabled:cursor-not-allowed">
+              <button onClick={handleUpload} disabled={uploading || !uploadText.trim()} className="px-6 py-2 text-sm font-medium text-[var(--bg-primary)] bg-[var(--color-action)] rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
                 {uploading ? 'extracting...' : 'extract facts'}
               </button>
             </div>
@@ -1264,7 +1307,7 @@ export default function Home() {
             onClick={() => setActiveTab('dump')}
             className={`p-2 rounded-lg transition-colors ${
               activeTab === 'dump' 
-                ? 'text-[var(--accent)] bg-[var(--accent-glow)]' 
+                ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
             }`}
             title="Text Explorer"
@@ -1273,7 +1316,7 @@ export default function Home() {
           </button>
 
           {/* Center: App Name */}
-          <h1 className="text-lg font-bold tracking-tight">
+          <h1 className="text-lg font-light tracking-tight">
             <span className="text-[var(--text-primary)]">enclave</span>
           </h1>
 
@@ -1282,7 +1325,7 @@ export default function Home() {
             onClick={() => setActiveTab('info')}
             className={`p-2 rounded-lg transition-colors ${
               activeTab === 'info' 
-                ? 'text-[var(--accent)] bg-[var(--accent-glow)]' 
+                ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
             }`}
             title="How It Works"

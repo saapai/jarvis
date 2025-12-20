@@ -687,7 +687,19 @@ function DumpTab() {
           const parsed = fact.dateStr.split('T')[0];
           // Validate it's a proper date format (YYYY-MM-DD)
           if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
-            dateStr = parsed;
+            const parsedDate = new Date(parsed);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // If the date is in the past, increment the year
+            if (parsedDate < today) {
+              const [year, month, day] = parsed.split('-');
+              const nextYear = parseInt(year, 10) + 1;
+              dateStr = `${nextYear}-${month}-${day}`;
+              console.log('[Calendar] Date in past, adjusted:', parsed, '->', dateStr);
+            } else {
+              dateStr = parsed;
+            }
           }
         } catch (e) {
           // Invalid dateStr, try timeRef
@@ -696,9 +708,11 @@ function DumpTab() {
       
       // Fallback to parsing timeRef if dateStr wasn't valid
       if (!dateStr && fact.timeRef) {
-        // Try to extract year from timeRef first, otherwise use calendar year
+        // Try to extract year from timeRef first, otherwise use current year
         const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
-        const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : year;
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
         dateStr = parseDateFromTimeRef(fact.timeRef, yearToUse);
         if (dateStr) {
           console.log('[Calendar] Parsed timeRef:', fact.timeRef, '->', dateStr);

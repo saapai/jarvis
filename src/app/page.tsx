@@ -121,33 +121,41 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // ============================================
 
 // Semantic text parser - colors times, locations, people
-function parseSemanticText(text: string, entities: string[]): Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> {
+function parseSemanticText(text: string, entities: string[], timeRef?: string): Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> {
   const parts: Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> = [];
   
   if (!text) return [{ text, type: 'text' }];
   
-  // Time patterns - more specific to avoid overlaps
-  const timePattern = /(@?\w+day|@?\w+day\s+\d+(?:st|nd|rd|th)?|@?\d{1,2}:\d{2}\s*(?:AM|PM)|@?\d{1,2}:\d{2}|@?\w+\s+\d+(?:st|nd|rd|th)?|@every\s+\w+day)/gi;
+  // Time patterns - match dates, times, and timeRef
+  const timePatterns: RegExp[] = [
+    /@\w+/gi, // @timeRef
+    /\b\w+day\b/gi, // Monday, Wednesday, etc.
+    /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:st|nd|rd|th)?\b/gi, // Full month names
+    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+(?:st|nd|rd|th)?\b/gi, // Short month names
+    /\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/gi, // 6:30 PM
+    /\b(?:from|to)\s+\d{1,2}:\d{2}\s*(?:AM|PM)\b/gi, // from 6:30 PM
+    /\bevery\s+\w+day\b/gi, // every Wednesday
+  ];
   
-  // Location patterns (common building/place words)
-  const locationPattern = /\b(Rieber Terrace|Kelton|Levering|apartment|lounge|floor|room|building|terrace|hall)\b/gi;
+  // Location patterns - prioritize multi-word locations
+  const locationPatterns = [
+    /\b(?:Rieber Terrace|9th Floor Lounge|Study Hall)\b/gi, // Multi-word locations
+    /\b(?:Kelton|Levering|apartment|lounge|floor|room|building|terrace)\b/gi, // Single-word locations
+  ];
   
-  // People/entities - sort by length descending to match longest first
-  const sortedEntities = [...entities].sort((a, b) => b.length - a.length);
-  const peoplePattern = sortedEntities.length > 0 
-    ? new RegExp(`\\b(${sortedEntities.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'gi')
-    : null;
+  // People/entities - sort by length descending to match longest phrases first
+  const sortedEntities = [...entities]
+    .filter(e => e && e.length > 0)
+    .sort((a, b) => b.length - a.length);
   
   const matches: Array<{ index: number; endIndex: number; type: 'time' | 'location' | 'people'; text: string }> = [];
   
   // Find all matches with their positions
   let match;
-  const usedRanges = new Set<string>();
   
   // Helper to check if range overlaps with existing matches
   const addMatch = (index: number, length: number, type: 'time' | 'location' | 'people', matchedText: string) => {
     const endIndex = index + length;
-    const rangeKey = `${index}-${endIndex}`;
     
     // Check for overlaps - if this range overlaps with any existing match, skip it
     const overlaps = matches.some(m => 
@@ -156,28 +164,32 @@ function parseSemanticText(text: string, entities: string[]): Array<{ text: stri
       (index <= m.index && endIndex >= m.endIndex)
     );
     
-    if (!overlaps && !usedRanges.has(rangeKey)) {
+    if (!overlaps) {
       matches.push({ index, endIndex, type, text: matchedText });
-      usedRanges.add(rangeKey);
     }
   };
   
   // Find time matches
-  timePattern.lastIndex = 0;
-  while ((match = timePattern.exec(text)) !== null) {
-    addMatch(match.index, match[0].length, 'time', match[0]);
+  for (const timePattern of timePatterns) {
+    timePattern.lastIndex = 0;
+    while ((match = timePattern.exec(text)) !== null) {
+      addMatch(match.index, match[0].length, 'time', match[0]);
+    }
   }
   
-  // Find location matches
-  locationPattern.lastIndex = 0;
-  while ((match = locationPattern.exec(text)) !== null) {
-    addMatch(match.index, match[0].length, 'location', match[0]);
+  // Find location matches (multi-word first)
+  for (const locationPattern of locationPatterns) {
+    locationPattern.lastIndex = 0;
+    while ((match = locationPattern.exec(text)) !== null) {
+      addMatch(match.index, match[0].length, 'location', match[0]);
+    }
   }
   
-  // Find people/entity matches (prioritize longest matches first)
-  if (peoplePattern) {
-    peoplePattern.lastIndex = 0;
-    while ((match = peoplePattern.exec(text)) !== null) {
+  // Find people/entity matches (longest first to avoid partial matches like "Hall" instead of "Study Hall")
+  for (const entity of sortedEntities) {
+    const entityPattern = new RegExp(`\\b${entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    entityPattern.lastIndex = 0;
+    while ((match = entityPattern.exec(text)) !== null) {
       addMatch(match.index, match[0].length, 'people', match[0]);
     }
   }
@@ -206,12 +218,14 @@ function HighlightedText({
   text, 
   entities, 
   onEntityClick,
+  onTimeClick,
   highlightClass,
   highlightBgClass,
 }: { 
   text: string; 
   entities: string[]; 
-  onEntityClick: (entity: string) => void;
+  onEntityClick?: (entity: string) => void;
+  onTimeClick?: (timeText: string) => void;
   highlightClass?: string;
   highlightBgClass?: string;
 }) {
@@ -224,24 +238,35 @@ function HighlightedText({
       {semanticParts.map((part, i) => {
         if (part.type === 'time') {
           return (
-            <span key={i} className="text-[var(--highlight-blue)] font-mono">
+            <button
+              key={i}
+              onClick={() => onTimeClick?.(part.text)}
+              className="text-[var(--highlight-red)] font-mono hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors cursor-pointer"
+              title="View in calendar"
+            >
               {part.text}
-            </span>
+            </button>
           );
         }
         if (part.type === 'location') {
           return (
-            <span key={i} className="text-[var(--highlight-blue)] font-mono">
+            <button
+              key={i}
+              onClick={() => onEntityClick?.(part.text.toLowerCase())}
+              className="text-[var(--highlight-blue)] hover:bg-[rgba(59,124,150,0.16)] hover:rounded px-1 transition-colors cursor-pointer font-mono"
+              title="Filter by location"
+            >
               {part.text}
-            </span>
+            </button>
           );
         }
         if (part.type === 'people') {
           return (
             <button
               key={i}
-              onClick={() => onEntityClick(part.text.toLowerCase())}
-              className="text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 cursor-pointer font-mono transition-colors"
+              onClick={() => onEntityClick?.(part.text.toLowerCase())}
+              className="text-[var(--highlight-blue)] hover:bg-[rgba(59,124,150,0.16)] hover:rounded px-1 cursor-pointer font-mono transition-colors"
+              title="Filter by entity"
             >
               {part.text}
             </button>
@@ -1104,7 +1129,7 @@ function DumpTab() {
                                 {subcategory}
                               </h3>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[var(--highlight-blue)] font-mono">@{mainFact.timeRef}</span>
+                                <span className="text-xs text-[var(--highlight-red)] font-mono">@{mainFact.timeRef}</span>
                               )}
                               <span className="text-xs text-[var(--text-meta)] font-mono">({groupFacts.length})</span>
                             </div>
@@ -1230,7 +1255,7 @@ function DumpTab() {
                                     {fact.subcategory || fact.content.slice(0, 20)}
                                   </span>
                                   {fact.timeRef && (
-                                    <span className="text-[var(--highlight-blue)] ml-1 font-mono">@{fact.timeRef.slice(0, 8)}</span>
+                                    <span className="text-[var(--highlight-red)] ml-1 font-mono">@{fact.timeRef.slice(0, 8)}</span>
                                   )}
                                 </div>
                               );

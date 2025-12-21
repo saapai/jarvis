@@ -63,12 +63,12 @@
 }
 
 html {
-  background: var(--bg-primary);
+  background: var(--bg-main);
 }
 
 body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: var(--bg-main);
+  color: var(--text-on-dark);
   font-family: 'JetBrains Mono', monospace;
   font-weight: 300;
   letter-spacing: 0.01em;
@@ -108,56 +108,55 @@ body {
   background: var(--text-tertiary);
 }
 
+/* Wikipedia-style hyperlinks */
 a {
-  color: var(--accent);
+  color: var(--highlight-blue);
   text-decoration: none;
-  transition: color var(--transition-fast) ease;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 a:hover {
-  color: var(--accent-dim);
+  background-color: rgba(52, 124, 147, 0.16); /* literal highlight */
+  border-radius: 4px;
+  text-decoration: underline;
 }
 
-/* Film grain texture overlay - analog memory feel */
-.card-texture {
-  position: relative;
+/* Card hover effect */
+.card {
+  transition: all 0.2s ease;
 }
 
-.card-texture::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: 
-    repeating-linear-gradient(
-      0deg,
-      rgba(0, 0, 0, 0.015) 0px,
-      transparent 1px,
-      transparent 2px,
-      rgba(0, 0, 0, 0.015) 3px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(0, 0, 0, 0.015) 0px,
-      transparent 1px,
-      transparent 2px,
-      rgba(0, 0, 0, 0.015) 3px
-    );
-  pointer-events: none;
-  opacity: 0.4;
-  mix-blend-mode: overlay;
+.card:hover {
+  background-color: var(--card-hover);
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
-/* Soft vignette for hero */
-.hero-vignette {
-  position: relative;
+/* Button styles */
+.button {
+  background: var(--bg-main);
+  color: var(--text-on-dark);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 14px;
+  transition: all 0.2s ease;
 }
 
-.hero-vignette::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
-  pointer-events: none;
+.button:hover {
+  background: rgba(206, 96, 135, 0.18); /* red highlight */
+  color: var(--highlight-red);
+  border-color: var(--highlight-red);
+}
+
+/* Input styles */
+input, textarea {
+  background: #1c1f23;
+  color: #f6eedf;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+
+input::placeholder, textarea::placeholder {
+  color: rgba(246, 238, 223, 0.45);
 }
 
 /* Smooth animations */

@@ -66,30 +66,20 @@ interface BreadcrumbItem {
 // ============================================
 
 // Semantic card system - cream cards with colored left borders
-// Ritualistic card backgrounds - alternating green/yellow with grain
-// Green and yellow alternate as backgrounds for cards
-let cardIndex = 0;
-const getCardStyle = (category: string, index?: number): string => {
-  const idx = index !== undefined ? index : cardIndex++;
-  // Alternate between green and yellow
-  const isGreen = idx % 2 === 0;
-  const bgColor = isGreen 
-    ? 'bg-[var(--bg-card-green)]' 
-    : 'bg-[var(--bg-card-yellow)]';
-  return `${bgColor} border border-[var(--border-subtle)]`;
-};
+// Card backgrounds - warm cream for all cards
+const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-[var(--card-radius)] shadow-[var(--card-shadow)]';
 
 const CATEGORY_BG: Record<string, string> = {
-  social: getCardStyle('social', 0),
-  professional: getCardStyle('professional', 1),
-  events: getCardStyle('events', 0),
-  pledging: getCardStyle('pledging', 1),
-  meetings: getCardStyle('meetings', 0),
-  other: getCardStyle('other', 1),
+  social: CARD_BG,
+  professional: CARD_BG,
+  events: CARD_BG,
+  pledging: CARD_BG,
+  meetings: CARD_BG,
+  other: CARD_BG,
 };
 
-// Card texture and styling
-const CARD_CLASS = 'card-texture shadow-sm';
+// Card class with hover effect
+const CARD_CLASS = 'card transition-all';
 
 // Body text color for expanded content (yellow cards use yellow text)
 const BODY_COLORS: Record<string, string> = {
@@ -211,14 +201,14 @@ function HighlightedText({
       {semanticParts.map((part, i) => {
         if (part.type === 'time') {
           return (
-            <span key={i} className="text-[var(--color-green)] font-mono">
+            <span key={i} className="text-[var(--highlight-blue)] font-mono">
               {part.text}
             </span>
           );
         }
         if (part.type === 'location') {
           return (
-            <span key={i} className="text-[var(--color-green)] font-mono">
+            <span key={i} className="text-[var(--highlight-blue)] font-mono">
               {part.text}
             </span>
           );
@@ -228,7 +218,7 @@ function HighlightedText({
             <button
               key={i}
               onClick={() => onEntityClick(part.text.toLowerCase())}
-              className="text-[var(--color-rose)] hover:text-[var(--color-plum)] underline decoration-[var(--color-rose)]/30 hover:decoration-[var(--color-rose)]/60 cursor-pointer font-mono"
+              className="text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 cursor-pointer font-mono transition-colors"
             >
               {part.text}
             </button>
@@ -277,9 +267,9 @@ function MenuIcon({ className }: { className?: string }) {
 
 function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   return (
-    <main className="min-h-screen flex flex-col animate-fade-in bg-white">
-      {/* Hero Section - Ritualistic with vignette */}
-      <div className="relative h-[25vh] min-h-[250px] flex items-center justify-center overflow-hidden hero-vignette">
+    <main className="min-h-screen flex flex-col animate-fade-in bg-[var(--bg-main)]">
+      {/* Hero Section */}
+      <div className="relative h-[25vh] min-h-[250px] flex items-center justify-center overflow-hidden">
         {/* Background Image with soft vignette */}
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -288,64 +278,64 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
           }}
         />
         {/* Soft vignette overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-primary)] opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-main)] opacity-80" />
         
-        {/* Content - Ritualistic */}
+        {/* Content */}
         <div className="relative z-10 text-center px-8 max-w-4xl w-full">
           {/* Timestamp in mono */}
-          <p className="text-xs text-white/80 mb-3 font-mono tracking-wider drop-shadow-sm">
+          <p className="text-xs text-[var(--text-on-dark)]/80 mb-3 font-mono tracking-wider">
             Winter Week 10 · SEP Lore
           </p>
           {/* Large title */}
-          <h1 className="text-6xl md:text-7xl font-display mb-2 text-white drop-shadow-lg leading-[0.9]">
+          <h1 className="text-6xl md:text-7xl font-display mb-2 text-[var(--text-on-dark)] leading-[0.9]">
             Enclave
           </h1>
-          {/* Thin green underline - highlighter streak */}
-          <div className="w-32 h-1 bg-[var(--color-green)] mx-auto mb-8 opacity-80" />
+          {/* Thin blue underline - highlighter streak */}
+          <div className="w-32 h-1 bg-[var(--highlight-blue)] mx-auto mb-8 opacity-80" />
         </div>
       </div>
 
       {/* Section 1: What Enclave Is */}
-      <section className="py-24 px-8 bg-[var(--bg-primary)]">
+      <section className="py-24 px-8 bg-[var(--bg-main)]">
         <div className="max-w-3xl mx-auto text-center space-y-6">
-          <h2 className="text-3xl md:text-4xl font-display text-[var(--text-primary)] mb-4">
+          <h2 className="text-3xl md:text-4xl font-display text-[var(--text-on-dark)] mb-4">
             SMS-powered memory
           </h2>
-          <p className="text-base md:text-lg text-[var(--text-body)] font-light leading-relaxed max-w-2xl mx-auto">
+          <p className="text-base md:text-lg text-[var(--text-on-dark)] font-light leading-relaxed max-w-2xl mx-auto opacity-90">
             Enclave transforms text messages into structured knowledge. Announcements become memories. Polls become decisions. Conversations become archives.
           </p>
         </div>
       </section>
 
-      {/* Section 2: How It Works - Ritualistic */}
-      <section className="py-24 px-8 bg-[var(--bg-primary)]">
+      {/* Section 2: How It Works */}
+      <section className="py-24 px-8 bg-[var(--bg-main)]">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-display text-[var(--text-primary)] mb-12 text-center">
+          <h2 className="text-2xl md:text-3xl font-display text-[var(--text-on-dark)] mb-12 text-center">
             how it works
           </h2>
           
           <div className="space-y-8">
             {/* Admin Commands */}
             <div>
-              <p className="text-xs uppercase tracking-widest text-[var(--text-tertiary)] mb-4 font-mono">
+              <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
                 admin
               </p>
-              <div className="bg-[var(--bg-card-green)] card-texture rounded-lg p-6 border border-[var(--border-subtle)] space-y-4">
+              <div className={`bg-[var(--card-bg)] rounded-[var(--card-radius)] p-6 border border-[var(--card-border)] shadow-[var(--card-shadow)] card space-y-4`}>
                 <div className="flex items-start gap-2">
-                  <span className="text-[var(--color-yellow)] font-mono text-sm">$</span>
+                  <span className="text-[var(--highlight-red)] font-mono text-sm">$</span>
                   <div className="flex-1">
-                    <span className="text-[var(--color-yellow)] font-mono text-sm">announce</span>
-                    <span className="text-[var(--text-body)] ml-2">meeting tonight at</span>
-                    <span className="text-[var(--color-green)] font-mono text-sm ml-1">7pm</span>
+                    <span className="text-[var(--highlight-red)] font-mono text-sm">announce</span>
+                    <span className="text-[var(--text-on-card)] ml-2">meeting tonight at</span>
+                    <span className="text-[var(--highlight-blue)] font-mono text-sm ml-1">7pm</span>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="text-[var(--color-yellow)] font-mono text-sm">$</span>
+                  <span className="text-[var(--highlight-red)] font-mono text-sm">$</span>
                   <div className="flex-1">
-                    <span className="text-[var(--color-yellow)] font-mono text-sm">poll</span>
-                    <span className="text-[var(--text-body)] ml-2">who&apos;s coming</span>
-                    <span className="text-[var(--color-green)] font-mono text-sm ml-1">friday</span>
-                    <span className="text-[var(--text-body)] ml-1">?</span>
+                    <span className="text-[var(--highlight-red)] font-mono text-sm">poll</span>
+                    <span className="text-[var(--text-on-card)] ml-2">who&apos;s coming</span>
+                    <span className="text-[var(--highlight-blue)] font-mono text-sm ml-1">friday</span>
+                    <span className="text-[var(--text-on-card)] ml-1">?</span>
                   </div>
                 </div>
               </div>
@@ -353,24 +343,24 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
 
             {/* User Commands */}
             <div>
-              <p className="text-xs uppercase tracking-widest text-[var(--text-tertiary)] mb-4 font-mono">
+              <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
                 user
               </p>
-              <div className="bg-[var(--bg-card-yellow)] card-texture rounded-lg p-6 border border-[var(--border-subtle)] space-y-3">
+              <div className={`bg-[var(--card-bg)] rounded-[var(--card-radius)] p-6 border border-[var(--card-border)] shadow-[var(--card-shadow)] card space-y-3`}>
                 <div className="flex items-center gap-2">
-                  <span className="text-[var(--color-yellow)] font-mono text-sm">START</span>
-                  <span className="text-[var(--text-tertiary)]">→</span>
-                  <span className="text-[var(--text-body)]">opt in</span>
+                  <span className="text-[var(--highlight-red)] font-mono text-sm">START</span>
+                  <span className="text-[var(--text-meta)]">→</span>
+                  <span className="text-[var(--text-on-card)]">opt in</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[var(--color-yellow)] font-mono text-sm">STOP</span>
-                  <span className="text-[var(--text-tertiary)]">→</span>
-                  <span className="text-[var(--text-body)]">unsubscribe</span>
+                  <span className="text-[var(--highlight-red)] font-mono text-sm">STOP</span>
+                  <span className="text-[var(--text-meta)]">→</span>
+                  <span className="text-[var(--text-on-card)]">unsubscribe</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[var(--color-yellow)] font-mono text-sm">HELP</span>
-                  <span className="text-[var(--text-tertiary)]">→</span>
-                  <span className="text-[var(--text-body)]">commands</span>
+                  <span className="text-[var(--highlight-red)] font-mono text-sm">HELP</span>
+                  <span className="text-[var(--text-meta)]">→</span>
+                  <span className="text-[var(--text-on-card)]">commands</span>
                 </div>
               </div>
             </div>
@@ -825,22 +815,22 @@ function DumpTab() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex animate-fade-in">
+    <div className="min-h-screen bg-[var(--bg-main)] flex animate-fade-in">
       {/* Overlay for mobile when sidebar is open */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-[rgba(114,95,69,0.5)] z-30 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] flex flex-col z-40 transition-transform duration-300`}>
+      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[var(--border-subtle)] bg-[var(--bg-main)] flex flex-col z-40 transition-transform duration-300`}>
         <div className="p-6 border-b border-[var(--border-subtle)]">
-          <h1 className="text-lg font-light text-[var(--text-primary)] tracking-tight">
-            dump<span className="text-[var(--color-rose)]">_</span>
+          <h1 className="text-lg font-light text-[var(--text-on-dark)] tracking-tight">
+            dump<span className="text-[var(--highlight-red)]">_</span>
           </h1>
-          <p className="text-xs text-[var(--text-tertiary)] mt-1 font-mono">{tree?.totalFacts ?? 0} facts</p>
+          <p className="text-xs text-[var(--text-meta)] mt-1 font-mono">{tree?.totalFacts ?? 0} facts</p>
         </div>
 
         {/* View Tabs */}
@@ -849,10 +839,10 @@ function DumpTab() {
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`flex-1 px-2 py-2 text-xs font-mono rounded transition-colors ${
+              className={`flex-1 px-2 py-2 text-xs font-mono rounded transition-colors button ${
                 viewMode === mode
-                  ? 'bg-[var(--color-green)] text-[var(--bg-primary)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                  ? 'bg-[rgba(206,96,135,0.18)] text-[var(--highlight-red)] border-[var(--highlight-red)]'
+                  : 'text-[var(--text-on-dark)] hover:bg-[rgba(206,96,135,0.18)] hover:text-[var(--highlight-red)] hover:border-[var(--highlight-red)]'
               }`}
             >
               {mode}
@@ -866,7 +856,7 @@ function DumpTab() {
           <button
             onClick={() => navigateTo('all', '', 'all')}
             className={`w-full text-left px-6 py-2 text-sm transition-colors ${
-              currentFilter.type === 'all' ? 'text-[var(--color-green)] bg-[var(--bg-card-green)]' : 'text-[var(--text-secondary)] hover:text-[var(--color-rose)] hover:bg-[var(--bg-hover)]'
+              currentFilter.type === 'all' ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
             }`}
           >
             <span className="opacity-50 mr-2">~</span>all
@@ -874,7 +864,7 @@ function DumpTab() {
 
           {/* Categories */}
           <div className="mt-3">
-            <button onClick={() => toggleSection('categories')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
+            <button onClick={() => toggleSection('categories')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-meta)] hover:text-[var(--text-on-dark)] flex items-center gap-2">
               <span className={`transition-transform ${expandedSections.categories ? 'rotate-90' : ''}`}>▸</span>
               categories
             </button>
@@ -882,19 +872,19 @@ function DumpTab() {
               <div key={cat.name}>
                 <div className="flex items-center">
                   {cat.subcategories.length > 0 && (
-                    <button onClick={() => toggleCategory(cat.name)} className="pl-6 pr-1 py-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
+                    <button onClick={() => toggleCategory(cat.name)} className="pl-6 pr-1 py-1.5 text-[var(--text-meta)] hover:text-[var(--text-on-dark)]">
                       <span className={`text-xs transition-transform inline-block ${expandedCategories[cat.name] ? 'rotate-90' : ''}`}>▸</span>
                     </button>
                   )}
                   <button
                     onClick={() => navigateTo('category', cat.name, cat.name)}
                     className={`flex-1 text-left ${cat.subcategories.length > 0 ? 'pl-1' : 'pl-6'} pr-6 py-1.5 text-sm transition-colors ${
-                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'text-[var(--color-green)] bg-[var(--bg-card-green)]' : 'text-[var(--text-secondary)] hover:text-[var(--color-rose)] hover:bg-[var(--bg-hover)]'
+                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
                     }`}
                   >
                     {!cat.subcategories.length && <span className="opacity-30 mr-2">├─</span>}
                     <span>{cat.name}</span>
-                    <span className="text-[var(--text-tertiary)] ml-2 text-xs">{cat.count}</span>
+                    <span className="text-[var(--text-meta)] ml-2 text-xs">{cat.count}</span>
                   </button>
                 </div>
                 {expandedCategories[cat.name] && cat.subcategories.map((sub) => (
@@ -902,11 +892,11 @@ function DumpTab() {
                     key={sub.name}
                     onClick={() => navigateTo('subcategory', sub.name, sub.name, cat.name)}
                     className={`w-full text-left pl-12 pr-6 py-1 text-sm transition-colors ${
-                      currentFilter.type === 'subcategory' && currentFilter.value === sub.name ? 'text-[var(--color-green)] bg-[var(--bg-card-green)]' : 'text-[var(--text-secondary)] hover:text-[var(--color-rose)] hover:bg-[var(--bg-hover)]'
+                      currentFilter.type === 'subcategory' && currentFilter.value === sub.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
                     }`}
                   >
                     <span className="opacity-30 mr-2">└─</span>{sub.name}
-                    <span className="text-[var(--text-tertiary)] ml-2 text-xs">{sub.count}</span>
+                    <span className="text-[var(--text-meta)] ml-2 text-xs">{sub.count}</span>
                   </button>
                 ))}
               </div>
@@ -931,7 +921,7 @@ function DumpTab() {
                           key={timeRef.name}
                           onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
                           className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--accent-contrast)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
                           }`}
                         >
                           {isValid && (
@@ -946,16 +936,16 @@ function DumpTab() {
                     {/* Recurring */}
                     {tree.timeRefs.filter(t => t.dateStr?.startsWith('recurring:')).length > 0 && (
                       <div className="pt-2 mt-2 border-t border-[var(--border-subtle)]">
-                        <span className="text-[10px] text-[var(--text-tertiary)] uppercase">recurring</span>
+                        <span className="text-[10px] text-[var(--text-meta)] uppercase">recurring</span>
                         {tree.timeRefs.filter(t => t.dateStr?.startsWith('recurring:')).map((timeRef) => (
                           <button
                             key={timeRef.name}
                             onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
                             className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                              currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--color-time)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-blue)] hover:bg-[rgba(52,124,147,0.16)]'
                             }`}
                           >
-                            <span className="w-12 text-[var(--text-tertiary)]">↻</span>
+                            <span className="w-12 text-[var(--text-meta)]">↻</span>
                             <span className="truncate">{timeRef.name}</span>
                           </button>
                         ))}
@@ -979,11 +969,11 @@ function DumpTab() {
                   key={entity.name}
                   onClick={() => navigateTo('entity', entity.name.toLowerCase(), entity.name)}
                   className={`w-full text-left px-6 py-1.5 text-sm transition-colors ${
-                    currentFilter.type === 'entity' && currentFilter.value.toLowerCase() === entity.name.toLowerCase() ? 'text-[var(--accent)] bg-[var(--accent-glow)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                    currentFilter.type === 'entity' && currentFilter.value.toLowerCase() === entity.name.toLowerCase() ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
                   }`}
                 >
                   <span className="opacity-30 mr-2">├─</span>{entity.name}
-                  <span className="text-[var(--text-tertiary)] ml-2 text-xs">{entity.count}</span>
+                  <span className="text-[var(--text-meta)] ml-2 text-xs">{entity.count}</span>
                 </button>
               ))}
             </div>
@@ -1000,11 +990,11 @@ function DumpTab() {
                 <button
                   key={upload.id}
                   onClick={() => setViewMode('uploads')}
-                  className="w-full text-left px-6 py-1.5 text-sm transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                  className="w-full text-left px-6 py-1.5 text-sm transition-colors text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]"
                 >
                   <span className="opacity-30 mr-2">📄</span>
                   <span className="truncate">{upload.name.slice(0, 20)}</span>
-                  <span className="text-[var(--text-tertiary)] ml-2 text-xs">{upload.factCount}</span>
+                  <span className="text-[var(--text-meta)] ml-2 text-xs">{upload.factCount}</span>
                 </button>
               ))}
             </div>
@@ -1012,7 +1002,7 @@ function DumpTab() {
         </nav>
 
         <div className="p-4 border-t border-[var(--border-subtle)]">
-          <button onClick={() => setShowUpload(true)} className="w-full px-4 py-2.5 text-sm font-mono text-[var(--bg-primary)] bg-[var(--color-yellow)] rounded hover:opacity-90 transition-colors">
+          <button onClick={() => setShowUpload(true)} className="w-full px-4 py-2.5 text-sm font-mono button">
             + dump text
           </button>
         </div>
@@ -1020,38 +1010,38 @@ function DumpTab() {
 
       {/* Main */}
       <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
-        <header className="px-8 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
+        <header className="px-8 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-main)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             {/* Menu Icon Button */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+              className="p-2 rounded-lg text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] transition-colors"
               aria-label="Toggle sidebar"
             >
               <MenuIcon className="w-5 h-5" />
             </button>
             {breadcrumbs.map((crumb, i) => (
               <div key={i} className="flex items-center gap-2">
-                {i > 0 && <span className="text-[var(--text-tertiary)]">/</span>}
+                {i > 0 && <span className="text-[var(--text-meta)]">/</span>}
                 <button
                   onClick={() => {
                     if (i === 0) navigateTo('all', '', 'all');
                     else if (i === 1 && crumb.type === 'category') navigateTo('category', crumb.value, crumb.label);
                   }}
-                  className={`text-sm ${i === breadcrumbs.length - 1 ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--color-rose)]'}`}
+                  className={`text-sm ${i === breadcrumbs.length - 1 ? 'text-[var(--text-on-dark)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'}`}
                 >
                   {crumb.label}
                 </button>
               </div>
             ))}
-            <span className="text-[var(--text-tertiary)] ml-2 text-xs">({facts.length})</span>
+            <span className="text-[var(--text-meta)] ml-2 text-xs">({facts.length})</span>
           </div>
           
           {viewMode === 'calendar' && (
             <div className="flex items-center gap-4">
-              <button onClick={() => setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })} className="text-[var(--text-secondary)] hover:text-[var(--color-rose)] px-2">←</button>
-              <span className="text-sm text-[var(--text-primary)] min-w-[120px] text-center">{MONTHS[calendarDate.month]} {calendarDate.year}</span>
-              <button onClick={() => setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 })} className="text-[var(--text-secondary)] hover:text-[var(--color-rose)] px-2">→</button>
+              <button onClick={() => setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })} className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors">←</button>
+              <span className="text-sm text-[var(--text-on-dark)] min-w-[120px] text-center">{MONTHS[calendarDate.month]} {calendarDate.year}</span>
+              <button onClick={() => setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 })} className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors">→</button>
             </div>
           )}
         </header>
@@ -1059,57 +1049,53 @@ function DumpTab() {
         <div className="flex-1 overflow-auto p-8">
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <span className="text-[var(--text-tertiary)] animate-pulse">loading...</span>
+              <span className="text-[var(--text-meta)] animate-pulse">loading...</span>
             </div>
           ) : viewMode === 'explore' ? (
             facts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center">
-                <p className="text-[var(--text-tertiary)]">no facts yet</p>
-                <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--color-action)] hover:underline">dump some text</button>
+                <p className="text-[var(--text-meta)]">no facts yet</p>
+                <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-2 transition-colors">dump some text</button>
               </div>
             ) : (
               <div className="space-y-4">
                 {/* Grouped facts */}
-                {Object.entries(groupedFacts.groups).map(([subcategory, groupFacts], idx) => {
+                {Object.entries(groupedFacts.groups).map(([subcategory, groupFacts]) => {
                   const isExpanded = expandedCards[subcategory];
                   const mainFact = groupFacts[0];
-                  // Alternate green/yellow backgrounds
-                  const cardBg = idx % 2 === 0 ? 'bg-[var(--bg-card-green)]' : 'bg-[var(--bg-card-yellow)]';
                   
                   return (
                     <div key={subcategory} className="animate-slide-in">
-                      <div className={`rounded-lg ${cardBg} ${CARD_CLASS} border border-[var(--border-subtle)] overflow-hidden`}>
+                      <div className={`${CARD_BG} ${CARD_CLASS} overflow-hidden`}>
                         {/* Header */}
                         <button
                           onClick={() => toggleCard(subcategory)}
-                          className="w-full p-4 text-left flex items-start justify-between gap-4 hover:bg-[var(--bg-hover)] transition-colors"
+                          className="w-full p-4 text-left flex items-start justify-between gap-4 transition-colors"
                         >
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-3">
-                              <h3 className="text-sm font-medium text-[var(--text-primary)]">
+                              <h3 className="text-sm font-medium text-[var(--text-on-card)]">
                                 {subcategory}
                               </h3>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[var(--text-tertiary)] font-mono">@{mainFact.timeRef}</span>
+                                <span className="text-xs text-[var(--highlight-blue)] font-mono">@{mainFact.timeRef}</span>
                               )}
-                              <span className="text-xs text-[var(--text-tertiary)] font-mono">({groupFacts.length})</span>
-                              {/* Decorative flourish - corner line */}
-                              <div className="ml-auto w-8 h-px bg-[var(--color-green)] opacity-40" />
+                              <span className="text-xs text-[var(--text-meta)] font-mono">({groupFacts.length})</span>
                             </div>
-                            <p className="text-sm text-[var(--text-body)] font-light leading-relaxed">{mainFact.content}</p>
+                            <p className="text-sm text-[var(--text-on-card)] font-light leading-relaxed">{mainFact.content}</p>
                           </div>
-                          <span className={`text-[var(--text-tertiary)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                          <span className={`text-[var(--text-meta)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                             ▾
                           </span>
                         </button>
                         
                         {/* Expanded content */}
                         {isExpanded && (
-                          <div className="border-t border-[var(--border-subtle)] p-4 space-y-4 animate-slide-in">
+                          <div className="border-t border-[var(--card-border)] p-4 space-y-4 animate-slide-in">
                             {groupFacts.map((fact) => (
                               <div key={fact.id} className="text-sm">
                                 {fact.sourceText && (
-                                    <p className="text-[var(--text-body)] leading-relaxed mb-3 font-light">
+                                  <p className="text-[var(--text-on-card)] leading-relaxed mb-3 font-light">
                                     <HighlightedText 
                                       text={fact.sourceText} 
                                       entities={fact.entities}
@@ -1136,7 +1122,7 @@ function DumpTab() {
                                           setExpandedCards(prev => ({ ...prev, [key]: true }));
                                         }
                                       }}
-                                      className="text-xs font-mono text-[var(--color-rose)] hover:text-[var(--color-plum)] underline decoration-[var(--color-rose)]/30 hover:decoration-[var(--color-rose)]/60 transition-colors"
+                                      className="text-xs font-mono text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors"
                                     >
                                       {entity}
                                     </button>
@@ -1168,16 +1154,15 @@ function DumpTab() {
                       />
                     </p>
                     <div className="flex flex-wrap items-center gap-3 text-xs">
-                      <span className="text-[var(--text-tertiary)] uppercase tracking-wide font-mono">{fact.category}</span>
+                      <span className="text-[var(--text-meta)] uppercase tracking-wide font-mono">{fact.category}</span>
                       {fact.timeRef && (
-                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--color-green)] hover:text-[var(--color-rose)] font-mono underline decoration-[var(--color-green)]/30 hover:decoration-[var(--color-green)]/60">
+                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--highlight-blue)] hover:bg-[rgba(52,124,147,0.16)] hover:rounded px-1 font-mono transition-colors">
                           @{fact.timeRef}
                         </button>
                       )}
                     </div>
                   </div>
-                  );
-                })}
+                ))}
               </div>
             )
           ) : viewMode === 'calendar' ? (
@@ -1185,7 +1170,7 @@ function DumpTab() {
             <div className="animate-fade-in">
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center text-xs text-[var(--text-tertiary)] py-2">{day}</div>
+                  <div key={day} className="text-center text-xs text-[var(--text-meta)] py-2">{day}</div>
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1" key={`calendar-${allFacts.length}-${calendarDate.year}-${calendarDate.month}`}>
@@ -1194,10 +1179,10 @@ function DumpTab() {
                   const isToday = day && new Date().getDate() === day && new Date().getMonth() === calendarDate.month && new Date().getFullYear() === calendarDate.year;
                   
                   return (
-                    <div key={i} className={`min-h-[100px] p-2 rounded-lg border transition-colors ${day ? 'border-[var(--border-subtle)] hover:border-[var(--border)] bg-[var(--bg-primary)]' : 'border-transparent'} ${isToday ? 'ring-1 ring-[var(--color-green)]' : ''}`}>
+                    <div key={i} className={`min-h-[100px] p-2 rounded-lg border transition-colors ${day ? 'border-[var(--border-subtle)] hover:border-[var(--border)] bg-[var(--bg-main)]' : 'border-transparent'} ${isToday ? 'ring-1 ring-[var(--highlight-blue)]' : ''}`}>
                       {day && (
                         <>
-                          <div className={`text-xs mb-1 ${isToday ? 'text-[var(--color-green)] font-medium' : 'text-[var(--text-tertiary)]'}`}>{day}</div>
+                          <div className={`text-xs mb-1 ${isToday ? 'text-[var(--highlight-blue)] font-medium' : 'text-[var(--text-meta)]'}`}>{day}</div>
                           <div className="space-y-1">
                             {dayFacts.slice(0, 3).map((fact) => {
                               // Determine organic gradient based on fact content
@@ -1207,27 +1192,22 @@ function DumpTab() {
                               const hasPeople = fact.entities.length > 0 && !hasLocation;
                               const hasTime = fact.timeRef || fact.dateStr;
                               
-                              // Alternate green/yellow for calendar cards
-                              const cardBg = (i + dayFacts.indexOf(fact)) % 2 === 0 
-                                ? 'bg-[var(--bg-card-green)]' 
-                                : 'bg-[var(--bg-card-yellow)]';
-                              
                               return (
                                 <div 
                                   key={fact.id} 
-                                  className={`text-[10px] px-1.5 py-0.5 rounded ${cardBg} border border-[var(--border-subtle)] card-texture truncate`}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded bg-[var(--card-bg)] border border-[var(--card-border)] card truncate`}
                                   title={fact.content}
                                 >
-                                  <span className="text-[var(--text-body)]">
+                                  <span className="text-[var(--text-on-card)]">
                                     {fact.subcategory || fact.content.slice(0, 20)}
                                   </span>
                                   {fact.timeRef && (
-                                    <span className="text-[var(--color-green)] ml-1 font-mono">@{fact.timeRef.slice(0, 8)}</span>
+                                    <span className="text-[var(--highlight-blue)] ml-1 font-mono">@{fact.timeRef.slice(0, 8)}</span>
                                   )}
                                 </div>
                               );
                             })}
-                            {dayFacts.length > 3 && <div className="text-[10px] text-[var(--text-tertiary)]">+{dayFacts.length - 3}</div>}
+                            {dayFacts.length > 3 && <div className="text-[10px] text-[var(--text-meta)]">+{dayFacts.length - 3}</div>}
                           </div>
                         </>
                       )}
@@ -1236,21 +1216,19 @@ function DumpTab() {
                 })}
               </div>
               {recurringFacts.length > 0 && (
-                <div className="mt-6 p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)]">
-                  <h3 className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-3">↻ recurring</h3>
+                <div className="mt-6 p-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] card">
+                  <h3 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3">↻ recurring</h3>
                   <div className="flex flex-wrap gap-2">
                     {recurringFacts.map(fact => {
                       const hasLocation = fact.entities.some(e => 
                         ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'hall'].some(loc => e.includes(loc))
                       );
                       const hasPeople = fact.entities.length > 0 && !hasLocation;
-                      const cardBg = 'bg-[var(--bg-card-green)]';
-                      
                       return (
-                        <div key={fact.id} className={`text-xs px-2 py-1 rounded ${cardBg} border border-[var(--border-subtle)] card-texture`}>
-                          <span className="text-[var(--color-green)] font-mono">{fact.dateStr?.replace('recurring:', '')}</span>
-                          <span className="mx-1.5 text-[var(--text-tertiary)]">·</span>
-                          <span className="text-[var(--text-body)]">{fact.subcategory || fact.content.slice(0, 30)}</span>
+                        <div key={fact.id} className={`text-xs px-2 py-1 rounded bg-[var(--card-bg)] border border-[var(--card-border)] card`}>
+                          <span className="text-[var(--highlight-blue)] font-mono">{fact.dateStr?.replace('recurring:', '')}</span>
+                          <span className="mx-1.5 text-[var(--text-meta)]">·</span>
+                          <span className="text-[var(--text-on-card)]">{fact.subcategory || fact.content.slice(0, 30)}</span>
                         </div>
                       );
                     })}
@@ -1320,9 +1298,9 @@ function DumpTab() {
 
       {/* Upload Modal */}
       {showUpload && (
-        <div className="fixed inset-0 bg-[rgba(114,95,69,0.8)] flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
-          <div className="w-full max-w-2xl bg-[var(--bg-primary)] rounded-xl border border-[var(--border)] p-6 animate-expand-in" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-medium text-[var(--text-primary)] mb-4">dump text<span className="text-[var(--color-rose)]">_</span></h2>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
+          <div className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-[var(--card-radius)] border border-[var(--card-border)] shadow-[var(--card-shadow)] p-6 animate-expand-in`} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-medium text-[var(--text-on-card)] mb-4">dump text<span className="text-[var(--highlight-red)]">_</span></h2>
             <textarea
               autoFocus
               placeholder="paste or type text here..."
@@ -1337,11 +1315,11 @@ function DumpTab() {
                 }
               }}
               rows={12}
-              className="w-full px-4 py-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] text-sm text-[var(--text-body)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:border-[var(--color-green)] transition-colors font-mono"
+              className="w-full px-4 py-3 rounded-lg bg-[#1c1f23] border border-[rgba(255,255,255,0.12)] text-sm text-[#f6eedf] placeholder-[rgba(246,238,223,0.45)] resize-none focus:outline-none focus:border-[var(--highlight-blue)] transition-colors font-mono"
             />
             <div className="mt-4 flex justify-end gap-3">
-              <button onClick={() => setShowUpload(false)} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">cancel</button>
-              <button onClick={handleUpload} disabled={uploading || !uploadText.trim()} className="px-6 py-2 text-sm font-mono text-[var(--bg-primary)] bg-[var(--color-yellow)] rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button onClick={() => setShowUpload(false)} className="px-4 py-2 text-sm text-[var(--text-on-card)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] rounded transition-colors">cancel</button>
+              <button onClick={handleUpload} disabled={uploading || !uploadText.trim()} className="px-6 py-2 text-sm font-mono button disabled:opacity-50 disabled:cursor-not-allowed">
                 {uploading ? 'extracting...' : 'extract facts'}
               </button>
             </div>
@@ -1360,7 +1338,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<AppTab>('info');
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
+    <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Global Navigation Header - Simplified for Landing */}
       {activeTab === 'info' ? (
         <header className="fixed top-0 left-0 right-0 z-40 bg-transparent">
@@ -1368,7 +1346,7 @@ export default function Home() {
             {/* Left: CTA */}
             <button
               onClick={() => setActiveTab('dump')}
-              className="p-2 rounded-lg transition-colors text-white/90 hover:text-white hover:bg-white/10"
+              className="p-2 rounded-lg transition-colors text-[var(--text-on-dark)]/90 hover:text-[var(--text-on-dark)] hover:bg-[rgba(206,96,135,0.16)]"
               title="Enter"
             >
               <HomeIcon className="w-5 h-5" />
@@ -1376,15 +1354,15 @@ export default function Home() {
           </div>
         </header>
       ) : (
-        <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-primary)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
+        <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
           <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
             {/* Left: Home Icon */}
             <button
               onClick={() => setActiveTab('dump')}
               className={`p-2 rounded-lg transition-colors ${
                 activeTab === 'dump' 
-                  ? 'text-[var(--color-time)] bg-[var(--color-time-light)]' 
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]' 
+                  : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
               }`}
               title="Text Explorer"
             >
@@ -1393,13 +1371,13 @@ export default function Home() {
 
             {/* Center: App Name */}
             <h1 className="text-lg font-light tracking-tight">
-              <span className="text-[var(--text-primary)]">enclave</span>
+              <span className="text-[var(--text-on-dark)]">enclave</span>
             </h1>
 
             {/* Right: Help Icon */}
             <button
               onClick={() => setActiveTab('info')}
-              className="p-2 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              className="p-2 rounded-lg transition-colors text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]"
               title="How It Works"
             >
               <HelpIcon className="w-5 h-5" />

@@ -41,21 +41,21 @@
   --highlight-red: #ce6087; /* soft red */
   --highlight-blue: #3b7c96; /* softer, intentional blue */
 
-  /* Semantic colors - SWAPPED: red for time, blue for people */
-  --color-time: var(--highlight-red);
-  --color-people: var(--highlight-blue);
-  --color-location: var(--highlight-red);
-  --color-action: var(--highlight-blue);
-  --color-green: var(--highlight-red);
-  --color-yellow: var(--highlight-blue);
-  --color-rose: var(--highlight-blue);
-  --color-plum: var(--highlight-blue);
+  /* Semantic colors - blue for time, red for people */
+  --color-time: var(--highlight-blue);
+  --color-people: var(--highlight-red);
+  --color-location: var(--highlight-blue);
+  --color-action: var(--highlight-red);
+  --color-green: var(--highlight-blue);
+  --color-yellow: var(--highlight-red);
+  --color-rose: var(--highlight-red);
+  --color-plum: var(--highlight-red);
 
   /* Legacy accent vars for compatibility */
-  --accent: var(--highlight-red);
-  --accent-dim: #a84f6d;
-  --accent-secondary: var(--highlight-blue);
-  --accent-contrast: var(--highlight-blue);
+  --accent: var(--highlight-blue);
+  --accent-dim: #2a6a7d;
+  --accent-secondary: var(--highlight-red);
+  --accent-contrast: var(--highlight-red);
 
   /* Borders */
   --border: rgba(255, 255, 255, 0.18);

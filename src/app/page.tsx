@@ -1129,14 +1129,14 @@ function DumpTab() {
                                 {subcategory}
                               </h3>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[var(--highlight-red)] font-mono">@{mainFact.timeRef}</span>
+                                <span className="text-xs text-[var(--highlight-blue)] font-mono">@{mainFact.timeRef}</span>
                               )}
                               <span className="text-xs text-[var(--text-meta)] font-mono">({groupFacts.length})</span>
                             </div>
                             <p className="text-sm text-[var(--text-on-card)] font-light leading-relaxed">{mainFact.content}</p>
                           </div>
-                          <span className={`text-[var(--text-meta)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                            ▾
+                          <span className={`text-[var(--text-meta)] transition-transform`}>
+                            {isExpanded ? '▾' : '▸'}
                           </span>
                         </button>
                         

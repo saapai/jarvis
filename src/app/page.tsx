@@ -82,7 +82,7 @@ const CATEGORY_OVERLAY: Record<string, string> = {
 const getCardStyle = (category?: string) => {
   const overlay = category ? CATEGORY_OVERLAY[category.toLowerCase()] || CATEGORY_OVERLAY.other : CATEGORY_OVERLAY.other;
   return {
-    background: `linear-gradient(${overlay}, ${overlay}), var(--card-bg)`,
+    background: overlay,
   };
 };
 

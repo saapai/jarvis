@@ -308,145 +308,24 @@ function MenuIcon({ className }: { className?: string }) {
   );
 }
 
-
-// ============================================
-// INFO TAB CONTENT
-// ============================================
-
-function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
+function CalendarIcon({ className }: { className?: string }) {
   return (
-    <main className="min-h-screen flex flex-col animate-fade-in bg-[var(--bg-main)]">
-      {/* Hero Section */}
-      <div className="relative h-[25vh] min-h-[250px] flex items-center justify-center overflow-hidden">
-        {/* Background Image with soft vignette */}
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: 'url(/hero-image.png)',
-          }}
-        />
-        {/* Soft vignette overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-main)] opacity-80" />
-        
-        {/* Content */}
-        <div className="relative z-10 text-center px-8 max-w-4xl w-full">
-          {/* Timestamp in mono */}
-          <p className="text-xs text-[var(--text-on-dark)]/80 mb-3 font-mono tracking-wider">
-            Winter Week 10 · SEP Lore
-          </p>
-          {/* Large title */}
-          <h1 className="text-6xl md:text-7xl font-display mb-2 text-[var(--text-on-dark)] leading-[0.9]">
-            Enclave
-          </h1>
-          {/* Thin blue underline - highlighter streak */}
-          <div className="w-32 h-1 bg-[var(--highlight-blue)] mx-auto mb-8 opacity-80" />
-        </div>
-      </div>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
 
-      {/* Section 1: What Enclave Is */}
-      <section className="py-24 px-8 bg-[var(--bg-main)]">
-        <div className="max-w-3xl mx-auto text-center space-y-6">
-          <h2 className="text-3xl md:text-4xl font-display text-[var(--text-on-dark)] mb-4">
-            SMS-powered memory
-          </h2>
-          <p className="text-base md:text-lg text-[var(--text-on-dark)] font-light leading-relaxed max-w-2xl mx-auto opacity-90">
-            Enclave transforms text messages into structured knowledge. Announcements become memories. Polls become decisions. Conversations become archives.
-          </p>
-        </div>
-      </section>
-
-      {/* Section 2: How It Works */}
-      <section className="py-24 px-8 bg-[var(--bg-main)]">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-display text-[var(--text-on-dark)] mb-12 text-center">
-            how it works
-          </h2>
-          
-          <div className="space-y-8">
-            {/* Admin Commands */}
-            <div>
-              <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
-                admin
-              </p>
-              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] card space-y-4`}>
-                <div className="flex items-start gap-2">
-                  <span className="text-[var(--highlight-red)] font-mono text-sm">$</span>
-                  <div className="flex-1">
-                    <span className="text-[var(--highlight-red)] font-mono text-sm">announce</span>
-                    <span className="text-[var(--text-on-card)] ml-2">meeting tonight at</span>
-                    <span className="text-[var(--highlight-blue)] font-mono text-sm ml-1">7pm</span>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-[var(--highlight-red)] font-mono text-sm">$</span>
-                  <div className="flex-1">
-                    <span className="text-[var(--highlight-red)] font-mono text-sm">poll</span>
-                    <span className="text-[var(--text-on-card)] ml-2">who&apos;s coming</span>
-                    <span className="text-[var(--highlight-blue)] font-mono text-sm ml-1">friday</span>
-                    <span className="text-[var(--text-on-card)] ml-1">?</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* User Commands */}
-            <div>
-              <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
-                user
-              </p>
-              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] card space-y-3`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--highlight-red)] font-mono text-sm">START</span>
-                  <span className="text-[var(--text-meta)]">→</span>
-                  <span className="text-[var(--text-on-card)]">opt in</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--highlight-red)] font-mono text-sm">STOP</span>
-                  <span className="text-[var(--text-meta)]">→</span>
-                  <span className="text-[var(--text-on-card)]">unsubscribe</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--highlight-red)] font-mono text-sm">HELP</span>
-                  <span className="text-[var(--text-meta)]">→</span>
-                  <span className="text-[var(--text-on-card)]">commands</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 3: Why It Matters */}
-      <section className="py-32 px-8 bg-[var(--bg-main)]">
-        <div className="max-w-3xl mx-auto text-center space-y-8">
-          <h2 className="text-3xl md:text-4xl font-display text-[var(--color-location)] mb-4">
-            why it matters
-          </h2>
-          <p className="text-lg text-[var(--text-primary)] font-light leading-relaxed">
-            Every message is a memory. Every poll is a decision. Every announcement is a moment preserved. Enclave helps your community remember what matters.
-          </p>
-        </div>
-      </section>
-
-      {/* Phone Number - Clean & Minimal */}
-      <section className="py-24 px-8 bg-white">
-        <div className="max-w-2xl mx-auto text-center">
-          <p className="text-xs uppercase tracking-widest text-[var(--text-tertiary)] mb-4 font-light">text to activate</p>
-          <p className="text-3xl md:text-4xl text-[var(--color-location)] font-display">
-            +1 (805) 919-8529
-          </p>
-        </div>
-      </section>
-
-      {/* Footer - Minimal */}
-      <footer className="py-12 px-8 bg-[var(--bg-main)] border-t border-[var(--border-subtle)]">
-        <div className="max-w-4xl mx-auto text-center">
-          <p className="text-xs text-[var(--text-tertiary)] font-light">
-            powered by enclave × twilio × airtable
-          </p>
-        </div>
-      </footer>
-    </main>
+function UploadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
   );
 }
 
@@ -483,7 +362,6 @@ function DumpTab() {
     entities: false,
     uploads: false,
   });
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Collapsed by default
 
   const currentFilter = breadcrumbs[breadcrumbs.length - 1];
 
@@ -620,7 +498,6 @@ function DumpTab() {
     // Switch to explore view when navigating to a filter
     setViewMode('explore');
     // Close sidebar on mobile after navigation
-    setSidebarOpen(false);
     
     if (type === 'all') {
       setBreadcrumbs([{ type: 'all', value: '', label: 'all' }]);
@@ -864,237 +741,9 @@ function DumpTab() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] flex animate-fade-in">
-      {/* Overlay for mobile when sidebar is open */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[rgba(255,255,255,0.04)] bg-[var(--bg-secondary)] flex flex-col z-40 transition-transform duration-300`}>
-        <div className="p-6 border-b border-[rgba(255,255,255,0.04)]">
-          <h1 className="text-lg font-medium text-[var(--text-on-dark)] tracking-tight">
-            dump<span className="text-[var(--highlight-red)]">_</span>
-          </h1>
-          <p className="text-xs text-[var(--text-sidebar)] mt-1 font-mono opacity-70">{tree?.totalFacts ?? 0} facts</p>
-        </div>
-
-        {/* View Tabs */}
-        <div className="px-4 pt-4 flex gap-1">
-          {(['explore', 'calendar', 'uploads'] as ViewMode[]).map(mode => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={`flex-1 px-2 py-2 text-xs font-mono rounded transition-colors button ${
-                viewMode === mode
-                  ? 'bg-[rgba(206,96,135,0.18)] text-[var(--highlight-red)] border-[var(--highlight-red)]'
-                  : 'text-[var(--text-on-dark)] hover:bg-[rgba(206,96,135,0.18)] hover:text-[var(--highlight-red)] hover:border-[var(--highlight-red)]'
-              }`}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 overflow-auto py-4">
-          {/* All */}
-          <button
-            onClick={() => navigateTo('all', '', 'all')}
-            className={`w-full text-left px-6 py-2 text-sm transition-colors ${
-              currentFilter.type === 'all' ? 'bg-[var(--bg-active)] text-[var(--text-on-dark)] font-medium rounded-md mx-2' : 'text-[var(--text-sidebar)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-on-dark)]'
-            }`}
-          >
-            <span className="opacity-50 mr-2">~</span>all
-          </button>
-
-          {/* Categories */}
-          <div className="mt-3">
-            <button onClick={() => toggleSection('categories')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-sidebar)] opacity-70 hover:opacity-100 hover:text-[var(--text-on-dark)] flex items-center gap-2">
-              <span className={`transition-transform ${expandedSections.categories ? 'rotate-90' : ''}`}>▸</span>
-              categories
-            </button>
-            {expandedSections.categories && tree?.categories.map((cat) => (
-              <div key={cat.name}>
-                <div className="flex items-center">
-                  {cat.subcategories.length > 0 && (
-                    <button onClick={() => toggleCategory(cat.name)} className="pl-6 pr-1 py-1.5 text-[var(--text-meta)] hover:text-[var(--text-on-dark)]">
-                      <span className={`text-xs transition-transform inline-block ${expandedCategories[cat.name] ? 'rotate-90' : ''}`}>▸</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => navigateTo('category', cat.name, cat.name)}
-                    className={`flex-1 text-left ${cat.subcategories.length > 0 ? 'pl-1' : 'pl-6'} pr-6 py-1.5 text-sm transition-colors ${
-                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'bg-[var(--bg-active)] text-[var(--text-on-dark)] font-medium rounded-md mr-2' : 'text-[var(--text-sidebar)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-on-dark)]'
-                    }`}
-                  >
-                    {!cat.subcategories.length && <span className="opacity-30 mr-2">├─</span>}
-                    <span>{cat.name}</span>
-                    <span className="text-[var(--text-meta)] ml-2 text-xs">{cat.count}</span>
-                  </button>
-                </div>
-                {expandedCategories[cat.name] && cat.subcategories.map((sub) => (
-                  <button
-                    key={sub.name}
-                    onClick={() => navigateTo('subcategory', sub.name, sub.name, cat.name)}
-                    className={`w-full text-left pl-12 pr-6 py-1 text-sm transition-colors ${
-                      currentFilter.type === 'subcategory' && currentFilter.value === sub.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
-                    }`}
-                  >
-                    <span className="opacity-30 mr-2">└─</span>{sub.name}
-                    <span className="text-[var(--text-meta)] ml-2 text-xs">{sub.count}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {/* Timeline */}
-          {tree?.timeRefs && tree.timeRefs.length > 0 && (
-            <div className="mt-3">
-              <button onClick={() => toggleSection('timeline')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
-                <span className={`transition-transform ${expandedSections.timeline ? 'rotate-90' : ''}`}>▸</span>
-                timeline
-              </button>
-              {expandedSections.timeline && (
-                <div className="px-6 py-2">
-                  <div className="space-y-1">
-                    {tree.timeRefs.filter(t => t.dateStr && !t.dateStr.startsWith('recurring:')).map((timeRef) => {
-                      const date = new Date(timeRef.dateStr!);
-                      const isValid = !isNaN(date.getTime());
-                      return (
-                        <button
-                          key={timeRef.name}
-                          onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
-                          className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
-                          }`}
-                        >
-                          {isValid && (
-                            <span className="w-12 text-[var(--accent-contrast)] font-medium">
-                              {MONTHS[date.getMonth()]} {date.getDate()}
-                            </span>
-                          )}
-                          <span className="truncate">{timeRef.name}</span>
-                        </button>
-                      );
-                    })}
-                    {/* Recurring */}
-                    {tree.timeRefs.filter(t => t.dateStr?.startsWith('recurring:')).length > 0 && (
-                      <div className="pt-2 mt-2 border-t border-[var(--border-subtle)]">
-                        <span className="text-[10px] text-[var(--text-meta)] uppercase">recurring</span>
-                        {tree.timeRefs.filter(t => t.dateStr?.startsWith('recurring:')).map((timeRef) => (
-                          <button
-                            key={timeRef.name}
-                            onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
-                            className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
-                              currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-blue)] hover:bg-[rgba(52,124,147,0.16)]'
-                            }`}
-                          >
-                            <span className="w-12 text-[var(--text-meta)]">↻</span>
-                            <span className="truncate">{timeRef.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Entities */}
-          {tree?.entities && tree.entities.length > 0 && (
-            <div className="mt-3">
-              <button onClick={() => toggleSection('entities')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
-                <span className={`transition-transform ${expandedSections.entities ? 'rotate-90' : ''}`}>▸</span>
-                entities
-              </button>
-              {expandedSections.entities && tree.entities.slice(0, 15).map((entity) => (
-                <button
-                  key={entity.name}
-                  onClick={() => navigateTo('entity', entity.name.toLowerCase(), entity.name)}
-                  className={`w-full text-left px-6 py-1.5 text-sm transition-colors ${
-                    currentFilter.type === 'entity' && currentFilter.value.toLowerCase() === entity.name.toLowerCase() ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
-                  }`}
-                >
-                  <span className="opacity-30 mr-2">├─</span>{entity.name}
-                  <span className="text-[var(--text-meta)] ml-2 text-xs">{entity.count}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Uploads */}
-          {uploads.length > 0 && (
-            <div className="mt-3">
-              <button onClick={() => toggleSection('uploads')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
-                <span className={`transition-transform ${expandedSections.uploads ? 'rotate-90' : ''}`}>▸</span>
-                uploads ({uploads.length})
-              </button>
-              {expandedSections.uploads && uploads.slice(0, 10).map((upload) => (
-                <button
-                  key={upload.id}
-                  onClick={() => setViewMode('uploads')}
-                  className="w-full text-left px-6 py-1.5 text-sm transition-colors text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]"
-                >
-                  <span className="opacity-30 mr-2">📄</span>
-                  <span className="truncate">{upload.name.slice(0, 20)}</span>
-                  <span className="text-[var(--text-meta)] ml-2 text-xs">{upload.factCount}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </nav>
-
-        <div className="p-4 border-t border-[var(--border-subtle)]">
-          <button onClick={() => setShowUpload(true)} className="w-full px-4 py-2.5 text-sm font-mono button">
-            + dump text
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
-        <header className="px-8 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-main)] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* Menu Icon Button */}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] transition-colors"
-              aria-label="Toggle sidebar"
-            >
-              <MenuIcon className="w-5 h-5" />
-            </button>
-            {breadcrumbs.map((crumb, i) => (
-              <div key={i} className="flex items-center gap-2">
-                {i > 0 && <span className="text-[var(--text-meta)]">/</span>}
-                <button
-                  onClick={() => {
-                    if (i === 0) navigateTo('all', '', 'all');
-                    else if (i === 1 && crumb.type === 'category') navigateTo('category', crumb.value, crumb.label);
-                  }}
-                  className={`text-sm ${i === breadcrumbs.length - 1 ? 'text-[var(--text-on-dark)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'}`}
-                >
-                  {crumb.label}
-                </button>
-              </div>
-            ))}
-            <span className="text-[var(--text-meta)] ml-2 text-xs">({facts.length})</span>
-          </div>
-          
-          {viewMode === 'calendar' && (
-            <div className="flex items-center gap-4">
-              <button onClick={() => setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })} className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors">←</button>
-              <span className="text-sm text-[var(--text-on-dark)] min-w-[120px] text-center">{MONTHS[calendarDate.month]} {calendarDate.year}</span>
-              <button onClick={() => setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 })} className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors">→</button>
-            </div>
-          )}
-        </header>
-
-        <div className="flex-1 overflow-auto p-8">
+      {/* Main Content - Full Width */}
+      <main className="flex-1 flex flex-col overflow-hidden max-w-6xl mx-auto w-full">
+        <div className="flex-1 overflow-auto py-6 px-4">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <span className="text-[var(--text-meta)] animate-pulse">loading...</span>
@@ -1413,66 +1062,62 @@ function DumpTab() {
 }
 
 // ============================================
-// MAIN APP WITH TABS
+// MAIN APP
 // ============================================
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<AppTab>('info');
-
+  const [viewMode, setViewMode] = useState<ViewMode>('explore');
+  
   return (
     <div className="min-h-screen bg-[var(--bg-main)]">
-      {/* Global Navigation Header - Simplified for Landing */}
-      {activeTab === 'info' ? (
-        <header className="fixed top-0 left-0 right-0 z-40 bg-transparent">
-          <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-start">
-            {/* Left: CTA */}
-            <button
-              onClick={() => setActiveTab('dump')}
-              className="p-2 rounded-lg transition-colors text-[var(--text-on-dark)]/90 hover:text-[var(--text-on-dark)] hover:bg-[rgba(206,96,135,0.16)]"
-              title="Enter"
-            >
-              <HomeIcon className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
-      ) : (
-        <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
-          <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-            {/* Left: Home Icon */}
-            <button
-              onClick={() => setActiveTab('dump')}
-              className={`p-2 rounded-lg transition-colors ${
-                activeTab === 'dump' 
-                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]' 
-                  : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
-              }`}
-              title="Text Explorer"
-            >
-              <HomeIcon className="w-5 h-5" />
-            </button>
+      {/* Top Navigation - 3 Icons */}
+      <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
+          {/* Home (Inbox) */}
+          <button
+            onClick={() => setViewMode('explore')}
+            className={`p-2 rounded-lg transition-colors ${
+              viewMode === 'explore'
+                ? 'text-[var(--text-on-dark)] bg-[var(--bg-active)]'
+                : 'text-[var(--text-sidebar)] hover:text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)]'
+            }`}
+            title="Home (Inbox)"
+          >
+            <HomeIcon className="w-5 h-5" />
+          </button>
+          
+          {/* Calendar */}
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={`p-2 rounded-lg transition-colors ${
+              viewMode === 'calendar'
+                ? 'text-[var(--text-on-dark)] bg-[var(--bg-active)]'
+                : 'text-[var(--text-sidebar)] hover:text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)]'
+            }`}
+            title="Calendar"
+          >
+            <CalendarIcon className="w-5 h-5" />
+          </button>
+          
+          {/* Upload */}
+          <button
+            onClick={() => setViewMode('uploads')}
+            className={`p-2 rounded-lg transition-colors ${
+              viewMode === 'uploads'
+                ? 'text-[var(--text-on-dark)] bg-[var(--bg-active)]'
+                : 'text-[var(--text-sidebar)] hover:text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)]'
+            }`}
+            title="Uploads"
+          >
+            <UploadIcon className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
 
-            {/* Center: App Name */}
-            <h1 className="text-lg font-light tracking-tight">
-              <span className="text-[var(--text-on-dark)]">enclave</span>
-            </h1>
-
-            {/* Right: Help Icon */}
-            <button
-              onClick={() => setActiveTab('info')}
-              className="p-2 rounded-lg transition-colors text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]"
-              title="How It Works"
-            >
-              <HelpIcon className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
-      )}
-
-      {/* Content Area - offset for fixed header */}
-      <div className="pt-14">
-        {activeTab === 'info' && <InfoTab onNavigate={setActiveTab} />}
-        {activeTab === 'dump' && <DumpTab />}
-      </div>
+      {/* Main Content - Full Width */}
+      <main className="pt-14">
+        <DumpTab />
+      </main>
     </div>
   );
 }

@@ -298,6 +298,16 @@ function HelpIcon({ className }: { className?: string }) {
   );
 }
 
+function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
 function CalendarIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -319,16 +329,9 @@ function UploadIcon({ className }: { className?: string }) {
   );
 }
 
-function MenuIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
-
+// ============================================
+// DUMP TAB CONTENT (Text Explorer)
+// ============================================
 
 function DumpTab() {
   const [tree, setTree] = useState<TreeData | null>(null);
@@ -359,6 +362,7 @@ function DumpTab() {
     entities: false,
     uploads: false,
   });
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Collapsed by default
 
   const currentFilter = breadcrumbs[breadcrumbs.length - 1];
 
@@ -739,6 +743,197 @@ function DumpTab() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] flex animate-fade-in">
+      {/* Overlay for mobile when sidebar is open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[rgba(255,255,255,0.04)] bg-[var(--bg-secondary)] flex flex-col z-40 transition-transform duration-300`}>
+        <div className="p-6 border-b border-[rgba(255,255,255,0.04)]">
+          <h1 className="text-lg font-medium text-[var(--text-on-dark)] tracking-tight">
+            dump<span className="text-[var(--highlight-red)]">_</span>
+          </h1>
+          <p className="text-xs text-[var(--text-sidebar)] mt-1 font-mono opacity-70">{tree?.totalFacts ?? 0} facts</p>
+        </div>
+
+        {/* View Tabs */}
+        <div className="px-4 pt-4 flex gap-1">
+          {(['explore', 'calendar', 'uploads'] as ViewMode[]).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`flex-1 px-2 py-2 text-xs font-mono rounded transition-colors button ${
+                viewMode === mode
+                  ? 'bg-[rgba(206,96,135,0.18)] text-[var(--highlight-red)] border-[var(--highlight-red)]'
+                  : 'text-[var(--text-on-dark)] hover:bg-[rgba(206,96,135,0.18)] hover:text-[var(--highlight-red)] hover:border-[var(--highlight-red)]'
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-auto py-4">
+          {/* All */}
+          <button
+            onClick={() => navigateTo('all', '', 'all')}
+            className={`w-full text-left px-6 py-2 text-sm transition-colors ${
+              currentFilter.type === 'all' ? 'bg-[var(--bg-active)] text-[var(--text-on-dark)] font-medium rounded-md mx-2' : 'text-[var(--text-sidebar)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-on-dark)]'
+            }`}
+          >
+            <span className="opacity-50 mr-2">~</span>all
+          </button>
+
+          {/* Categories */}
+          <div className="mt-3">
+            <button onClick={() => toggleSection('categories')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-sidebar)] opacity-70 hover:opacity-100 hover:text-[var(--text-on-dark)] flex items-center gap-2">
+              <span className={`transition-transform ${expandedSections.categories ? 'rotate-90' : ''}`}>▸</span>
+              categories
+            </button>
+            {expandedSections.categories && tree?.categories.map((cat) => (
+              <div key={cat.name}>
+                <div className="flex items-center">
+                  {cat.subcategories.length > 0 && (
+                    <button onClick={() => toggleCategory(cat.name)} className="pl-6 pr-1 py-1.5 text-[var(--text-meta)] hover:text-[var(--text-on-dark)]">
+                      <span className={`text-xs transition-transform inline-block ${expandedCategories[cat.name] ? 'rotate-90' : ''}`}>▸</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => navigateTo('category', cat.name, cat.name)}
+                    className={`flex-1 text-left ${cat.subcategories.length > 0 ? 'pl-1' : 'pl-6'} pr-6 py-1.5 text-sm transition-colors ${
+                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'bg-[var(--bg-active)] text-[var(--text-on-dark)] font-medium rounded-md mr-2' : 'text-[var(--text-sidebar)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-on-dark)]'
+                    }`}
+                  >
+                    {!cat.subcategories.length && <span className="opacity-30 mr-2">├─</span>}
+                    <span>{cat.name}</span>
+                    <span className="text-[var(--text-meta)] ml-2 text-xs">{cat.count}</span>
+                  </button>
+                </div>
+                {expandedCategories[cat.name] && cat.subcategories.map((sub) => (
+                  <button
+                    key={sub.name}
+                    onClick={() => navigateTo('subcategory', sub.name, sub.name, cat.name)}
+                    className={`w-full text-left pl-12 pr-6 py-1 text-sm transition-colors ${
+                      currentFilter.type === 'subcategory' && currentFilter.value === sub.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+                    }`}
+                  >
+                    <span className="opacity-30 mr-2">└─</span>{sub.name}
+                    <span className="text-[var(--text-meta)] ml-2 text-xs">{sub.count}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Timeline */}
+          {tree?.timeRefs && tree.timeRefs.length > 0 && (
+            <div className="mt-3">
+              <button onClick={() => toggleSection('timeline')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
+                <span className={`transition-transform ${expandedSections.timeline ? 'rotate-90' : ''}`}>▸</span>
+                timeline
+              </button>
+              {expandedSections.timeline && (
+                <div className="px-6 py-2">
+                  <div className="space-y-1">
+                    {tree.timeRefs.filter(t => t.dateStr && !t.dateStr.startsWith('recurring:')).map((timeRef) => {
+                      const date = new Date(timeRef.dateStr!);
+                      const isValid = !isNaN(date.getTime());
+                      return (
+                        <button
+                          key={timeRef.name}
+                          onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
+                          className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
+                            currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+                          }`}
+                        >
+                          {isValid && (
+                            <span className="w-12 text-[var(--accent-contrast)] font-medium">
+                              {MONTHS[date.getMonth()]} {date.getDate()}
+                            </span>
+                          )}
+                          <span className="truncate">{timeRef.name}</span>
+                        </button>
+                      );
+                    })}
+                    {/* Recurring */}
+                    {tree.timeRefs.filter(t => t.dateStr?.startsWith('recurring:')).length > 0 && (
+                      <div className="pt-2 mt-2 border-t border-[var(--border-subtle)]">
+                        <span className="text-[10px] text-[var(--text-meta)] uppercase">recurring</span>
+                        {tree.timeRefs.filter(t => t.dateStr?.startsWith('recurring:')).map((timeRef) => (
+                          <button
+                            key={timeRef.name}
+                            onClick={() => navigateTo('time', timeRef.name, timeRef.name)}
+                            className={`w-full text-left py-1 text-xs transition-colors flex items-center gap-2 ${
+                              currentFilter.type === 'time' && currentFilter.value === timeRef.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-blue)] hover:bg-[rgba(52,124,147,0.16)]'
+                            }`}
+                          >
+                            <span className="w-12 text-[var(--text-meta)]">↻</span>
+                            <span className="truncate">{timeRef.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Entities */}
+          {tree?.entities && tree.entities.length > 0 && (
+            <div className="mt-3">
+              <button onClick={() => toggleSection('entities')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
+                <span className={`transition-transform ${expandedSections.entities ? 'rotate-90' : ''}`}>▸</span>
+                entities
+              </button>
+              {expandedSections.entities && tree.entities.slice(0, 15).map((entity) => (
+                <button
+                  key={entity.name}
+                  onClick={() => navigateTo('entity', entity.name.toLowerCase(), entity.name)}
+                  className={`w-full text-left px-6 py-1.5 text-sm transition-colors ${
+                    currentFilter.type === 'entity' && currentFilter.value.toLowerCase() === entity.name.toLowerCase() ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+                  }`}
+                >
+                  <span className="opacity-30 mr-2">├─</span>{entity.name}
+                  <span className="text-[var(--text-meta)] ml-2 text-xs">{entity.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Uploads */}
+          {uploads.length > 0 && (
+            <div className="mt-3">
+              <button onClick={() => toggleSection('uploads')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] flex items-center gap-2">
+                <span className={`transition-transform ${expandedSections.uploads ? 'rotate-90' : ''}`}>▸</span>
+                uploads ({uploads.length})
+              </button>
+              {expandedSections.uploads && uploads.slice(0, 10).map((upload) => (
+                <button
+                  key={upload.id}
+                  onClick={() => setViewMode('uploads')}
+                  className="w-full text-left px-6 py-1.5 text-sm transition-colors text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]"
+                >
+                  <span className="opacity-30 mr-2">📄</span>
+                  <span className="truncate">{upload.name.slice(0, 20)}</span>
+                  <span className="text-[var(--text-meta)] ml-2 text-xs">{upload.factCount}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </nav>
+
+        <div className="p-4 border-t border-[var(--border-subtle)]">
+          <button onClick={() => setShowUpload(true)} className="w-full px-4 py-2.5 text-sm font-mono button">
+            + dump text
+          </button>
+        </div>
+      </aside>
 
       {/* Main */}
       <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>

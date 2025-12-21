@@ -855,36 +855,21 @@ function DumpTab({
                   const isExpanded = expandedCards[subcategory];
                   const mainFact = groupFacts[0];
                   
-                  // Extract metadata for chips
-                  const metadata = [];
-                  if (mainFact.timeRef) metadata.push({ type: 'time', value: mainFact.timeRef });
+                  // Show only ONE canonical date chip - the primary date
+                  let dateChip = null;
                   if (mainFact.dateStr && !mainFact.dateStr.startsWith('recurring:')) {
                     try {
                       const date = new Date(mainFact.dateStr);
                       if (!isNaN(date.getTime())) {
-                        metadata.push({ type: 'date', value: `${MONTHS[date.getMonth()]} ${date.getDate()}` });
+                        dateChip = `${MONTHS[date.getMonth()]} ${date.getDate()}`;
                       }
                     } catch (e) {}
                   }
-                  // Extract locations from entities
-                  const locations = mainFact.entities.filter(e => 
-                    ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'Study Hall', '9th Floor Lounge'].some(loc => e.toLowerCase().includes(loc.toLowerCase()))
-                  );
-                  if (locations.length > 0) {
-                    metadata.push({ type: 'location', value: locations[0] });
-                  }
-                  
-                  // Create summary line
-                  const summaryParts = [];
-                  if (mainFact.category) summaryParts.push(mainFact.category);
-                  if (locations.length > 0) summaryParts.push(locations[0]);
-                  if (mainFact.timeRef) summaryParts.push(mainFact.timeRef);
-                  const summary = summaryParts.join(' • ');
                   
                   return (
                     <div key={subcategory} className="animate-slide-in flex justify-center">
                       <div 
-                        className={`w-full max-w-[720px] ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:border-[var(--highlight-red)] transition-colors`}
+                        className={`w-full max-w-[650px] ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:border-[var(--highlight-red)]/40 transition-colors`}
                         style={getCardStyle(mainFact.category)}
                       >
                         {/* Two-Column Header */}
@@ -892,41 +877,30 @@ function DumpTab({
                           onClick={() => toggleCard(subcategory)}
                           className="w-full p-4 text-left transition-colors"
                         >
-                          {/* Header Row: Title left, Metadata chips right */}
-                          <div className="flex items-start justify-between gap-4 mb-3">
+                          {/* Header Row: Title and date on same baseline */}
+                          <div className="flex items-baseline justify-between gap-4 mb-2">
                             {/* Left: Title */}
                             <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1">
                               {subcategory}
-                              <span className="text-xs text-[var(--text-meta)] font-mono ml-2">({groupFacts.length})</span>
                             </h3>
                             
-                            {/* Right: Metadata Chips */}
-                            <div className="flex items-center gap-2 flex-wrap justify-end">
-                              {metadata.map((meta, idx) => (
-                                <span
-                                  key={idx}
-                                  className={`text-xs px-2 py-1 rounded-md border font-mono ${
-                                    meta.type === 'time' || meta.type === 'date'
-                                      ? 'text-[var(--highlight-red)] border-[var(--highlight-red)]/30 bg-[var(--highlight-red)]/5'
-                                      : 'text-[var(--highlight-blue)] border-[var(--highlight-blue)]/30 bg-[var(--highlight-blue)]/5'
-                                  }`}
-                                >
-                                  {meta.value}
+                            {/* Right: Single pale date chip + expand arrow */}
+                            <div className="flex items-baseline gap-2">
+                              {dateChip && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono text-[var(--text-meta)] border-[var(--text-meta)]/20 bg-[var(--text-meta)]/3">
+                                  {dateChip}
                                 </span>
-                              ))}
-                              {/* Expand indicator */}
-                              <span className="text-[var(--text-meta)] text-sm ml-1">
+                              )}
+                              <span className="text-[var(--text-meta)] text-sm">
                                 {isExpanded ? '▾' : '▸'}
                               </span>
                             </div>
                           </div>
                           
-                          {/* Sub-summary line */}
-                          {summary && (
-                            <p className="text-sm text-[var(--text-on-card)] opacity-70 font-light">
-                              {summary}
-                            </p>
-                          )}
+                          {/* True summary: the actual event description */}
+                          <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                            {mainFact.content}
+                          </p>
                         </button>
                         
                         {/* Expanded body content - Wikipedia style */}

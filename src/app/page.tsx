@@ -67,22 +67,37 @@ interface BreadcrumbItem {
 
 // Semantic card system - cream cards with colored left borders
 // Card backgrounds - warm cream for all cards
-const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg shadow-[0_-1px_2px_rgba(0,0,0,0.2)]';
+const CARD_BG = 'bg-[var(--card-bg)] rounded-lg';
 
-// Category color overlays - dusty, muted (15-20% less saturation)
+// Category color overlays - desaturated to 80-85% (dusty, unified undertone)
 const CATEGORY_OVERLAY: Record<string, string> = {
-  social: 'rgba(190, 130, 150, 0.18)', // dusty pink (desaturated red)
-  professional: 'rgba(100, 130, 145, 0.18)', // dusty blue (desaturated)
-  events: 'rgba(190, 130, 150, 0.18)', // dusty pink
-  pledging: 'rgba(100, 130, 145, 0.18)', // dusty blue
-  meetings: 'rgba(100, 130, 145, 0.18)', // dusty blue
-  other: 'rgba(190, 130, 150, 0.18)', // dusty pink
+  social: 'rgba(185, 135, 152, 0.18)', // dusty pink - desaturated, warmer
+  professional: 'rgba(105, 135, 148, 0.18)', // dusty blue-green - desaturated
+  events: 'rgba(185, 135, 152, 0.18)', // dusty pink
+  pledging: 'rgba(105, 135, 148, 0.18)', // dusty blue-green
+  meetings: 'rgba(105, 135, 148, 0.18)', // dusty blue-green
+  other: 'rgba(185, 135, 152, 0.18)', // dusty pink
+};
+
+// Border colors - darker, dustier tones matching each overlay
+const CATEGORY_BORDER: Record<string, string> = {
+  social: '#d7b7b2', // darker dusty pink border
+  professional: '#9fb5b8', // darker dusty blue-green border
+  events: '#d7b7b2',
+  pledging: '#9fb5b8',
+  meetings: '#9fb5b8',
+  other: '#d7b7b2',
 };
 
 const getCardStyle = (category?: string) => {
-  const overlay = category ? CATEGORY_OVERLAY[category.toLowerCase()] || CATEGORY_OVERLAY.other : CATEGORY_OVERLAY.other;
+  const cat = category?.toLowerCase() || 'other';
+  const overlay = CATEGORY_OVERLAY[cat] || CATEGORY_OVERLAY.other;
+  const border = CATEGORY_BORDER[cat] || CATEGORY_BORDER.other;
   return {
     background: `linear-gradient(${overlay}, ${overlay}), var(--card-bg)`,
+    borderColor: border,
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
   };
 };
 
@@ -328,7 +343,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
               <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
                 admin
               </p>
-              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] card space-y-4`}>
+              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] card space-y-4`}>
                 <div className="flex items-start gap-2">
                   <span className="text-[var(--highlight-red)] font-mono text-sm">$</span>
                   <div className="flex-1">
@@ -354,7 +369,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
               <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
                 user
               </p>
-              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] card space-y-3`}>
+              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] card space-y-3`}>
                 <div className="flex items-center gap-2">
                   <span className="text-[var(--highlight-red)] font-mono text-sm">START</span>
                   <span className="text-[var(--text-meta)]">→</span>
@@ -1075,7 +1090,7 @@ function DumpTab() {
                   return (
                     <div key={subcategory} className="animate-slide-in">
                       <div 
-                        className={`${CARD_BG} ${CARD_CLASS} overflow-hidden`}
+                        className={`${CARD_BG} border ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                         style={getCardStyle(mainFact.category)}
                       >
                         {/* Header */}
@@ -1152,7 +1167,7 @@ function DumpTab() {
                 {groupedFacts.ungrouped.map((fact) => (
                   <div 
                     key={fact.id} 
-                    className={`p-4 ${CARD_BG} ${CARD_CLASS} animate-slide-in`}
+                    className={`p-4 ${CARD_BG} border ${CARD_CLASS} animate-slide-in shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                     style={getCardStyle(fact.category)}
                   >
                     <p className="text-[var(--text-on-card)] text-sm leading-relaxed mb-3 font-light">
@@ -1207,7 +1222,7 @@ function DumpTab() {
                               return (
                                 <div
                                   key={fact.id}
-                                  className={`text-[10px] px-1.5 py-0.5 rounded bg-[var(--card-bg)] border border-[var(--card-border)] card truncate`}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded-lg bg-[var(--card-bg)] border card truncate shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                                   style={getCardStyle(fact.category)}
                                   title={fact.content}
                                 >
@@ -1230,7 +1245,7 @@ function DumpTab() {
               </div>
               {recurringFacts.length > 0 && (
                 <div 
-                  className="mt-6 p-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] card"
+                  className="mt-6 p-4 rounded-lg border bg-[var(--card-bg)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] card"
                   style={getCardStyle('other')}
                 >
                   <h3 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3">↻ recurring</h3>
@@ -1241,7 +1256,7 @@ function DumpTab() {
                       );
                       const hasPeople = fact.entities.length > 0 && !hasLocation;
                       return (
-                        <div key={fact.id} className={`text-xs px-2 py-1 rounded bg-[var(--card-bg)] border border-[var(--card-border)] card`}>
+                        <div key={fact.id} className={`text-xs px-2 py-1 rounded-lg bg-[var(--card-bg)] border card shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`} style={getCardStyle(fact.category)}>
                           <span className="text-[var(--highlight-blue)] font-mono">{fact.dateStr?.replace('recurring:', '')}</span>
                           <span className="mx-1.5 text-[var(--text-meta)]">·</span>
                           <span className="text-[var(--text-on-card)]">{fact.subcategory || fact.content.slice(0, 30)}</span>
@@ -1279,7 +1294,7 @@ function DumpTab() {
                   {uploads.map((upload) => (
                     <div 
                       key={upload.id} 
-                      className={`p-4 ${CARD_BG} ${CARD_CLASS}`}
+                      className={`p-4 ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
@@ -1315,7 +1330,7 @@ function DumpTab() {
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
-          <div className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-lg border border-[var(--card-border)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] p-6 animate-expand-in`} onClick={(e) => e.stopPropagation()}>
+          <div className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-lg border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] p-6 animate-expand-in`} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-medium text-[var(--text-on-card)] mb-4">dump text<span className="text-[var(--highlight-red)]">_</span></h2>
             <textarea
               autoFocus

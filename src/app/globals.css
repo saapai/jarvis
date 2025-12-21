@@ -16,12 +16,12 @@
   --bg-active: #21272f; /* sidebar active */
   --bg-elevated: #16191d;
 
-  /* Card Backgrounds - Unified with background (slightly cooler) */
-  --card-bg: #d4c8b8; /* slightly cooler cream to match blue-charcoal */
-  --card-border: #c4b5a0; /* darker by ~10% for internal structure */
-  --card-radius: 8px; /* rounded-lg - controlled, geometric */
-  --card-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2); /* top shadow only - paper inset */
-  --card-hover: #dcd0c0; /* lamp over a note */
+  /* Card Backgrounds - Unified undertone (warmer, slightly pinkish cream) */
+  --card-bg: #d6c9ba; /* warmer, slightly pinkish cream - unified undertone */
+  --card-border: #c4b5a0; /* base border for cream cards */
+  --card-radius: 8px; /* rounded-lg - intentional geometry */
+  --card-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.15); /* soft inner lip */
+  --card-hover: #ded2c4; /* lamp over a note */
 
   /* Text Colors - Hierarchy & softer contrast */
   --text-on-dark: #d9ccba; /* darker warm cream text on dark */

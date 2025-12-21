@@ -69,14 +69,14 @@ interface BreadcrumbItem {
 // Card backgrounds - warm cream for all cards
 const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-[var(--card-radius)] shadow-[var(--card-shadow)]';
 
-// Category color overlays - subtle red or blue wash
+// Category color overlays - more prominent red or blue wash
 const CATEGORY_OVERLAY: Record<string, string> = {
-  social: 'rgba(206, 96, 135, 0.08)', // red overlay
-  professional: 'rgba(59, 124, 150, 0.08)', // blue overlay
-  events: 'rgba(206, 96, 135, 0.08)', // red overlay
-  pledging: 'rgba(59, 124, 150, 0.08)', // blue overlay
-  meetings: 'rgba(59, 124, 150, 0.08)', // blue overlay
-  other: 'rgba(206, 96, 135, 0.08)', // red overlay
+  social: 'rgba(206, 96, 135, 0.18)', // stronger red overlay
+  professional: 'rgba(59, 124, 150, 0.18)', // stronger blue overlay
+  events: 'rgba(206, 96, 135, 0.18)', // stronger red overlay
+  pledging: 'rgba(59, 124, 150, 0.18)', // stronger blue overlay
+  meetings: 'rgba(59, 124, 150, 0.18)', // stronger blue overlay
+  other: 'rgba(206, 96, 135, 0.18)', // stronger red overlay
 };
 
 const getCardStyle = (category?: string) => {

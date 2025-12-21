@@ -1230,7 +1230,7 @@ function DumpTab() {
               </div>
               {recurringFacts.length > 0 && (
                 <div 
-                  className="mt-6 p-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] card"
+                  className="mt-6 p-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] card"
                   style={getCardStyle('other')}
                 >
                   <h3 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3">↻ recurring</h3>

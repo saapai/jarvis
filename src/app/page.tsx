@@ -1342,10 +1342,10 @@ export default function Home() {
       <header className={`fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)] border-b border-[var(--border-subtle)] transition-transform duration-300 ${
         headerVisible ? 'translate-y-0' : '-translate-y-full'
       }`}>
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto pr-4 h-14 flex items-center justify-between">
           {/* Left: Navigation Icons + Breadcrumbs */}
           <div className="flex items-center gap-3">
-            {/* Home (Inbox) - deselects when filtering */}
+            {/* Home (Inbox) - deselects when filtering - flush left */}
             <button
               onClick={handleHomeClick}
               className={`p-2 rounded-lg transition-colors ${

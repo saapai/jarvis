@@ -905,7 +905,24 @@ function DumpTab({
                                         }
                                       }}
                                       onTimeClick={(timeText) => {
-                                        // Switch to calendar view when clicking a time - update parent first
+                                        // Parse date from fact to navigate to correct month
+                                        if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
+                                          try {
+                                            const date = new Date(fact.dateStr);
+                                            if (!isNaN(date.getTime())) {
+                                              // Update calendar to show this month
+                                              const newDate = { year: date.getFullYear(), month: date.getMonth() };
+                                              if (setParentCalendarDate) {
+                                                setParentCalendarDate(newDate);
+                                              } else {
+                                                setCalendarDate(newDate);
+                                              }
+                                            }
+                                          } catch (e) {
+                                            console.log('Could not parse date:', fact.dateStr);
+                                          }
+                                        }
+                                        // Switch to calendar view - update parent first
                                         if (setParentViewMode) {
                                           setParentViewMode('calendar');
                                         }
@@ -957,7 +974,24 @@ function DumpTab({
                           // For ungrouped facts, we can't auto-expand but we ensure filtering works
                         }}
                         onTimeClick={(timeText) => {
-                          // Switch to calendar view when clicking a time - update parent first
+                          // Parse date from fact to navigate to correct month
+                          if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
+                            try {
+                              const date = new Date(fact.dateStr);
+                              if (!isNaN(date.getTime())) {
+                                // Update calendar to show this month
+                                const newDate = { year: date.getFullYear(), month: date.getMonth() };
+                                if (setParentCalendarDate) {
+                                  setParentCalendarDate(newDate);
+                                } else {
+                                  setCalendarDate(newDate);
+                                }
+                              }
+                            } catch (e) {
+                              console.log('Could not parse date:', fact.dateStr);
+                            }
+                          }
+                          // Switch to calendar view - update parent first
                           if (setParentViewMode) {
                             setParentViewMode('calendar');
                           }
@@ -970,6 +1004,27 @@ function DumpTab({
                       {fact.timeRef && (
                         <button 
                           onClick={() => {
+                            // Parse date from fact to navigate to correct month
+                            if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
+                              try {
+                                const date = new Date(fact.dateStr);
+                                if (!isNaN(date.getTime())) {
+                                  // Update calendar to show this month
+                                  const newDate = { year: date.getFullYear(), month: date.getMonth() };
+                                  if (setParentCalendarDate) {
+                                    setParentCalendarDate(newDate);
+                                  } else {
+                                    setCalendarDate(newDate);
+                                  }
+                                }
+                              } catch (e) {
+                                console.log('Could not parse date:', fact.dateStr);
+                              }
+                            }
+                            // Switch to calendar view
+                            if (setParentViewMode) {
+                              setParentViewMode('calendar');
+                            }
                             updateViewMode('calendar');
                           }} 
                           className="text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 font-mono transition-colors cursor-pointer"

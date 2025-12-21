@@ -67,16 +67,16 @@ interface BreadcrumbItem {
 
 // Semantic card system - cream cards with colored left borders
 // Card backgrounds - warm cream for all cards
-const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-[var(--card-radius)] shadow-[var(--card-shadow)]';
+const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg shadow-[0_-1px_2px_rgba(0,0,0,0.2)]';
 
-// Category color overlays - more prominent red or blue wash
+// Category color overlays - dusty, muted (15-20% less saturation)
 const CATEGORY_OVERLAY: Record<string, string> = {
-  social: 'rgba(206, 96, 135, 0.18)', // stronger red overlay
-  professional: 'rgba(59, 124, 150, 0.18)', // stronger blue overlay
-  events: 'rgba(206, 96, 135, 0.18)', // stronger red overlay
-  pledging: 'rgba(59, 124, 150, 0.18)', // stronger blue overlay
-  meetings: 'rgba(59, 124, 150, 0.18)', // stronger blue overlay
-  other: 'rgba(206, 96, 135, 0.18)', // stronger red overlay
+  social: 'rgba(190, 130, 150, 0.18)', // dusty pink (desaturated red)
+  professional: 'rgba(100, 130, 145, 0.18)', // dusty blue (desaturated)
+  events: 'rgba(190, 130, 150, 0.18)', // dusty pink
+  pledging: 'rgba(100, 130, 145, 0.18)', // dusty blue
+  meetings: 'rgba(100, 130, 145, 0.18)', // dusty blue
+  other: 'rgba(190, 130, 150, 0.18)', // dusty pink
 };
 
 const getCardStyle = (category?: string) => {
@@ -328,7 +328,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
               <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
                 admin
               </p>
-              <div className={`bg-[var(--card-bg)] rounded-[var(--card-radius)] p-6 border border-[var(--card-border)] shadow-[var(--card-shadow)] card space-y-4`}>
+              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] card space-y-4`}>
                 <div className="flex items-start gap-2">
                   <span className="text-[var(--highlight-red)] font-mono text-sm">$</span>
                   <div className="flex-1">
@@ -354,7 +354,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
               <p className="text-xs uppercase tracking-widest text-[var(--text-meta)] mb-4 font-mono">
                 user
               </p>
-              <div className={`bg-[var(--card-bg)] rounded-[var(--card-radius)] p-6 border border-[var(--card-border)] shadow-[var(--card-shadow)] card space-y-3`}>
+              <div className={`bg-[var(--card-bg)] rounded-lg p-6 border border-[var(--card-border)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] card space-y-3`}>
                 <div className="flex items-center gap-2">
                   <span className="text-[var(--highlight-red)] font-mono text-sm">START</span>
                   <span className="text-[var(--text-meta)]">→</span>
@@ -1315,7 +1315,7 @@ function DumpTab() {
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
-          <div className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-[var(--card-radius)] border border-[var(--card-border)] shadow-[var(--card-shadow)] p-6 animate-expand-in`} onClick={(e) => e.stopPropagation()}>
+          <div className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-lg border border-[var(--card-border)] shadow-[0_-1px_2px_rgba(0,0,0,0.2)] p-6 animate-expand-in`} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-medium text-[var(--text-on-card)] mb-4">dump text<span className="text-[var(--highlight-red)]">_</span></h2>
             <textarea
               autoFocus

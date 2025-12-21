@@ -16,12 +16,12 @@
   --bg-active: #21272f; /* sidebar active */
   --bg-elevated: #16191d;
 
-  /* Card Backgrounds - Much darker warm paper */
-  --card-bg: #d9ccba; /* much darker, warmer cream */
-  --card-border: rgba(0, 0, 0, 0.12); /* subtle border */
-  --card-radius: 10px; /* less pill, more index card */
-  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
-  --card-hover: #e0d4c4; /* lamp over a note */
+  /* Card Backgrounds - Unified with background (slightly cooler) */
+  --card-bg: #d4c8b8; /* slightly cooler cream to match blue-charcoal */
+  --card-border: #c4b5a0; /* darker by ~10% for internal structure */
+  --card-radius: 8px; /* rounded-lg - controlled, geometric */
+  --card-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2); /* top shadow only - paper inset */
+  --card-hover: #dcd0c0; /* lamp over a note */
 
   /* Text Colors - Hierarchy & softer contrast */
   --text-on-dark: #d9ccba; /* darker warm cream text on dark */

@@ -825,12 +825,12 @@ function DumpTab() {
       )}
 
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[var(--border-subtle)] bg-[var(--bg-main)] flex flex-col z-40 transition-transform duration-300`}>
-        <div className="p-6 border-b border-[var(--border-subtle)]">
-          <h1 className="text-lg font-light text-[var(--text-on-dark)] tracking-tight">
+      <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed top-0 left-0 h-full w-72 border-r border-[rgba(255,255,255,0.04)] bg-[var(--bg-secondary)] flex flex-col z-40 transition-transform duration-300`}>
+        <div className="p-6 border-b border-[rgba(255,255,255,0.04)]">
+          <h1 className="text-lg font-medium text-[var(--text-on-dark)] tracking-tight">
             dump<span className="text-[var(--highlight-red)]">_</span>
           </h1>
-          <p className="text-xs text-[var(--text-meta)] mt-1 font-mono">{tree?.totalFacts ?? 0} facts</p>
+          <p className="text-xs text-[var(--text-sidebar)] mt-1 font-mono opacity-70">{tree?.totalFacts ?? 0} facts</p>
         </div>
 
         {/* View Tabs */}
@@ -856,7 +856,7 @@ function DumpTab() {
           <button
             onClick={() => navigateTo('all', '', 'all')}
             className={`w-full text-left px-6 py-2 text-sm transition-colors ${
-              currentFilter.type === 'all' ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+              currentFilter.type === 'all' ? 'bg-[var(--bg-active)] text-[var(--text-on-dark)] font-medium rounded-md mx-2' : 'text-[var(--text-sidebar)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-on-dark)]'
             }`}
           >
             <span className="opacity-50 mr-2">~</span>all
@@ -864,7 +864,7 @@ function DumpTab() {
 
           {/* Categories */}
           <div className="mt-3">
-            <button onClick={() => toggleSection('categories')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-meta)] hover:text-[var(--text-on-dark)] flex items-center gap-2">
+            <button onClick={() => toggleSection('categories')} className="w-full text-left px-6 py-2 text-xs uppercase tracking-wider text-[var(--text-sidebar)] opacity-70 hover:opacity-100 hover:text-[var(--text-on-dark)] flex items-center gap-2">
               <span className={`transition-transform ${expandedSections.categories ? 'rotate-90' : ''}`}>▸</span>
               categories
             </button>
@@ -879,7 +879,7 @@ function DumpTab() {
                   <button
                     onClick={() => navigateTo('category', cat.name, cat.name)}
                     className={`flex-1 text-left ${cat.subcategories.length > 0 ? 'pl-1' : 'pl-6'} pr-6 py-1.5 text-sm transition-colors ${
-                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'text-[var(--highlight-blue)] bg-[rgba(52,124,147,0.16)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+                      currentFilter.type === 'category' && currentFilter.value === cat.name ? 'bg-[var(--bg-active)] text-[var(--text-on-dark)] font-medium rounded-md mr-2' : 'text-[var(--text-sidebar)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-on-dark)]'
                     }`}
                   >
                     {!cat.subcategories.length && <span className="opacity-30 mr-2">├─</span>}
@@ -1074,7 +1074,7 @@ function DumpTab() {
                         >
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-3">
-                              <h3 className="text-sm font-medium text-[var(--text-on-card)]">
+                              <h3 className="text-sm font-medium text-[var(--text-on-card-title)] card-title">
                                 {subcategory}
                               </h3>
                               {mainFact.timeRef && (

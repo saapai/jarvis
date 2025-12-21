@@ -8,31 +8,33 @@
 
 :root {
   /* Global Background - Warm blue-charcoal (nighttime beach) */
-  --bg-main: #181d21; /* warmer, softer twilight */
-  --bg-primary: #181d21;
-  --bg-secondary: #15191d; /* navbar/elevated */
+  --bg-main: #171b1f; /* warmer, softer twilight */
+  --bg-primary: #171b1f;
+  --bg-secondary: #13171b; /* sidebar - darker, calmer */
   --bg-tertiary: #1c1f23;
   --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(255, 255, 255, 0.08);
-  --bg-elevated: #15191d;
+  --bg-active: #1e262d; /* sidebar active */
+  --bg-elevated: #13171b;
 
-  /* Card Backgrounds - Warm paper (not LED panels) */
-  --card-bg: #f3ebdd; /* slightly darker, warmer cream */
-  --card-border: rgba(255, 255, 255, 0.06); /* subtle hairline */
-  --card-radius: 10px; /* less pill-y */
-  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  --card-hover: #f7efe1; /* lamp over a note */
+  /* Card Backgrounds - Warm paper (index cards, not pills) */
+  --card-bg: #f1e7d7; /* warmer, darker cream - paper feel */
+  --card-border: rgba(0, 0, 0, 0.12); /* subtle border */
+  --card-radius: 10px; /* less pill, more index card */
+  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  --card-hover: #f5ebe0; /* lamp over a note */
 
-  /* Text Colors - Softer contrast */
-  --text-on-dark: #f3ebdd; /* warm cream text on dark */
-  --text-on-card: #333537; /* softer, not harsh black */
+  /* Text Colors - Hierarchy & softer contrast */
+  --text-on-dark: #f1e7d7; /* warm cream text on dark */
+  --text-on-card: #494b4e; /* softer body text */
+  --text-on-card-title: #2f3235; /* stronger titles */
   --text-meta: #7e858c; /* softened blue-grey metadata */
+  --text-sidebar: #c5c9d0; /* sidebar text */
 
   /* Text hierarchy (for compatibility) */
   --text-primary: var(--text-on-dark);
   --text-body: var(--text-on-card);
-  --text-secondary: rgba(243, 235, 221, 0.85);
-  --text-tertiary: rgba(243, 235, 221, 0.7);
+  --text-secondary: rgba(241, 231, 215, 0.85);
+  --text-tertiary: rgba(241, 231, 215, 0.7);
   --text-muted: var(--text-meta);
 
   /* Highlight Colors - Designed, not default-web */
@@ -77,11 +79,17 @@ html {
 }
 
 body {
-  background: var(--bg-main);
+  background: radial-gradient(
+    circle at top,
+    #20252b 0%,
+    #171b1f 45%,
+    #14171b 100%
+  ); /* soft twilight, not flat black */
   color: var(--text-on-dark);
   font-family: 'JetBrains Mono', monospace;
-  font-weight: 300;
+  font-weight: 400;
   letter-spacing: 0.01em;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   max-width: 100vw;
@@ -118,23 +126,24 @@ body {
   background: var(--text-tertiary);
 }
 
-/* Intentional hyperlinks - designed, not default-web */
+/* Intentional hyperlinks - literal highlights */
 a {
-  color: var(--highlight-blue);
+  color: #347c93;
   text-decoration: none;
   padding: 0 2px;
   border-radius: 3px;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 a:hover {
-  background-color: rgba(59, 124, 150, 0.22); /* literal highlight */
-  color: var(--text-on-dark);
+  background-color: rgba(52, 124, 147, 0.23); /* soft highlight */
+  color: #f8f0e3; /* cream-on-blue */
 }
 
 /* Card hover effect - lamp over a note */
 .card {
   transition: all 0.2s ease;
+  margin-bottom: 10px; /* reduce black bands between cards */
 }
 
 .card:hover {
@@ -157,6 +166,12 @@ a:hover {
   background: rgba(206, 96, 135, 0.18); /* red highlight */
   color: var(--highlight-red);
   border-color: var(--highlight-red);
+}
+
+/* Card title - stronger hierarchy */
+h3.card-title {
+  font-weight: 500;
+  color: var(--text-on-card-title);
 }
 
 /* Input styles */

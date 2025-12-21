@@ -1240,12 +1240,12 @@ function DumpTab() {
             /* Uploads Management View */
             <div className="animate-fade-in space-y-4">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-medium text-[var(--text-primary)]">
-                  uploads<span className="text-[var(--color-action)]">_</span>
+                <h2 className="text-lg font-medium text-[var(--text-on-dark)]">
+                  uploads<span className="text-[var(--highlight-red)]">_</span>
                 </h2>
                 <button 
                   onClick={() => setShowUpload(true)}
-                  className="px-4 py-2 text-sm font-medium text-[var(--bg-primary)] bg-[var(--color-action)] rounded hover:opacity-90 transition-colors"
+                  className="px-4 py-2 text-sm font-mono button"
                 >
                   + new upload
                 </button>
@@ -1253,8 +1253,8 @@ function DumpTab() {
               
               {uploads.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-center">
-                  <p className="text-[var(--text-tertiary)]">no uploads yet</p>
-                  <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--accent)] hover:underline">
+                  <p className="text-[var(--text-meta)]">no uploads yet</p>
+                  <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-2 transition-colors">
                     dump some text
                   </button>
                 </div>
@@ -1263,26 +1263,26 @@ function DumpTab() {
                   {uploads.map((upload) => (
                     <div 
                       key={upload.id} 
-                      className="p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--border)] transition-colors"
+                      className={`p-4 ${CARD_BG} ${CARD_CLASS}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-[var(--text-primary)] truncate">
+                          <h3 className="font-medium text-[var(--text-on-card)] truncate">
                             {upload.name}
                           </h3>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-tertiary)]">
+                          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-meta)]">
                             <span>{upload.factCount} facts</span>
                             <span>•</span>
                             <span>{new Date(upload.createdAt).toLocaleDateString()}</span>
                           </div>
-                          <p className="mt-2 text-sm text-[var(--text-secondary)] line-clamp-2">
+                          <p className="mt-2 text-sm text-[var(--text-on-card)] line-clamp-2 opacity-80">
                             {upload.rawText.slice(0, 200)}...
                           </p>
                         </div>
                         <button
                           onClick={() => deleteUpload(upload.id)}
                           disabled={deletingUpload === upload.id}
-                          className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded transition-colors disabled:opacity-50"
+                          className="px-3 py-1.5 text-xs text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] rounded transition-colors disabled:opacity-50"
                         >
                           {deletingUpload === upload.id ? 'deleting...' : 'delete'}
                         </button>

@@ -637,6 +637,67 @@ function DumpTab({
   };
 
   // Group facts by subcategory
+  // Helper function to calculate days until/since event and map to urgency bucket
+  const getUrgencyBucket = (dateStr: string | null, isPast: boolean): 'critical' | 'high' | 'medium' | 'low' | 'minimal' => {
+    if (!dateStr || dateStr.startsWith('recurring:')) return 'minimal';
+    
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return 'minimal';
+      
+      const eventDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      eventDate.setHours(0, 0, 0, 0);
+      
+      const diffTime = eventDate.getTime() - today.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (isPast) {
+        // For past events: invert the mapping (yesterday = more saturated, older = more neutral)
+        // diffDays will be negative for past events, so we use -diffDays to get days since
+        const daysSince = -diffDays;
+        if (daysSince === 1) return 'high'; // Yesterday
+        if (daysSince <= 3) return 'medium';
+        if (daysSince <= 7) return 'low';
+        return 'minimal';
+      } else {
+        // For future events: normal urgency mapping
+        if (diffDays === 0) return 'critical';
+        if (diffDays >= 1 && diffDays <= 3) return 'high';
+        if (diffDays >= 4 && diffDays <= 7) return 'medium';
+        if (diffDays >= 8 && diffDays <= 14) return 'low';
+        return 'minimal';
+      }
+    } catch (e) {
+      return 'minimal';
+    }
+  };
+
+  // Helper function to get date chip Tailwind classes based on urgency
+  const getDateChipClasses = (urgency: 'critical' | 'high' | 'medium' | 'low' | 'minimal'): string => {
+    const baseClasses = 'text-[10px] px-1.5 py-0.5 rounded border font-mono';
+    
+    switch (urgency) {
+      case 'critical':
+        // Stronger red background, red border, darker red text
+        return `${baseClasses} text-[#ce6087] border-[#ce6087] bg-[rgba(206,96,135,0.25)]`;
+      case 'high':
+        // Lighter red/pink background, soft red border, normal text
+        return `${baseClasses} text-[var(--text-meta)] border-[rgba(206,96,135,0.4)] bg-[rgba(206,96,135,0.12)]`;
+      case 'medium':
+        // Very light pink background, subtle border
+        return `${baseClasses} text-[var(--text-meta)] border-[rgba(206,96,135,0.25)] bg-[rgba(206,96,135,0.08)]`;
+      case 'low':
+        // Almost neutral background, hairline border
+        return `${baseClasses} text-[var(--text-meta)] border-[var(--text-meta)]/15 bg-[var(--text-meta)]/5`;
+      case 'minimal':
+      default:
+        // Neutral background, very faint border
+        return `${baseClasses} text-[var(--text-meta)] border-[var(--text-meta)]/20 bg-[var(--text-meta)]/3`;
+    }
+  };
+
   // Helper function to get card style based on column (left = red, right = blue-green)
   const getColumnCardStyle = (columnType: 'left' | 'right') => {
     if (columnType === 'left') {
@@ -659,7 +720,7 @@ function DumpTab({
   };
 
   // Helper function to render a fact card
-  const renderFactCard = (fact: Fact, groupFacts: Fact[], columnType: 'left' | 'right') => {
+  const renderFactCard = (fact: Fact, groupFacts: Fact[], columnType: 'left' | 'right', isPastEvent: boolean = false) => {
     if (!fact.subcategory) return null;
     
     const subcategory = fact.subcategory.toLowerCase();
@@ -668,6 +729,8 @@ function DumpTab({
     
     // Show only ONE canonical date chip - the primary date (fix UTC offset issue)
     let dateChip = null;
+    let urgency: 'critical' | 'high' | 'medium' | 'low' | 'minimal' = 'minimal';
+    
     if (mainFact.dateStr && !mainFact.dateStr.startsWith('recurring:')) {
       try {
         // Parse as UTC to avoid timezone offset issues
@@ -677,13 +740,20 @@ function DumpTab({
           const month = parseInt(parts[1]) - 1; // 0-indexed
           const day = parseInt(parts[2]);
           dateChip = `${MONTHS[month]} ${day}`;
+          
+          // Calculate urgency based on time-to-event
+          urgency = getUrgencyBucket(mainFact.dateStr, isPastEvent);
         }
       } catch (e) {}
     } else if (mainFact.dateStr && mainFact.dateStr.startsWith('recurring:')) {
       // For recurring events, show the day of week
       const day = mainFact.dateStr.replace('recurring:', '');
       dateChip = day.charAt(0).toUpperCase() + day.slice(1, 3);
+      urgency = 'minimal'; // Recurring events always use minimal styling
     }
+    
+    // Get date chip classes based on urgency
+    const dateChipClasses = getDateChipClasses(urgency);
     
     return (
       <div key={fact.id} className="animate-slide-in">
@@ -706,7 +776,7 @@ function DumpTab({
               {/* Right: Single pale date chip + expand arrow */}
               <div className="flex items-baseline gap-2">
                 {dateChip && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono text-[var(--text-meta)] border-[var(--text-meta)]/20 bg-[var(--text-meta)]/3">
+                  <span className={dateChipClasses}>
                     {dateChip}
                   </span>
                 )}
@@ -1096,7 +1166,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.todayFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'left');
+                          return renderFactCard(fact, groupFacts, 'left', false);
                         })}
                       </div>
                     </div>
@@ -1109,7 +1179,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.upcomingFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'left');
+                          return renderFactCard(fact, groupFacts, 'left', false);
                         })}
                       </div>
                     </div>
@@ -1132,7 +1202,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.recurringFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'right');
+                          return renderFactCard(fact, groupFacts, 'right', false);
                         })}
                       </div>
                     </div>
@@ -1145,7 +1215,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.staticFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'right');
+                          return renderFactCard(fact, groupFacts, 'right', false);
                         })}
                       </div>
                     </div>
@@ -1158,7 +1228,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.oldFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'right');
+                          return renderFactCard(fact, groupFacts, 'right', true);
                         })}
                       </div>
                     </div>

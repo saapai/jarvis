@@ -855,41 +855,81 @@ function DumpTab({
                   const isExpanded = expandedCards[subcategory];
                   const mainFact = groupFacts[0];
                   
+                  // Extract metadata for chips
+                  const metadata = [];
+                  if (mainFact.timeRef) metadata.push({ type: 'time', value: mainFact.timeRef });
+                  if (mainFact.dateStr && !mainFact.dateStr.startsWith('recurring:')) {
+                    try {
+                      const date = new Date(mainFact.dateStr);
+                      if (!isNaN(date.getTime())) {
+                        metadata.push({ type: 'date', value: `${MONTHS[date.getMonth()]} ${date.getDate()}` });
+                      }
+                    } catch (e) {}
+                  }
+                  // Extract locations from entities
+                  const locations = mainFact.entities.filter(e => 
+                    ['Rieber Terrace', 'Kelton', 'Levering', 'apartment', 'lounge', 'floor', 'room', 'building', 'terrace', 'Study Hall', '9th Floor Lounge'].some(loc => e.toLowerCase().includes(loc.toLowerCase()))
+                  );
+                  if (locations.length > 0) {
+                    metadata.push({ type: 'location', value: locations[0] });
+                  }
+                  
+                  // Create summary line
+                  const summaryParts = [];
+                  if (mainFact.category) summaryParts.push(mainFact.category);
+                  if (locations.length > 0) summaryParts.push(locations[0]);
+                  if (mainFact.timeRef) summaryParts.push(mainFact.timeRef);
+                  const summary = summaryParts.join(' • ');
+                  
                   return (
-                    <div key={subcategory} className="animate-slide-in">
+                    <div key={subcategory} className="animate-slide-in flex justify-center">
                       <div 
-                        className={`${CARD_BG} border ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                        className={`w-full max-w-[720px] ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:border-[var(--highlight-red)] transition-colors`}
                         style={getCardStyle(mainFact.category)}
                       >
-                        {/* Header */}
+                        {/* Two-Column Header */}
                         <button
                           onClick={() => toggleCard(subcategory)}
-                          className="w-full p-4 text-left flex items-start justify-between gap-4 transition-colors"
+                          className="w-full p-4 text-left transition-colors"
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-3">
-                              <h3 className="text-sm font-medium text-[var(--text-on-card-title)] card-title">
-                                {subcategory}
-                              </h3>
-                              {mainFact.timeRef && (
-                                <button
-                                  onClick={() => setViewMode('calendar')}
-                                  className="text-xs text-[var(--highlight-blue)] font-mono hover:bg-[rgba(59,124,150,0.16)] hover:rounded px-1 transition-colors cursor-pointer"
-                                  title="View in calendar"
+                          {/* Header Row: Title left, Metadata chips right */}
+                          <div className="flex items-start justify-between gap-4 mb-3">
+                            {/* Left: Title */}
+                            <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1">
+                              {subcategory}
+                              <span className="text-xs text-[var(--text-meta)] font-mono ml-2">({groupFacts.length})</span>
+                            </h3>
+                            
+                            {/* Right: Metadata Chips */}
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              {metadata.map((meta, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`text-xs px-2 py-1 rounded-md border font-mono ${
+                                    meta.type === 'time' || meta.type === 'date'
+                                      ? 'text-[var(--highlight-red)] border-[var(--highlight-red)]/30 bg-[var(--highlight-red)]/5'
+                                      : 'text-[var(--highlight-blue)] border-[var(--highlight-blue)]/30 bg-[var(--highlight-blue)]/5'
+                                  }`}
                                 >
-                                  @{mainFact.timeRef}
-                                </button>
-                              )}
-                              <span className="text-xs text-[var(--text-meta)] font-mono">({groupFacts.length})</span>
+                                  {meta.value}
+                                </span>
+                              ))}
+                              {/* Expand indicator */}
+                              <span className="text-[var(--text-meta)] text-sm ml-1">
+                                {isExpanded ? '▾' : '▸'}
+                              </span>
                             </div>
-                            <p className="text-sm text-[var(--text-on-card)] font-light leading-relaxed">{mainFact.content}</p>
                           </div>
-                          <span className={`text-[var(--text-meta)] transition-transform`}>
-                            {isExpanded ? '▾' : '▸'}
-                          </span>
+                          
+                          {/* Sub-summary line */}
+                          {summary && (
+                            <p className="text-sm text-[var(--text-on-card)] opacity-70 font-light">
+                              {summary}
+                            </p>
+                          )}
                         </button>
                         
-                        {/* Expanded content */}
+                        {/* Expanded body content - Wikipedia style */}
                         {isExpanded && (
                           <div className="border-t border-[var(--card-border)] p-4 space-y-4 animate-slide-in">
                             {groupFacts.map((fact) => (

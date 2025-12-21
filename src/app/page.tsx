@@ -339,7 +339,9 @@ function DumpTab({
   onFilterChange, 
   onBreadcrumbsChange,
   breadcrumbClickIndex,
-  resetBreadcrumbClick
+  resetBreadcrumbClick,
+  calendarDate: parentCalendarDate,
+  setCalendarDate: setParentCalendarDate
 }: { 
   viewMode?: ViewMode;
   setViewMode?: (mode: ViewMode) => void;
@@ -347,6 +349,8 @@ function DumpTab({
   onBreadcrumbsChange?: (breadcrumbs: BreadcrumbItem[]) => void;
   breadcrumbClickIndex?: number | null;
   resetBreadcrumbClick?: () => void;
+  calendarDate?: { year: number; month: number };
+  setCalendarDate?: (date: { year: number; month: number } | ((prev: { year: number; month: number }) => { year: number; month: number })) => void;
 }) {
   const [tree, setTree] = useState<TreeData | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
@@ -381,6 +385,13 @@ function DumpTab({
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
+  
+  // Sync with parent calendarDate if provided
+  useEffect(() => {
+    if (parentCalendarDate) {
+      setCalendarDate(parentCalendarDate);
+    }
+  }, [parentCalendarDate]);
   
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { type: 'all', value: '', label: 'all' }
@@ -895,7 +906,7 @@ function DumpTab({
                                       }}
                                       onTimeClick={(timeText) => {
                                         // Switch to calendar view when clicking a time
-                                        setViewMode('calendar');
+                                        updateViewMode('calendar');
                                       }}
                                     />
                                   </p>
@@ -944,7 +955,7 @@ function DumpTab({
                         }}
                         onTimeClick={(timeText) => {
                           // Switch to calendar view when clicking a time
-                          setViewMode('calendar');
+                          updateViewMode('calendar');
                         }}
                       />
                     </p>
@@ -953,7 +964,7 @@ function DumpTab({
                       {fact.timeRef && (
                         <button 
                           onClick={() => {
-                            setViewMode('calendar');
+                            updateViewMode('calendar');
                           }} 
                           className="text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 font-mono transition-colors cursor-pointer"
                           title="View in calendar"
@@ -994,25 +1005,34 @@ function DumpTab({
                               const hasTime = fact.timeRef || fact.dateStr;
                               
                               return (
-                                <div
+                                <button
                                   key={fact.id}
-                                  className={`text-[10px] px-1.5 py-0.5 rounded-lg bg-[var(--card-bg)] border card truncate shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                                  onClick={() => {
+                                    // Navigate to the fact's category/subcategory
+                                    if (fact.subcategory && fact.category) {
+                                      navigateTo('subcategory', fact.subcategory, fact.subcategory, fact.category);
+                                    } else if (fact.category) {
+                                      navigateTo('category', fact.category, fact.category);
+                                    }
+                                    // Switch to explore view
+                                    updateViewMode('explore');
+                                  }}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded-lg bg-[var(--card-bg)] border card truncate shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:scale-105 transition-transform cursor-pointer text-left w-full`}
                                   style={getCardStyle(fact.category)}
-                                  title={fact.content}
+                                  title={`${fact.content} - Click to view`}
                                 >
                                   <span className="text-[var(--text-on-card)]">
                                     {fact.subcategory || fact.content.slice(0, 20)}
                                   </span>
                                   {fact.timeRef && (
-                                    <button
-                                      onClick={() => setViewMode('calendar')}
-                                      className="text-[var(--highlight-red)] ml-1 font-mono hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors cursor-pointer"
+                                    <span
+                                      className="text-[var(--highlight-red)] ml-1 font-mono"
                                       title="View in calendar"
                                     >
                                       @{fact.timeRef.slice(0, 8)}
-                                    </button>
+                                    </span>
                                   )}
-                                </div>
+                                </button>
                               );
                             })}
                             {dayFacts.length > 3 && <div className="text-[10px] text-[var(--text-meta)]">+{dayFacts.length - 3}</div>}
@@ -1150,6 +1170,12 @@ export default function Home() {
   const [currentFilter, setCurrentFilter] = useState<BreadcrumbItem>({ type: 'all', value: '', label: 'all' });
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([{ type: 'all', value: '', label: 'all' }]);
   const [breadcrumbClickIndex, setBreadcrumbClickIndex] = useState<number | null>(null);
+  const [calendarDate, setCalendarDate] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   
   const handleHomeClick = () => {
     setViewMode('explore');
@@ -1166,12 +1192,20 @@ export default function Home() {
     setBreadcrumbClickIndex(index);
   };
   
+  const handlePrevMonth = () => {
+    setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
+  };
+  
+  const handleNextMonth = () => {
+    setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
+  };
+  
   return (
     <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Top Navigation - 3 Icons + Breadcrumbs */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          {/* Left: Navigation Icons + Breadcrumbs */}
+          {/* Left: Navigation Icons + Brand + Breadcrumbs */}
           <div className="flex items-center gap-3">
             {/* Home (Inbox) - deselects when filtering */}
             <button
@@ -1186,6 +1220,13 @@ export default function Home() {
               <HomeIcon className="w-5 h-5" />
             </button>
             
+            {/* Brand Name */}
+            <div className="font-extrabold text-base tracking-tight">
+              <span className="text-[var(--highlight-blue)]">/</span>
+              <span className="text-[var(--text-on-dark)]">enclave</span>
+              <span className="text-[var(--highlight-red)]">_</span>
+            </div>
+            
             {/* Calendar */}
             <button
               onClick={() => setViewMode('calendar')}
@@ -1199,27 +1240,51 @@ export default function Home() {
               <CalendarIcon className="w-5 h-5" />
             </button>
             
-            {/* Breadcrumbs - show when in explore mode */}
+            {/* Breadcrumbs - show formatted with slashes and trailing underscore */}
             {viewMode === 'explore' && breadcrumbs.length > 0 && (
-              <div className="flex items-center gap-2 ml-2">
+              <div className="flex items-center gap-1 ml-2 italic text-sm">
                 {breadcrumbs.map((crumb, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    {i > 0 && <span className="text-[var(--text-meta)]">/</span>}
+                  <div key={i} className="flex items-center">
+                    <span className="text-[var(--text-meta)]">/</span>
                     <button
                       onClick={() => handleBreadcrumbClick(i)}
-                      className={`text-sm transition-colors ${
+                      className={`transition-colors ${
                         i === breadcrumbs.length - 1
                           ? 'text-[var(--text-on-dark)]'
-                          : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 py-1 rounded'
+                          : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] px-1 rounded'
                       }`}
                     >
                       {crumb.label}
                     </button>
+                    {i === breadcrumbs.length - 1 && (
+                      <span className="text-[var(--highlight-red)]">_</span>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
+          
+          {/* Center: Calendar Month Navigation (when in calendar view) */}
+          {viewMode === 'calendar' && (
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={handlePrevMonth}
+                className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors"
+              >
+                ←
+              </button>
+              <span className="text-sm text-[var(--text-on-dark)] min-w-[120px] text-center font-mono">
+                {MONTHS[calendarDate.month]} {calendarDate.year}
+              </span>
+              <button 
+                onClick={handleNextMonth}
+                className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors"
+              >
+                →
+              </button>
+            </div>
+          )}
           
           {/* Right: Upload Icon */}
           <button
@@ -1245,6 +1310,8 @@ export default function Home() {
           onBreadcrumbsChange={setBreadcrumbs}
           breadcrumbClickIndex={breadcrumbClickIndex}
           resetBreadcrumbClick={() => setBreadcrumbClickIndex(null)}
+          calendarDate={calendarDate}
+          setCalendarDate={setCalendarDate}
         />
       </main>
     </div>

@@ -333,7 +333,7 @@ function UploadIcon({ className }: { className?: string }) {
 // DUMP TAB CONTENT (Text Explorer)
 // ============================================
 
-function DumpTab() {
+function DumpTab({ onFilterChange }: { onFilterChange?: (filter: BreadcrumbItem) => void }) {
   const [tree, setTree] = useState<TreeData | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
   const [allFacts, setAllFacts] = useState<Fact[]>([]); // For calendar view - all facts
@@ -1067,17 +1067,23 @@ function DumpTab() {
 
 export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
+  const [currentFilter, setCurrentFilter] = useState<BreadcrumbItem>({ type: 'all', value: '', label: 'all' });
+  
+  const handleHomeClick = () => {
+    setViewMode('explore');
+    setCurrentFilter({ type: 'all', value: '', label: 'all' });
+  };
   
   return (
     <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Top Navigation - 3 Icons */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
-          {/* Home (Inbox) */}
+          {/* Home (Inbox) - deselects when filtering */}
           <button
-            onClick={() => setViewMode('explore')}
+            onClick={handleHomeClick}
             className={`p-2 rounded-lg transition-colors ${
-              viewMode === 'explore'
+              viewMode === 'explore' && currentFilter.type === 'all'
                 ? 'text-[var(--text-on-dark)] bg-[var(--bg-active)]'
                 : 'text-[var(--text-sidebar)] hover:text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)]'
             }`}
@@ -1116,7 +1122,7 @@ export default function Home() {
 
       {/* Main Content - Full Width */}
       <main className="pt-14">
-        <DumpTab />
+        <DumpTab onFilterChange={setCurrentFilter} />
       </main>
     </div>
   );

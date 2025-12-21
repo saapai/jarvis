@@ -637,11 +637,154 @@ function DumpTab({
   };
 
   // Group facts by subcategory
+  // Helper function to render a fact card
+  const renderFactCard = (fact: Fact, groupFacts: Fact[]) => {
+    if (!fact.subcategory) return null;
+    
+    const subcategory = fact.subcategory.toLowerCase();
+    const isExpanded = expandedCards[subcategory];
+    const mainFact = groupFacts[0];
+    
+    // Show only ONE canonical date chip - the primary date (fix UTC offset issue)
+    let dateChip = null;
+    if (mainFact.dateStr && !mainFact.dateStr.startsWith('recurring:')) {
+      try {
+        // Parse as UTC to avoid timezone offset issues
+        const parts = mainFact.dateStr.split('-');
+        if (parts.length === 3) {
+          const year = parseInt(parts[0]);
+          const month = parseInt(parts[1]) - 1; // 0-indexed
+          const day = parseInt(parts[2]);
+          dateChip = `${MONTHS[month]} ${day}`;
+        }
+      } catch (e) {}
+    } else if (mainFact.dateStr && mainFact.dateStr.startsWith('recurring:')) {
+      // For recurring events, show the day of week
+      const day = mainFact.dateStr.replace('recurring:', '');
+      dateChip = day.charAt(0).toUpperCase() + day.slice(1, 3);
+    }
+    
+    return (
+      <div key={fact.id} className="animate-slide-in">
+        <div 
+          className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:border-[var(--highlight-red)]/40 transition-colors`}
+          style={getCardStyle(mainFact.category)}
+        >
+          {/* Two-Column Header */}
+          <button
+            onClick={() => toggleCard(fact.subcategory!.toLowerCase())}
+            className="w-full p-4 text-left transition-colors"
+          >
+            {/* Header Row: Title and date on same baseline */}
+            <div className="flex items-baseline justify-between gap-4 mb-2">
+              {/* Left: Title */}
+              <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1">
+                {fact.subcategory}
+              </h3>
+              
+              {/* Right: Single pale date chip + expand arrow */}
+              <div className="flex items-baseline gap-2">
+                {dateChip && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono text-[var(--text-meta)] border-[var(--text-meta)]/20 bg-[var(--text-meta)]/3">
+                    {dateChip}
+                  </span>
+                )}
+                <span className="text-[var(--text-meta)] text-sm">
+                  {isExpanded ? '▾' : '▸'}
+                </span>
+              </div>
+            </div>
+            
+            {/* True summary: the actual event description */}
+            <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+              {mainFact.content}
+            </p>
+          </button>
+          
+          {/* Expanded body content - Wikipedia style */}
+          {isExpanded && (
+            <div className="border-t border-[var(--card-border)] p-4 space-y-4 animate-slide-in">
+              {groupFacts.map((f) => (
+                <div key={f.id} className="text-sm">
+                  {f.sourceText && (
+                    <p className="text-[var(--text-on-card)] leading-relaxed mb-3 font-light">
+                      <HighlightedText 
+                        text={f.sourceText} 
+                        entities={f.entities}
+                        onEntityClick={(e) => {
+                          navigateTo('entity', e.toLowerCase(), e);
+                          if (f.subcategory) {
+                            const key = f.subcategory.toLowerCase();
+                            setExpandedCards(prev => ({ ...prev, [key]: true }));
+                          }
+                        }}
+                        onTimeClick={(timeText) => {
+                          if (f.dateStr && !f.dateStr.startsWith('recurring:')) {
+                            try {
+                              const date = new Date(f.dateStr);
+                              if (!isNaN(date.getTime())) {
+                                const newDate = { year: date.getFullYear(), month: date.getMonth() };
+                                if (setParentCalendarDate) {
+                                  setParentCalendarDate(newDate);
+                                } else {
+                                  setCalendarDate(newDate);
+                                }
+                              }
+                            } catch (e) {
+                              console.log('Could not parse date:', f.dateStr);
+                            }
+                          }
+                          if (setParentViewMode) {
+                            setParentViewMode('calendar');
+                          }
+                          updateViewMode('calendar');
+                        }}
+                      />
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {f.entities.slice(0, 8).map((entity) => (
+                      <button
+                        key={entity}
+                        onClick={() => {
+                          navigateTo('entity', entity.toLowerCase(), entity);
+                          if (f.subcategory) {
+                            const key = f.subcategory.toLowerCase();
+                            setExpandedCards(prev => ({ ...prev, [key]: true }));
+                          }
+                        }}
+                        className="text-xs font-mono text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors"
+                      >
+                        {entity}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const groupedFacts = useMemo(() => {
     const groups: Record<string, Fact[]> = {};
     const ungrouped: Fact[] = [];
     
+    // Categorize facts by time relevance
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    
+    const todayFacts: Fact[] = [];
+    const upcomingFacts: Fact[] = [];
+    const recurringFacts: Fact[] = [];
+    const staticFacts: Fact[] = []; // Facts without dates
+    const oldFacts: Fact[] = [];
+    
     for (const fact of facts) {
+      // Group by subcategory for card rendering
       if (fact.subcategory) {
         const key = fact.subcategory.toLowerCase();
         if (!groups[key]) groups[key] = [];
@@ -649,9 +792,82 @@ function DumpTab({
       } else {
         ungrouped.push(fact);
       }
+      
+      // Categorize by time (use first fact of each subcategory to avoid duplicates)
+      if (fact.subcategory) {
+        const key = fact.subcategory.toLowerCase();
+        const isFirstInGroup = groups[key][0] === fact;
+        
+        if (isFirstInGroup) {
+          if (fact.dateStr) {
+            if (fact.dateStr.startsWith('recurring:')) {
+              recurringFacts.push(fact);
+            } else if (fact.dateStr === todayStr) {
+              todayFacts.push(fact);
+            } else if (fact.dateStr > todayStr) {
+              upcomingFacts.push(fact);
+            } else {
+              oldFacts.push(fact);
+            }
+          } else {
+            staticFacts.push(fact);
+          }
+        }
+      } else {
+        // Ungrouped facts
+        if (fact.dateStr) {
+          if (fact.dateStr.startsWith('recurring:')) {
+            recurringFacts.push(fact);
+          } else if (fact.dateStr === todayStr) {
+            todayFacts.push(fact);
+          } else if (fact.dateStr > todayStr) {
+            upcomingFacts.push(fact);
+          } else {
+            oldFacts.push(fact);
+          }
+        } else {
+          staticFacts.push(fact);
+        }
+      }
     }
     
-    return { groups, ungrouped };
+    // Sort upcoming by date (nearest first)
+    upcomingFacts.sort((a, b) => {
+      if (!a.dateStr || !b.dateStr) return 0;
+      return a.dateStr.localeCompare(b.dateStr);
+    });
+    
+    // Sort old events by date (most recent first - yesterday first)
+    oldFacts.sort((a, b) => {
+      if (!a.dateStr || !b.dateStr) return 0;
+      return b.dateStr.localeCompare(a.dateStr);
+    });
+    
+    // Sort recurring by weekday
+    const weekdayOrder: Record<string, number> = {
+      'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4,
+      'friday': 5, 'saturday': 6, 'sunday': 7
+    };
+    recurringFacts.sort((a, b) => {
+      const aDay = (a.dateStr || '').toLowerCase();
+      const bDay = (b.dateStr || '').toLowerCase();
+      let aOrder = 8, bOrder = 8;
+      for (const [day, order] of Object.entries(weekdayOrder)) {
+        if (aDay.includes(day)) aOrder = order;
+        if (bDay.includes(day)) bOrder = order;
+      }
+      return aOrder - bOrder;
+    });
+    
+    return { 
+      groups, 
+      ungrouped,
+      todayFacts,
+      upcomingFacts,
+      recurringFacts,
+      staticFacts,
+      oldFacts
+    };
   }, [facts]);
 
   // Calendar helpers
@@ -849,214 +1065,84 @@ function DumpTab({
                 <button onClick={() => setShowUpload(true)} className="mt-4 text-sm text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-2 transition-colors">dump some text</button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Grouped facts */}
-                {Object.entries(groupedFacts.groups).map(([subcategory, groupFacts]) => {
-                  const isExpanded = expandedCards[subcategory];
-                  const mainFact = groupFacts[0];
-                  
-                  // Show only ONE canonical date chip - the primary date (fix UTC offset issue)
-                  let dateChip = null;
-                  if (mainFact.dateStr && !mainFact.dateStr.startsWith('recurring:')) {
-                    try {
-                      // Parse as UTC to avoid timezone offset issues
-                      const parts = mainFact.dateStr.split('-');
-                      if (parts.length === 3) {
-                        const year = parseInt(parts[0]);
-                        const month = parseInt(parts[1]) - 1; // 0-indexed
-                        const day = parseInt(parts[2]);
-                        dateChip = `${MONTHS[month]} ${day}`;
-                      }
-                    } catch (e) {}
-                  }
-                  
-                  return (
-                    <div key={subcategory} className="animate-slide-in flex justify-center">
-                      <div 
-                        className={`w-full max-w-[650px] ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:border-[var(--highlight-red)]/40 transition-colors`}
-                        style={getCardStyle(mainFact.category)}
-                      >
-                        {/* Two-Column Header */}
-                        <button
-                          onClick={() => toggleCard(subcategory)}
-                          className="w-full p-4 text-left transition-colors"
-                        >
-                          {/* Header Row: Title and date on same baseline */}
-                          <div className="flex items-baseline justify-between gap-4 mb-2">
-                            {/* Left: Title */}
-                            <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1">
-                              {subcategory}
-                            </h3>
-                            
-                            {/* Right: Single pale date chip + expand arrow */}
-                            <div className="flex items-baseline gap-2">
-                              {dateChip && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono text-[var(--text-meta)] border-[var(--text-meta)]/20 bg-[var(--text-meta)]/3">
-                                  {dateChip}
-                                </span>
-                              )}
-                              <span className="text-[var(--text-meta)] text-sm">
-                                {isExpanded ? '▾' : '▸'}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          {/* True summary: the actual event description */}
-                          <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-                            {mainFact.content}
-                          </p>
-                        </button>
-                        
-                        {/* Expanded body content - Wikipedia style */}
-                        {isExpanded && (
-                          <div className="border-t border-[var(--card-border)] p-4 space-y-4 animate-slide-in">
-                            {groupFacts.map((fact) => (
-                              <div key={fact.id} className="text-sm">
-                                {fact.sourceText && (
-                                  <p className="text-[var(--text-on-card)] leading-relaxed mb-3 font-light">
-                                    <HighlightedText 
-                                      text={fact.sourceText} 
-                                      entities={fact.entities}
-                                      onEntityClick={(e) => {
-                                        navigateTo('entity', e.toLowerCase(), e);
-                                        // Auto-expand the card when clicking an entity within it
-                                        if (fact.subcategory) {
-                                          const key = fact.subcategory.toLowerCase();
-                                          setExpandedCards(prev => ({ ...prev, [key]: true }));
-                                        }
-                                      }}
-                                      onTimeClick={(timeText) => {
-                                        // Parse date from fact to navigate to correct month
-                                        if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
-                                          try {
-                                            const date = new Date(fact.dateStr);
-                                            if (!isNaN(date.getTime())) {
-                                              // Update calendar to show this month
-                                              const newDate = { year: date.getFullYear(), month: date.getMonth() };
-                                              if (setParentCalendarDate) {
-                                                setParentCalendarDate(newDate);
-                                              } else {
-                                                setCalendarDate(newDate);
-                                              }
-                                            }
-                                          } catch (e) {
-                                            console.log('Could not parse date:', fact.dateStr);
-                                          }
-                                        }
-                                        // Switch to calendar view - update parent first
-                                        if (setParentViewMode) {
-                                          setParentViewMode('calendar');
-                                        }
-                                        updateViewMode('calendar');
-                                      }}
-                                    />
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap gap-2">
-                                  {fact.entities.slice(0, 8).map((entity) => (
-                                    <button
-                                      key={entity}
-                                      onClick={() => {
-                                        navigateTo('entity', entity.toLowerCase(), entity);
-                                        // Auto-expand the card when clicking an entity tag
-                                        if (fact.subcategory) {
-                                          const key = fact.subcategory.toLowerCase();
-                                          setExpandedCards(prev => ({ ...prev, [key]: true }));
-                                        }
-                                      }}
-                                      className="text-xs font-mono text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors"
-                                    >
-                                      {entity}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* LEFT COLUMN: THE LIVING TIMELINE */}
+                <div className="space-y-6">
+                  {/* Today Section */}
+                  {groupedFacts.todayFacts.length > 0 && (
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Today</h4>
+                      <div className="space-y-3">
+                        {groupedFacts.todayFacts.map(fact => {
+                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                          return renderFactCard(fact, groupFacts);
+                        })}
                       </div>
                     </div>
-                  );
-                })}
-                
-                {/* Ungrouped facts */}
-                {groupedFacts.ungrouped.map((fact) => (
-                  <div 
-                    key={fact.id} 
-                    className={`p-4 ${CARD_BG} border ${CARD_CLASS} animate-slide-in shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
-                    style={getCardStyle(fact.category)}
-                  >
-                    <p className="text-[var(--text-on-card)] text-sm leading-relaxed mb-3 font-light">
-                      <HighlightedText 
-                        text={fact.sourceText || fact.content} 
-                        entities={fact.entities}
-                        onEntityClick={(e) => {
-                          navigateTo('entity', e.toLowerCase(), e);
-                          // For ungrouped facts, we can't auto-expand but we ensure filtering works
-                        }}
-                        onTimeClick={(timeText) => {
-                          // Parse date from fact to navigate to correct month
-                          if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
-                            try {
-                              const date = new Date(fact.dateStr);
-                              if (!isNaN(date.getTime())) {
-                                // Update calendar to show this month
-                                const newDate = { year: date.getFullYear(), month: date.getMonth() };
-                                if (setParentCalendarDate) {
-                                  setParentCalendarDate(newDate);
-                                } else {
-                                  setCalendarDate(newDate);
-                                }
-                              }
-                            } catch (e) {
-                              console.log('Could not parse date:', fact.dateStr);
-                            }
-                          }
-                          // Switch to calendar view - update parent first
-                          if (setParentViewMode) {
-                            setParentViewMode('calendar');
-                          }
-                          updateViewMode('calendar');
-                        }}
-                      />
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 text-xs">
-                      <span className="text-[var(--text-meta)] uppercase tracking-wide font-mono">{fact.category}</span>
-                      {fact.timeRef && (
-                        <button 
-                          onClick={() => {
-                            // Parse date from fact to navigate to correct month
-                            if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
-                              try {
-                                const date = new Date(fact.dateStr);
-                                if (!isNaN(date.getTime())) {
-                                  // Update calendar to show this month
-                                  const newDate = { year: date.getFullYear(), month: date.getMonth() };
-                                  if (setParentCalendarDate) {
-                                    setParentCalendarDate(newDate);
-                                  } else {
-                                    setCalendarDate(newDate);
-                                  }
-                                }
-                              } catch (e) {
-                                console.log('Could not parse date:', fact.dateStr);
-                              }
-                            }
-                            // Switch to calendar view
-                            if (setParentViewMode) {
-                              setParentViewMode('calendar');
-                            }
-                            updateViewMode('calendar');
-                          }} 
-                          className="text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 font-mono transition-colors cursor-pointer"
-                          title="View in calendar"
-                        >
-                          @{fact.timeRef}
-                        </button>
-                      )}
+                  )}
+                  
+                  {/* Upcoming Section */}
+                  {groupedFacts.upcomingFacts.length > 0 && (
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Upcoming</h4>
+                      <div className="space-y-3">
+                        {groupedFacts.upcomingFacts.map(fact => {
+                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                          return renderFactCard(fact, groupFacts);
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )}
+                  
+                  {/* Show message if left column is empty */}
+                  {groupedFacts.todayFacts.length === 0 && groupedFacts.upcomingFacts.length === 0 && (
+                    <div className="text-center py-12 text-[var(--text-meta)] opacity-60">
+                      <p className="text-sm font-light">No upcoming events</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* RIGHT COLUMN: STRUCTURE & HISTORY */}
+                <div className="space-y-6">
+                  {/* Recurring Section */}
+                  {groupedFacts.recurringFacts.length > 0 && (
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">↻ Recurring</h4>
+                      <div className="space-y-3">
+                        {groupedFacts.recurringFacts.map(fact => {
+                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                          return renderFactCard(fact, groupFacts);
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Facts Section */}
+                  {groupedFacts.staticFacts.length > 0 && (
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Facts</h4>
+                      <div className="space-y-3">
+                        {groupedFacts.staticFacts.map(fact => {
+                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                          return renderFactCard(fact, groupFacts);
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Old Events Section */}
+                  {groupedFacts.oldFacts.length > 0 && (
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Past</h4>
+                      <div className="space-y-3">
+                        {groupedFacts.oldFacts.map(fact => {
+                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                          return renderFactCard(fact, groupFacts);
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )
           ) : activeViewMode === 'calendar' ? (

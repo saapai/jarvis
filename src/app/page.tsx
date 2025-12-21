@@ -855,13 +855,17 @@ function DumpTab({
                   const isExpanded = expandedCards[subcategory];
                   const mainFact = groupFacts[0];
                   
-                  // Show only ONE canonical date chip - the primary date
+                  // Show only ONE canonical date chip - the primary date (fix UTC offset issue)
                   let dateChip = null;
                   if (mainFact.dateStr && !mainFact.dateStr.startsWith('recurring:')) {
                     try {
-                      const date = new Date(mainFact.dateStr);
-                      if (!isNaN(date.getTime())) {
-                        dateChip = `${MONTHS[date.getMonth()]} ${date.getDate()}`;
+                      // Parse as UTC to avoid timezone offset issues
+                      const parts = mainFact.dateStr.split('-');
+                      if (parts.length === 3) {
+                        const year = parseInt(parts[0]);
+                        const month = parseInt(parts[1]) - 1; // 0-indexed
+                        const day = parseInt(parts[2]);
+                        dateChip = `${MONTHS[month]} ${day}`;
                       }
                     } catch (e) {}
                   }

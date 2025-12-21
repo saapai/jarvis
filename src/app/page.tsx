@@ -65,9 +65,9 @@ interface BreadcrumbItem {
 // CONSTANTS
 // ============================================
 
-// Semantic card system - warm parchment with green/yellow accents
-// Card backgrounds - consistent warm parchment
-const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-[var(--card-radius)] shadow-[var(--card-shadow)] card-texture';
+// Semantic card system - pure cream cards, accents only in tags/dates
+// Card backgrounds - consistent warm cream
+const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-[var(--card-radius)] shadow-[var(--card-shadow)]';
 
 const CARD_CLASS = 'card transition-all';
 

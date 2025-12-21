@@ -7,62 +7,60 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
-  /* Global Background - Dark forest charcoal */
-  --bg-main: #0e1412; /* deep forest, neutral base */
-  --bg-primary: #0e1412;
-  --bg-secondary: #0a0f0d; /* sidebar - darker */
-  --bg-tertiary: #121816;
-  --bg-hover: rgba(53, 92, 74, 0.08); /* subtle green hover */
-  --bg-active: rgba(53, 92, 74, 0.15); /* green active state */
-  --bg-elevated: #0a0f0d;
+  /* Global Background - Warmer blue-charcoal (nighttime beach) */
+  --bg-main: #1a1d21; /* warmer twilight */
+  --bg-primary: #1a1d21;
+  --bg-secondary: #16191d; /* sidebar - darker, calmer */
+  --bg-tertiary: #1e2023;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: #21272f; /* sidebar active */
+  --bg-elevated: #16191d;
 
-  /* Card Backgrounds - Pure warm cream (not tinted) */
-  --card-bg: #f4f0e7; /* warm cream, not yellow */
-  --card-border: #e4dfd4; /* subtle warm border */
-  --card-radius: 10px;
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-  --card-hover: #f8f5ec; /* slightly brighter on hover */
+  /* Card Backgrounds - Much darker warm paper */
+  --card-bg: #d9ccba; /* much darker, warmer cream */
+  --card-border: rgba(0, 0, 0, 0.12); /* subtle border */
+  --card-radius: 10px; /* less pill, more index card */
+  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  --card-hover: #e0d4c4; /* lamp over a note */
 
-  /* Text Colors - Ink black on cards, cream on dark */
-  --text-on-dark: #e8e4db; /* warm cream on dark */
-  --text-on-card: #1b1b1b; /* ink black */
-  --text-on-card-title: #0f0f0f; /* darker ink for titles */
-  --text-meta: #6a675f; /* warm grey for metadata */
-  --text-sidebar: #a5a29a; /* muted warm grey */
+  /* Text Colors - Hierarchy & softer contrast */
+  --text-on-dark: #d9ccba; /* darker warm cream text on dark */
+  --text-on-card: #3a3a3c; /* darker body text for contrast */
+  --text-on-card-title: #252527; /* even darker titles */
+  --text-meta: #7e858c; /* softened blue-grey metadata */
+  --text-sidebar: #c5c9d0; /* sidebar text */
 
   /* Text hierarchy (for compatibility) */
   --text-primary: var(--text-on-dark);
   --text-body: var(--text-on-card);
-  --text-secondary: rgba(232, 228, 219, 0.85);
-  --text-tertiary: rgba(232, 228, 219, 0.7);
+  --text-secondary: rgba(217, 204, 186, 0.85);
+  --text-tertiary: rgba(217, 204, 186, 0.7);
   --text-muted: var(--text-meta);
 
-  /* Accent Colors - Patagonia palette (earthy, mature) */
-  --accent-green: #355c4a; /* deep evergreen */
-  --accent-red: #c44a36; /* desaturated vermillion */
-  --accent-green-light: rgba(53, 92, 74, 0.12);
-  --accent-red-light: rgba(196, 74, 54, 0.12);
+  /* Highlight Colors - Designed, not default-web */
+  --highlight-red: #ce6087; /* soft red */
+  --highlight-blue: #3b7c96; /* softer, intentional blue */
 
-  /* Semantic colors - minimal, intentional usage */
-  --color-time: var(--accent-red); /* red for time/dates */
-  --color-people: var(--accent-green); /* green for people */
-  --color-location: var(--accent-green);
-  --color-action: var(--accent-red);
+  /* Semantic colors - blue for time, red for people */
+  --color-time: var(--highlight-blue);
+  --color-people: var(--highlight-red);
+  --color-location: var(--highlight-blue);
+  --color-action: var(--highlight-red);
+  --color-green: var(--highlight-blue);
+  --color-yellow: var(--highlight-red);
+  --color-rose: var(--highlight-red);
+  --color-plum: var(--highlight-red);
 
   /* Legacy accent vars for compatibility */
-  --accent: var(--accent-green);
-  --accent-dim: #2a483a;
-  --accent-secondary: var(--accent-red);
-  --accent-contrast: var(--accent-red);
+  --accent: var(--highlight-blue);
+  --accent-dim: #2a6a7d;
+  --accent-secondary: var(--highlight-red);
+  --accent-contrast: var(--highlight-red);
 
-  /* Highlight colors (for back-compat) */
-  --highlight-red: var(--accent-red);
-  --highlight-blue: var(--accent-green);
-
-  /* Borders - neutral warm tones */
-  --border: rgba(228, 223, 212, 0.15);
-  --border-subtle: rgba(228, 223, 212, 0.08);
-  --border-active: var(--accent-green);
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.18);
+  --border-subtle: rgba(255, 255, 255, 0.04); /* more subtle for navbar */
+  --border-active: rgba(255, 255, 255, 0.25);
 
   /* Smooth transitions */
   --transition-fast: 150ms;
@@ -81,7 +79,12 @@ html {
 }
 
 body {
-  background: #0e1412; /* flat dark forest, no gradient */
+  background: radial-gradient(
+    circle at top,
+    #23272c 0%,
+    #1a1d21 45%,
+    #17191d 100%
+  ); /* warmer twilight, not flat black */
   color: var(--text-on-dark);
   font-family: 'JetBrains Mono', monospace;
   font-weight: 400;
@@ -123,70 +126,64 @@ body {
   background: var(--text-tertiary);
 }
 
-/* Minimal hyperlinks - subtle accent */
+/* Intentional hyperlinks - literal highlights */
 a {
-  color: var(--accent-green);
+  color: #347c93;
   text-decoration: none;
-  transition: color 0.15s ease;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 a:hover {
-  color: var(--accent-red);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
+  background-color: rgba(52, 124, 147, 0.23); /* soft highlight */
+  color: #f8f0e3; /* cream-on-blue */
 }
 
-/* Card hover effect - minimal lift, no borders */
+/* Card hover effect - lamp over a note */
 .card {
   transition: all 0.2s ease;
-  margin-bottom: 12px;
+  margin-bottom: 10px; /* reduce black bands between cards */
 }
 
 .card:hover {
   background-color: var(--card-hover);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
 }
 
-/* Button styles - minimal, green accent on hover */
+/* Button styles */
 .button {
   background: var(--bg-main);
   color: var(--text-on-dark);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
   padding: 8px 14px;
   transition: all 0.2s ease;
 }
 
 .button:hover {
-  border-color: var(--accent-green);
-  color: var(--accent-green);
+  background: rgba(206, 96, 135, 0.18); /* red highlight */
+  color: var(--highlight-red);
+  border-color: var(--highlight-red);
 }
 
-/* Card title - strong ink hierarchy */
+/* Card title - stronger hierarchy */
 h3.card-title {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-on-card-title);
-  letter-spacing: -0.01em;
 }
 
-/* Input styles - neutral, clean focus */
+/* Input styles */
 input, textarea {
-  background: #121816;
-  color: #e8e4db;
-  border: 1px solid var(--border);
+  background: #1c1f23;
+  color: #f6eedf;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
 }
 
-input:focus, textarea:focus {
-  outline: none;
-  border-color: var(--accent-green);
-  box-shadow: 0 0 0 2px rgba(53, 92, 74, 0.12);
-}
-
 input::placeholder, textarea::placeholder {
-  color: rgba(232, 228, 219, 0.35);
+  color: rgba(246, 238, 223, 0.45);
 }
 
 /* Smooth animations */

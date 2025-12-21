@@ -495,7 +495,6 @@ function DumpTab() {
     // Switch to explore view when navigating to a filter
     setViewMode('explore');
     // Close sidebar on mobile after navigation
-    setSidebarOpen(false);
     
     if (type === 'all') {
       setBreadcrumbs([{ type: 'all', value: '', label: 'all' }]);
@@ -744,32 +743,6 @@ function DumpTab() {
       <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
         <header className="px-8 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-main)] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {/* Menu Icon Button */}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] transition-colors"
-              aria-label="Toggle sidebar"
-            >
-              <MenuIcon className="w-5 h-5" />
-            </button>
-            {breadcrumbs.map((crumb, i) => (
-              <div key={i} className="flex items-center gap-2">
-                {i > 0 && <span className="text-[var(--text-meta)]">/</span>}
-                <button
-                  onClick={() => {
-                    if (i === 0) navigateTo('all', '', 'all');
-                    else if (i === 1 && crumb.type === 'category') navigateTo('category', crumb.value, crumb.label);
-                  }}
-                  className={`text-sm ${i === breadcrumbs.length - 1 ? 'text-[var(--text-on-dark)]' : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'}`}
-                >
-                  {crumb.label}
-                </button>
-              </div>
-            ))}
-            <span className="text-[var(--text-meta)] ml-2 text-xs">({facts.length})</span>
-          </div>
-          
-          {viewMode === 'calendar' && (
             <div className="flex items-center gap-4">
               <button onClick={() => setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })} className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors">←</button>
               <span className="text-sm text-[var(--text-on-dark)] min-w-[120px] text-center">{MONTHS[calendarDate.month]} {calendarDate.year}</span>

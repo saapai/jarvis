@@ -495,7 +495,6 @@ function DumpTab() {
     // Switch to explore view when navigating to a filter
     setViewMode('explore');
     // Close sidebar on mobile after navigation
-    setSidebarOpen(false);
     
     if (type === 'all') {
       setBreadcrumbs([{ type: 'all', value: '', label: 'all' }]);

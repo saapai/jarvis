@@ -362,6 +362,9 @@ function DumpTab({
   const [uploadText, setUploadText] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
   
+  // Use parent viewMode if provided, otherwise use local state
+  const activeViewMode = parentViewMode !== undefined ? parentViewMode : viewMode;
+  
   // Sync with parent viewMode if provided
   useEffect(() => {
     if (parentViewMode !== undefined) {
@@ -839,7 +842,7 @@ function DumpTab({
             <div className="flex items-center justify-center h-64">
               <span className="text-[var(--text-meta)] animate-pulse">loading...</span>
             </div>
-          ) : viewMode === 'explore' ? (
+          ) : activeViewMode === 'explore' ? (
             facts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center">
                 <p className="text-[var(--text-meta)]">no facts yet</p>
@@ -1038,11 +1041,11 @@ function DumpTab({
                 ))}
               </div>
             )
-          ) : viewMode === 'calendar' ? (
+          ) : activeViewMode === 'calendar' ? (
             /* Calendar View */
             <div className="animate-fade-in">
-              {/* Month Navigation - Above Calendar Grid */}
-              <div className="mb-6 flex items-center justify-center gap-4">
+              {/* Month Navigation - Right Corner */}
+              <div className="mb-6 flex items-center justify-end gap-4">
                 <button 
                   onClick={() => {
                     if (setParentCalendarDate) {
@@ -1163,7 +1166,7 @@ function DumpTab({
                 </div>
               )}
             </div>
-          ) : viewMode === 'uploads' ? (
+          ) : activeViewMode === 'uploads' ? (
             /* Uploads Management View */
             <div className="animate-fade-in space-y-4">
               <div className="flex items-center justify-between mb-6">
@@ -1317,6 +1320,8 @@ export default function Home() {
   };
   
   const handleBreadcrumbClick = (index: number) => {
+    // Always switch to explore view when navigating breadcrumbs
+    setViewMode('explore');
     const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
     setBreadcrumbs(newBreadcrumbs);
     setCurrentFilter(newBreadcrumbs[newBreadcrumbs.length - 1]);
@@ -1334,7 +1339,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Top Navigation - 3 Icons + Breadcrumbs */}
-      <header className={`fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)] transition-transform duration-300 ${
+      <header className={`fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)] border-b border-[var(--border-subtle)] transition-transform duration-300 ${
         headerVisible ? 'translate-y-0' : '-translate-y-full'
       }`}>
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">

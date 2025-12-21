@@ -114,7 +114,7 @@ const BODY_COLORS: Record<string, string> = {
   other: 'text-[var(--text-primary)]',
 };
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 // ============================================
 // COMPONENTS
@@ -905,7 +905,10 @@ function DumpTab({
                                         }
                                       }}
                                       onTimeClick={(timeText) => {
-                                        // Switch to calendar view when clicking a time
+                                        // Switch to calendar view when clicking a time - update parent first
+                                        if (setParentViewMode) {
+                                          setParentViewMode('calendar');
+                                        }
                                         updateViewMode('calendar');
                                       }}
                                     />
@@ -954,7 +957,10 @@ function DumpTab({
                           // For ungrouped facts, we can't auto-expand but we ensure filtering works
                         }}
                         onTimeClick={(timeText) => {
-                          // Switch to calendar view when clicking a time
+                          // Switch to calendar view when clicking a time - update parent first
+                          if (setParentViewMode) {
+                            setParentViewMode('calendar');
+                          }
                           updateViewMode('calendar');
                         }}
                       />
@@ -980,6 +986,37 @@ function DumpTab({
           ) : viewMode === 'calendar' ? (
             /* Calendar View */
             <div className="animate-fade-in">
+              {/* Month Navigation - Above Calendar Grid */}
+              <div className="mb-6 flex items-center justify-center gap-4">
+                <button 
+                  onClick={() => {
+                    if (setParentCalendarDate) {
+                      setParentCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
+                    } else {
+                      setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
+                    }
+                  }}
+                  className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-3 py-1 rounded transition-colors"
+                >
+                  ← prev
+                </button>
+                <span className="text-sm text-[var(--text-on-dark)] min-w-[140px] text-center font-mono">
+                  {MONTHS[calendarDate.month]} {calendarDate.year}
+                </span>
+                <button 
+                  onClick={() => {
+                    if (setParentCalendarDate) {
+                      setParentCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
+                    } else {
+                      setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
+                    }
+                  }}
+                  className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-3 py-1 rounded transition-colors"
+                >
+                  next →
+                </button>
+              </div>
+              
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                   <div key={day} className="text-center text-xs text-[var(--text-meta)] py-2">{day}</div>
@@ -1008,14 +1045,17 @@ function DumpTab({
                                 <button
                                   key={fact.id}
                                   onClick={() => {
+                                    // Switch to explore view first - update parent before navigating
+                                    if (setParentViewMode) {
+                                      setParentViewMode('explore');
+                                    }
+                                    updateViewMode('explore');
                                     // Navigate to the fact's category/subcategory
                                     if (fact.subcategory && fact.category) {
                                       navigateTo('subcategory', fact.subcategory, fact.subcategory, fact.category);
                                     } else if (fact.category) {
                                       navigateTo('category', fact.category, fact.category);
                                     }
-                                    // Switch to explore view
-                                    updateViewMode('explore');
                                   }}
                                   className={`text-[10px] px-1.5 py-0.5 rounded-lg bg-[var(--card-bg)] border card truncate shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:scale-105 transition-transform cursor-pointer text-left w-full`}
                                   style={getCardStyle(fact.category)}
@@ -1042,37 +1082,6 @@ function DumpTab({
                     </div>
                   );
                 })}
-              </div>
-              
-              {/* Month Navigation - Below Calendar Grid */}
-              <div className="mt-6 flex items-center justify-center gap-4">
-                <button 
-                  onClick={() => {
-                    if (setParentCalendarDate) {
-                      setParentCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
-                    } else {
-                      setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
-                    }
-                  }}
-                  className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-3 py-1 rounded transition-colors"
-                >
-                  ← prev
-                </button>
-                <span className="text-sm text-[var(--text-on-dark)] min-w-[140px] text-center font-mono">
-                  {MONTHS[calendarDate.month]} {calendarDate.year}
-                </span>
-                <button 
-                  onClick={() => {
-                    if (setParentCalendarDate) {
-                      setParentCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
-                    } else {
-                      setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
-                    }
-                  }}
-                  className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-3 py-1 rounded transition-colors"
-                >
-                  next →
-                </button>
               </div>
               
               {recurringFacts.length > 0 && (
@@ -1206,8 +1215,43 @@ export default function Home() {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
+  const [scrollY, setScrollY] = useState(0);
+  const [headerVisible, setHeaderVisible] = useState(true);
   
-  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  // Handle scroll behavior for header
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+    
+    const updateScrollDirection = () => {
+      const currentScrollY = window.scrollY;
+      
+      if (currentScrollY < 10) {
+        // At top, always show header
+        setHeaderVisible(true);
+      } else if (currentScrollY > lastScrollY) {
+        // Scrolling down - hide header
+        setHeaderVisible(false);
+      } else if (currentScrollY < lastScrollY) {
+        // Scrolling up - show header
+        setHeaderVisible(true);
+      }
+      
+      setScrollY(currentScrollY);
+      lastScrollY = currentScrollY > 0 ? currentScrollY : 0;
+      ticking = false;
+    };
+    
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateScrollDirection);
+        ticking = true;
+      }
+    };
+    
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   
   const handleHomeClick = () => {
     setViewMode('explore');
@@ -1235,7 +1279,9 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Top Navigation - 3 Icons + Breadcrumbs */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
+      <header className={`fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)] transition-transform duration-300 ${
+        headerVisible ? 'translate-y-0' : '-translate-y-full'
+      }`}>
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           {/* Left: Navigation Icons + Breadcrumbs */}
           <div className="flex items-center gap-3">

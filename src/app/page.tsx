@@ -1158,6 +1158,10 @@ function DumpTab() {
                                           setExpandedCards(prev => ({ ...prev, [key]: true }));
                                         }
                                       }}
+                                      onTimeClick={(timeText) => {
+                                        // Switch to calendar view when clicking a time
+                                        setViewMode('calendar');
+                                      }}
                                     />
                                   </p>
                                 )}
@@ -1202,6 +1206,10 @@ function DumpTab() {
                         onEntityClick={(e) => {
                           navigateTo('entity', e.toLowerCase(), e);
                           // For ungrouped facts, we can't auto-expand but we ensure filtering works
+                        }}
+                        onTimeClick={(timeText) => {
+                          // Switch to calendar view when clicking a time
+                          setViewMode('calendar');
                         }}
                       />
                     </p>

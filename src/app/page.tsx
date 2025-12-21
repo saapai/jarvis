@@ -637,8 +637,29 @@ function DumpTab({
   };
 
   // Group facts by subcategory
+  // Helper function to get card style based on column (left = red, right = blue-green)
+  const getColumnCardStyle = (columnType: 'left' | 'right') => {
+    if (columnType === 'left') {
+      // Red overlay for left column (Today + Upcoming)
+      return {
+        background: `linear-gradient(rgba(185, 135, 152, 0.18), rgba(185, 135, 152, 0.18)), var(--card-bg)`,
+        borderColor: '#d7b7b2',
+        borderWidth: '1.5px',
+        borderStyle: 'solid',
+      };
+    } else {
+      // Blue-green overlay for right column (Recurring + Facts + Past)
+      return {
+        background: `linear-gradient(rgba(105, 135, 148, 0.18), rgba(105, 135, 148, 0.18)), var(--card-bg)`,
+        borderColor: '#9fb5b8',
+        borderWidth: '1.5px',
+        borderStyle: 'solid',
+      };
+    }
+  };
+
   // Helper function to render a fact card
-  const renderFactCard = (fact: Fact, groupFacts: Fact[]) => {
+  const renderFactCard = (fact: Fact, groupFacts: Fact[], columnType: 'left' | 'right') => {
     if (!fact.subcategory) return null;
     
     const subcategory = fact.subcategory.toLowerCase();
@@ -668,7 +689,7 @@ function DumpTab({
       <div key={fact.id} className="animate-slide-in">
         <div 
           className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:border-[var(--highlight-red)]/40 transition-colors`}
-          style={getCardStyle(mainFact.category)}
+          style={getColumnCardStyle(columnType)}
         >
           {/* Two-Column Header */}
           <button
@@ -1075,7 +1096,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.todayFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts);
+                          return renderFactCard(fact, groupFacts, 'left');
                         })}
                       </div>
                     </div>
@@ -1088,7 +1109,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.upcomingFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts);
+                          return renderFactCard(fact, groupFacts, 'left');
                         })}
                       </div>
                     </div>
@@ -1111,7 +1132,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.recurringFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts);
+                          return renderFactCard(fact, groupFacts, 'right');
                         })}
                       </div>
                     </div>
@@ -1124,7 +1145,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.staticFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts);
+                          return renderFactCard(fact, groupFacts, 'right');
                         })}
                       </div>
                     </div>
@@ -1137,7 +1158,7 @@ function DumpTab({
                       <div className="space-y-3">
                         {groupedFacts.oldFacts.map(fact => {
                           const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts);
+                          return renderFactCard(fact, groupFacts, 'right');
                         })}
                       </div>
                     </div>

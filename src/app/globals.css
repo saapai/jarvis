@@ -7,60 +7,62 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
-  /* Global Background - Warm blue-charcoal (nighttime beach) */
-  --bg-main: #171b1f; /* warmer, softer twilight */
-  --bg-primary: #171b1f;
-  --bg-secondary: #13171b; /* sidebar - darker, calmer */
-  --bg-tertiary: #1c1f23;
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: #1e262d; /* sidebar active */
-  --bg-elevated: #13171b;
+  /* Global Background - Deep moss/charcoal (organic depth) */
+  --bg-main: #1a1e1b; /* deep green-charcoal, not purple */
+  --bg-primary: #1a1e1b;
+  --bg-secondary: #141715; /* sidebar - darker moss */
+  --bg-tertiary: #1f2320;
+  --bg-hover: rgba(207, 155, 66, 0.08); /* warm yellow hover */
+  --bg-active: #25321f; /* green-tinted active state */
+  --bg-elevated: #141715;
 
-  /* Card Backgrounds - Warm paper (index cards, not pills) */
-  --card-bg: #e8dcc8; /* darker, less bright cream */
-  --card-border: rgba(0, 0, 0, 0.12); /* subtle border */
-  --card-radius: 10px; /* less pill, more index card */
-  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
-  --card-hover: #ece1cd; /* lamp over a note */
+  /* Card Backgrounds - Warm parchment with subtle texture */
+  --card-bg: #f4ebe0; /* warm parchment cream */
+  --card-border: rgba(30, 86, 55, 0.15); /* subtle green-tinted border */
+  --card-radius: 8px; /* less rounded, more stationery */
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --card-hover: #f7f0e6; /* slightly brighter on hover */
 
-  /* Text Colors - Hierarchy & softer contrast */
-  --text-on-dark: #e8dcc8; /* darker cream text on dark */
-  --text-on-card: #e8dcc8; /* cream text on cards */
-  --text-on-card-title: #f1e7d7; /* lighter cream for titles */
-  --text-meta: #7e858c; /* softened blue-grey metadata */
-  --text-sidebar: #c5c9d0; /* sidebar text */
+  /* Text Colors - Ink-like hierarchy */
+  --text-on-dark: #e9dcc5; /* warm cream on dark */
+  --text-on-card: #2a2c28; /* deep near-black ink */
+  --text-on-card-title: #1a1c18; /* darker for titles */
+  --text-meta: #7a8274; /* muted green-grey */
+  --text-sidebar: #b8bfb4; /* soft sage sidebar text */
 
   /* Text hierarchy (for compatibility) */
   --text-primary: var(--text-on-dark);
   --text-body: var(--text-on-card);
-  --text-secondary: rgba(232, 220, 200, 0.85);
-  --text-tertiary: rgba(232, 220, 200, 0.7);
+  --text-secondary: rgba(233, 220, 197, 0.85);
+  --text-tertiary: rgba(233, 220, 197, 0.7);
   --text-muted: var(--text-meta);
 
-  /* Highlight Colors - Designed, not default-web */
-  --highlight-red: #ce6087; /* soft red */
-  --highlight-blue: #3b7c96; /* softer, intentional blue */
+  /* Accent Colors - Green/Yellow duo (analog stationery energy) */
+  --accent-green: #3d6e4a; /* forest green */
+  --accent-yellow: #c99d47; /* desaturated golden yellow */
+  --accent-green-light: rgba(61, 110, 74, 0.15);
+  --accent-yellow-light: rgba(201, 157, 71, 0.15);
 
-  /* Semantic colors - blue for time, red for people */
-  --color-time: var(--highlight-blue);
-  --color-people: var(--highlight-red);
-  --color-location: var(--highlight-blue);
-  --color-action: var(--highlight-red);
-  --color-green: var(--highlight-blue);
-  --color-yellow: var(--highlight-red);
-  --color-rose: var(--highlight-red);
-  --color-plum: var(--highlight-red);
+  /* Semantic colors - green for structure, yellow for highlights */
+  --color-time: var(--accent-yellow); /* warm yellow for time */
+  --color-people: var(--accent-green); /* green for people */
+  --color-location: var(--accent-green); /* green for locations */
+  --color-action: var(--accent-yellow); /* yellow for actions */
 
   /* Legacy accent vars for compatibility */
-  --accent: var(--highlight-blue);
-  --accent-dim: #2a6a7d;
-  --accent-secondary: var(--highlight-red);
-  --accent-contrast: var(--highlight-red);
+  --accent: var(--accent-yellow);
+  --accent-dim: #a68139;
+  --accent-secondary: var(--accent-green);
+  --accent-contrast: var(--accent-yellow);
+
+  /* Highlight colors (for back-compat) */
+  --highlight-red: var(--accent-green);
+  --highlight-blue: var(--accent-yellow);
 
   /* Borders */
-  --border: rgba(255, 255, 255, 0.18);
-  --border-subtle: rgba(255, 255, 255, 0.04); /* more subtle for navbar */
-  --border-active: rgba(255, 255, 255, 0.25);
+  --border: rgba(61, 110, 74, 0.18);
+  --border-subtle: rgba(61, 110, 74, 0.06);
+  --border-active: rgba(201, 157, 71, 0.3);
 
   /* Smooth transitions */
   --transition-fast: 150ms;
@@ -81,10 +83,10 @@ html {
 body {
   background: radial-gradient(
     circle at top,
-    #20252b 0%,
-    #171b1f 45%,
-    #14171b 100%
-  ); /* soft twilight, not flat black */
+    #212722 0%,
+    #1a1e1b 40%,
+    #141715 100%
+  ); /* deep moss gradient, organic depth */
   color: var(--text-on-dark);
   font-family: 'JetBrains Mono', monospace;
   font-weight: 400;
@@ -126,64 +128,111 @@ body {
   background: var(--text-tertiary);
 }
 
-/* Intentional hyperlinks - literal highlights */
+/* Intentional hyperlinks - yellow glow */
 a {
-  color: #347c93;
+  color: var(--accent-yellow);
   text-decoration: none;
   padding: 0 2px;
-  border-radius: 3px;
+  border-radius: 2px;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 a:hover {
-  background-color: rgba(52, 124, 147, 0.23); /* soft highlight */
-  color: #f8f0e3; /* cream-on-blue */
+  background-color: var(--accent-yellow-light); /* warm yellow highlight */
+  text-decoration: underline;
+  text-decoration-color: var(--accent-yellow);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
-/* Card hover effect - lamp over a note */
+/* Card hover effect - subtle lift with green accent */
 .card {
   transition: all 0.2s ease;
-  margin-bottom: 10px; /* reduce black bands between cards */
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent-green);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.card:hover::before {
+  opacity: 0.6;
 }
 
 .card:hover {
   background-color: var(--card-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  border-color: rgba(61, 110, 74, 0.25);
 }
 
-/* Button styles */
+/* Button styles - yellow accent on hover */
 .button {
   background: var(--bg-main);
   color: var(--text-on-dark);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
+  border: 1px solid rgba(61, 110, 74, 0.25);
+  border-radius: 6px;
   padding: 8px 14px;
   transition: all 0.2s ease;
 }
 
 .button:hover {
-  background: rgba(206, 96, 135, 0.18); /* red highlight */
-  color: var(--highlight-red);
-  border-color: var(--highlight-red);
+  background: var(--accent-yellow-light);
+  color: var(--accent-yellow);
+  border-color: var(--accent-yellow);
 }
 
-/* Card title - stronger hierarchy */
+/* Card title - bold hierarchy */
 h3.card-title {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-on-card-title);
+  letter-spacing: -0.01em;
 }
 
-/* Input styles */
+/* Input styles - stationery feel */
 input, textarea {
-  background: #1c1f23;
-  color: #f6eedf;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  background: #1f2320;
+  color: #e9dcc5;
+  border: 1px solid rgba(61, 110, 74, 0.2);
+  border-radius: 6px;
+}
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-yellow);
+  box-shadow: 0 0 0 2px rgba(201, 157, 71, 0.15);
 }
 
 input::placeholder, textarea::placeholder {
-  color: rgba(246, 238, 223, 0.45);
+  color: rgba(233, 220, 197, 0.4);
+}
+
+/* Add subtle paper texture to cards */
+.card-texture {
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.03) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.03) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 3px
+    );
 }
 
 /* Smooth animations */

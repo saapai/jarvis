@@ -1129,7 +1129,13 @@ function DumpTab() {
                                 {subcategory}
                               </h3>
                               {mainFact.timeRef && (
-                                <span className="text-xs text-[var(--highlight-blue)] font-mono">@{mainFact.timeRef}</span>
+                                <button
+                                  onClick={() => setViewMode('calendar')}
+                                  className="text-xs text-[var(--highlight-blue)] font-mono hover:bg-[rgba(59,124,150,0.16)] hover:rounded px-1 transition-colors cursor-pointer"
+                                  title="View in calendar"
+                                >
+                                  @{mainFact.timeRef}
+                                </button>
                               )}
                               <span className="text-xs text-[var(--text-meta)] font-mono">({groupFacts.length})</span>
                             </div>
@@ -1263,7 +1269,13 @@ function DumpTab() {
                                     {fact.subcategory || fact.content.slice(0, 20)}
                                   </span>
                                   {fact.timeRef && (
-                                    <span className="text-[var(--highlight-red)] ml-1 font-mono">@{fact.timeRef.slice(0, 8)}</span>
+                                    <button
+                                      onClick={() => setViewMode('calendar')}
+                                      className="text-[var(--highlight-red)] ml-1 font-mono hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors cursor-pointer"
+                                      title="View in calendar"
+                                    >
+                                      @{fact.timeRef.slice(0, 8)}
+                                    </button>
                                   )}
                                 </div>
                               );

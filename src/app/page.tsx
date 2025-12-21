@@ -69,13 +69,21 @@ interface BreadcrumbItem {
 // Card backgrounds - warm cream for all cards
 const CARD_BG = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-[var(--card-radius)] shadow-[var(--card-shadow)]';
 
-const CATEGORY_BG: Record<string, string> = {
-  social: CARD_BG,
-  professional: CARD_BG,
-  events: CARD_BG,
-  pledging: CARD_BG,
-  meetings: CARD_BG,
-  other: CARD_BG,
+// Category color overlays - subtle red or blue wash
+const CATEGORY_OVERLAY: Record<string, string> = {
+  social: 'rgba(206, 96, 135, 0.08)', // red overlay
+  professional: 'rgba(59, 124, 150, 0.08)', // blue overlay
+  events: 'rgba(206, 96, 135, 0.08)', // red overlay
+  pledging: 'rgba(59, 124, 150, 0.08)', // blue overlay
+  meetings: 'rgba(59, 124, 150, 0.08)', // blue overlay
+  other: 'rgba(206, 96, 135, 0.08)', // red overlay
+};
+
+const getCardStyle = (category?: string) => {
+  const overlay = category ? CATEGORY_OVERLAY[category.toLowerCase()] || CATEGORY_OVERLAY.other : CATEGORY_OVERLAY.other;
+  return {
+    background: `linear-gradient(${overlay}, ${overlay}), var(--card-bg)`,
+  };
 };
 
 // Card class with hover effect
@@ -1066,7 +1074,10 @@ function DumpTab() {
                   
                   return (
                     <div key={subcategory} className="animate-slide-in">
-                      <div className={`${CARD_BG} ${CARD_CLASS} overflow-hidden`}>
+                      <div 
+                        className={`${CARD_BG} ${CARD_CLASS} overflow-hidden`}
+                        style={getCardStyle(mainFact.category)}
+                      >
                         {/* Header */}
                         <button
                           onClick={() => toggleCard(subcategory)}
@@ -1139,7 +1150,11 @@ function DumpTab() {
                 
                 {/* Ungrouped facts */}
                 {groupedFacts.ungrouped.map((fact) => (
-                  <div key={fact.id} className={`p-4 ${CARD_BG} ${CARD_CLASS} animate-slide-in`}>
+                  <div 
+                    key={fact.id} 
+                    className={`p-4 ${CARD_BG} ${CARD_CLASS} animate-slide-in`}
+                    style={getCardStyle(fact.category)}
+                  >
                     <p className="text-[var(--text-on-card)] text-sm leading-relaxed mb-3 font-light">
                       <HighlightedText 
                         text={fact.sourceText || fact.content} 
@@ -1190,9 +1205,10 @@ function DumpTab() {
                               const hasTime = fact.timeRef || fact.dateStr;
                               
                               return (
-                                <div 
-                                  key={fact.id} 
+                                <div
+                                  key={fact.id}
                                   className={`text-[10px] px-1.5 py-0.5 rounded bg-[var(--card-bg)] border border-[var(--card-border)] card truncate`}
+                                  style={getCardStyle(fact.category)}
                                   title={fact.content}
                                 >
                                   <span className="text-[var(--text-on-card)]">
@@ -1213,7 +1229,10 @@ function DumpTab() {
                 })}
               </div>
               {recurringFacts.length > 0 && (
-                <div className="mt-6 p-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] card">
+                <div 
+                  className="mt-6 p-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] card"
+                  style={getCardStyle('other')}
+                >
                   <h3 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3">↻ recurring</h3>
                   <div className="flex flex-wrap gap-2">
                     {recurringFacts.map(fact => {

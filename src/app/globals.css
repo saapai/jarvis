@@ -7,48 +7,58 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
-  /* Cream-first base */
-  --bg-primary: #DBCBBD;
-  --bg-card: #fdf9f5;
-  --bg-secondary: rgba(253, 249, 245, 0.95);
-  --bg-tertiary: rgba(253, 249, 245, 0.98);
-  --bg-hover: rgba(253, 249, 245, 0.9);
-  --bg-active: rgba(253, 249, 245, 0.95);
-  --bg-elevated: rgba(253, 249, 245, 1);
+  /* Global Background - Blue Charcoal */
+  --bg-main: #191d20; /* blue-charcoal */
+  --bg-primary: #191d20;
+  --bg-secondary: #1c1f23;
+  --bg-tertiary: #1f2327;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-elevated: #1f2327;
 
-  /* Locked text colors - 1-2 tones for body text */
-  --text-primary: #524f3b; /* Dark olive */
-  --text-secondary: #8a7b69; /* Muted brown */
-  --text-tertiary: rgba(138, 123, 105, 0.7);
-  --text-muted: rgba(138, 123, 105, 0.5);
+  /* Card Backgrounds - Warm Cream */
+  --card-bg: #f6eedf; /* warm cream */
+  --card-border: rgba(0, 0, 0, 0.12);
+  --card-radius: 12px;
+  --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  --card-hover: #fbf5eb; /* slightly brighter cream */
 
-  /* Semantic color system - ink, not paint */
-  /* Blue → Time data */
-  --color-time: #347c93;
-  --color-time-light: rgba(52, 124, 147, 0.15);
-  
-  /* Pink → People & entities */
-  --color-people: #ce6087;
-  --color-people-light: rgba(206, 96, 135, 0.15);
-  
-  /* Green → Locations */
-  --color-location: #1e5637;
-  --color-location-light: rgba(30, 86, 55, 0.15);
-  
-  /* Yellow → Actions / status */
-  --color-action: #cf9b42;
-  --color-action-light: rgba(207, 155, 66, 0.15);
+  /* Text Colors */
+  --text-on-dark: #f6eedf; /* cream text on dark */
+  --text-on-card: #2c2e2f; /* soft blue-charcoal on cards */
+  --text-meta: #7e858c; /* softened blue-grey metadata */
+
+  /* Text hierarchy (for compatibility) */
+  --text-primary: var(--text-on-dark);
+  --text-body: var(--text-on-card);
+  --text-secondary: rgba(246, 238, 223, 0.85);
+  --text-tertiary: rgba(246, 238, 223, 0.7);
+  --text-muted: var(--text-meta);
+
+  /* Highlight Colors - Only for text/hover, NOT backgrounds */
+  --highlight-red: #ce6087; /* soft red */
+  --highlight-blue: #347c93; /* muted ocean blue */
+
+  /* Semantic colors (for compatibility) */
+  --color-time: var(--highlight-blue);
+  --color-people: var(--highlight-red);
+  --color-location: var(--highlight-blue);
+  --color-action: var(--highlight-red);
+  --color-green: var(--highlight-blue);
+  --color-yellow: var(--highlight-red);
+  --color-rose: var(--highlight-red);
+  --color-plum: var(--highlight-red);
 
   /* Legacy accent vars for compatibility */
-  --accent: var(--color-time);
+  --accent: var(--highlight-blue);
   --accent-dim: #2a6a7d;
-  --accent-secondary: var(--color-people);
-  --accent-contrast: var(--color-action);
+  --accent-secondary: var(--highlight-red);
+  --accent-contrast: var(--highlight-red);
 
-  /* Subtle borders */
-  --border: rgba(114, 95, 69, 0.2);
-  --border-subtle: rgba(114, 95, 69, 0.15);
-  --border-active: rgba(114, 95, 69, 0.3);
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.18);
+  --border-subtle: rgba(255, 255, 255, 0.12);
+  --border-active: rgba(255, 255, 255, 0.25);
 
   /* Smooth transitions */
   --transition-fast: 150ms;

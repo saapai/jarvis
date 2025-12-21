@@ -30,3 +30,9 @@ export async function embedText(text: string): Promise<number[]> {
 export const emptyVector = zeroVector
 
 
+
+
+
+
+
+

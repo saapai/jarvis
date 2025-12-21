@@ -25,8 +25,8 @@
 
   /* Text Colors - Hierarchy & softer contrast */
   --text-on-dark: #e8dcc8; /* darker cream text on dark */
-  --text-on-card: #494b4e; /* softer body text */
-  --text-on-card-title: #2f3235; /* stronger titles */
+  --text-on-card: #e8dcc8; /* cream text on cards */
+  --text-on-card-title: #f1e7d7; /* lighter cream for titles */
   --text-meta: #7e858c; /* softened blue-grey metadata */
   --text-sidebar: #c5c9d0; /* sidebar text */
 

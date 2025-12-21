@@ -369,7 +369,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
       </section>
 
       {/* Section 3: Why It Matters */}
-      <section className="py-32 px-8 bg-white">
+      <section className="py-32 px-8 bg-[var(--bg-main)]">
         <div className="max-w-3xl mx-auto text-center space-y-8">
           <h2 className="text-3xl md:text-4xl font-display text-[var(--color-location)] mb-4">
             why it matters
@@ -391,7 +391,7 @@ function InfoTab({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
       </section>
 
       {/* Footer - Minimal */}
-      <footer className="py-12 px-8 bg-white border-t border-[var(--border-subtle)]">
+      <footer className="py-12 px-8 bg-[var(--bg-main)] border-t border-[var(--border-subtle)]">
         <div className="max-w-4xl mx-auto text-center">
           <p className="text-xs text-[var(--text-tertiary)] font-light">
             powered by enclave × twilio × airtable

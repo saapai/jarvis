@@ -1138,12 +1138,9 @@ function DumpTab() {
                 })}
                 
                 {/* Ungrouped facts */}
-                {groupedFacts.ungrouped.map((fact, idx) => {
-                  // Alternate green/yellow backgrounds
-                  const cardBg = idx % 2 === 0 ? 'bg-[var(--bg-card-green)]' : 'bg-[var(--bg-card-yellow)]';
-                  return (
-                  <div key={fact.id} className={`p-4 rounded-lg ${cardBg} ${CARD_CLASS} border border-[var(--border-subtle)] animate-slide-in`}>
-                    <p className="text-[var(--text-primary)] text-sm leading-relaxed mb-3 font-light">
+                {groupedFacts.ungrouped.map((fact) => (
+                  <div key={fact.id} className={`p-4 ${CARD_BG} ${CARD_CLASS} animate-slide-in`}>
+                    <p className="text-[var(--text-on-card)] text-sm leading-relaxed mb-3 font-light">
                       <HighlightedText 
                         text={fact.sourceText || fact.content} 
                         entities={fact.entities}

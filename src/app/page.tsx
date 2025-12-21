@@ -1043,6 +1043,38 @@ function DumpTab({
                   );
                 })}
               </div>
+              
+              {/* Month Navigation - Below Calendar Grid */}
+              <div className="mt-6 flex items-center justify-center gap-4">
+                <button 
+                  onClick={() => {
+                    if (setParentCalendarDate) {
+                      setParentCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
+                    } else {
+                      setCalendarDate(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
+                    }
+                  }}
+                  className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-3 py-1 rounded transition-colors"
+                >
+                  ← prev
+                </button>
+                <span className="text-sm text-[var(--text-on-dark)] min-w-[140px] text-center font-mono">
+                  {MONTHS[calendarDate.month]} {calendarDate.year}
+                </span>
+                <button 
+                  onClick={() => {
+                    if (setParentCalendarDate) {
+                      setParentCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
+                    } else {
+                      setCalendarDate(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
+                    }
+                  }}
+                  className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-3 py-1 rounded transition-colors"
+                >
+                  next →
+                </button>
+              </div>
+              
               {recurringFacts.length > 0 && (
                 <div 
                   className="mt-6 p-4 rounded-lg border bg-[var(--card-bg)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] card"
@@ -1205,15 +1237,8 @@ export default function Home() {
       {/* Top Navigation - 3 Icons + Breadcrumbs */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          {/* Left: Navigation Icons + Brand + Breadcrumbs */}
+          {/* Left: Navigation Icons + Breadcrumbs */}
           <div className="flex items-center gap-3">
-            {/* Brand Name */}
-            <div className="font-extrabold text-base tracking-tight">
-              <span className="text-[var(--highlight-blue)]">/</span>
-              <span className="text-[var(--text-on-dark)]">enclave</span>
-              <span className="text-[var(--highlight-red)]">_</span>
-            </div>
-            
             {/* Home (Inbox) - deselects when filtering */}
             <button
               onClick={handleHomeClick}
@@ -1265,26 +1290,12 @@ export default function Home() {
             )}
           </div>
           
-          {/* Center: Calendar Month Navigation (when in calendar view) */}
-          {viewMode === 'calendar' && (
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={handlePrevMonth}
-                className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors"
-              >
-                ←
-              </button>
-              <span className="text-sm text-[var(--text-on-dark)] min-w-[120px] text-center font-mono">
-                {MONTHS[calendarDate.month]} {calendarDate.year}
-              </span>
-              <button 
-                onClick={handleNextMonth}
-                className="text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 rounded transition-colors"
-              >
-                →
-              </button>
-            </div>
-          )}
+          {/* Center: Brand Name */}
+          <div className="absolute left-1/2 transform -translate-x-1/2 font-extrabold text-base tracking-tight">
+            <span className="text-[var(--highlight-blue)]">/</span>
+            <span className="text-[var(--text-on-dark)]">enclave</span>
+            <span className="text-[var(--highlight-red)]">_</span>
+          </div>
           
           {/* Right: Upload Icon */}
           <button

@@ -333,7 +333,21 @@ function UploadIcon({ className }: { className?: string }) {
 // DUMP TAB CONTENT (Text Explorer)
 // ============================================
 
-function DumpTab({ onFilterChange }: { onFilterChange?: (filter: BreadcrumbItem) => void }) {
+function DumpTab({ 
+  viewMode: parentViewMode, 
+  setViewMode: setParentViewMode,
+  onFilterChange, 
+  onBreadcrumbsChange,
+  breadcrumbClickIndex,
+  resetBreadcrumbClick
+}: { 
+  viewMode?: ViewMode;
+  setViewMode?: (mode: ViewMode) => void;
+  onFilterChange?: (filter: BreadcrumbItem) => void;
+  onBreadcrumbsChange?: (breadcrumbs: BreadcrumbItem[]) => void;
+  breadcrumbClickIndex?: number | null;
+  resetBreadcrumbClick?: () => void;
+}) {
   const [tree, setTree] = useState<TreeData | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
   const [allFacts, setAllFacts] = useState<Fact[]>([]); // For calendar view - all facts
@@ -343,6 +357,23 @@ function DumpTab({ onFilterChange }: { onFilterChange?: (filter: BreadcrumbItem)
   const [showUpload, setShowUpload] = useState(false);
   const [uploadText, setUploadText] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
+  
+  // Sync with parent viewMode if provided
+  useEffect(() => {
+    if (parentViewMode !== undefined) {
+      setViewMode(parentViewMode);
+    }
+  }, [parentViewMode]);
+  
+  // Helper to update viewMode (use parent setter if provided)
+  const updateViewMode = useCallback((mode: ViewMode) => {
+    if (setParentViewMode) {
+      setParentViewMode(mode);
+    } else {
+      setViewMode(mode);
+    }
+  }, [setParentViewMode]);
+  
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [deletingUpload, setDeletingUpload] = useState<string | null>(null);
   
@@ -354,6 +385,42 @@ function DumpTab({ onFilterChange }: { onFilterChange?: (filter: BreadcrumbItem)
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { type: 'all', value: '', label: 'all' }
   ]);
+  
+  // Sync breadcrumbs with parent when they click home or navigate from parent
+  useEffect(() => {
+    if (onBreadcrumbsChange) {
+      onBreadcrumbsChange(breadcrumbs);
+    }
+  }, []); // Only on mount to initialize parent
+  
+  // Handle breadcrumb clicks from parent (when user clicks breadcrumb in header)
+  useEffect(() => {
+    if (breadcrumbClickIndex !== null && breadcrumbClickIndex !== undefined) {
+      const newBreadcrumbs = breadcrumbs.slice(0, breadcrumbClickIndex + 1);
+      setBreadcrumbs(newBreadcrumbs);
+      
+      const targetCrumb = newBreadcrumbs[newBreadcrumbs.length - 1];
+      
+      // Apply the filter based on breadcrumb type
+      if (targetCrumb.type === 'all') {
+        setFacts(allFacts);
+        setExpandedCards({});
+      } else if (targetCrumb.type === 'category') {
+        setFacts(allFacts.filter(f => f.category === targetCrumb.value));
+      } else if (targetCrumb.type === 'subcategory') {
+        setFacts(allFacts.filter(f => f.subcategory === targetCrumb.value));
+      } else if (targetCrumb.type === 'entity') {
+        setFacts(allFacts.filter(f => f.entities.some(e => e.toLowerCase() === targetCrumb.value.toLowerCase())));
+      } else if (targetCrumb.type === 'time') {
+        setFacts(allFacts.filter(f => f.timeRef?.toLowerCase() === targetCrumb.value.toLowerCase()));
+      }
+      
+      // Reset the click index after processing
+      if (resetBreadcrumbClick) {
+        resetBreadcrumbClick();
+      }
+    }
+  }, [breadcrumbClickIndex, allFacts, resetBreadcrumbClick]);
   
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -496,23 +563,36 @@ function DumpTab({ onFilterChange }: { onFilterChange?: (filter: BreadcrumbItem)
 
   const navigateTo = (type: FilterType, value: string, label: string, parent?: string) => {
     // Switch to explore view when navigating to a filter
-    setViewMode('explore');
-    // Close sidebar on mobile after navigation
+    updateViewMode('explore');
+    
+    let newBreadcrumbs: BreadcrumbItem[];
     
     if (type === 'all') {
-      setBreadcrumbs([{ type: 'all', value: '', label: 'all' }]);
+      newBreadcrumbs = [{ type: 'all', value: '', label: 'all' }];
       setExpandedCards({});
     } else if (type === 'subcategory' && parent) {
-      setBreadcrumbs([
+      newBreadcrumbs = [
         { type: 'all', value: '', label: 'all' },
         { type: 'category', value: parent, label: parent },
         { type, value, label, parent }
-      ]);
+      ];
     } else {
-      setBreadcrumbs([
+      newBreadcrumbs = [
         { type: 'all', value: '', label: 'all' },
         { type, value, label }
-      ]);
+      ];
+    }
+    
+    setBreadcrumbs(newBreadcrumbs);
+    
+    // Notify parent of filter change
+    if (onFilterChange) {
+      onFilterChange(newBreadcrumbs[newBreadcrumbs.length - 1]);
+    }
+    
+    // Notify parent of breadcrumbs change
+    if (onBreadcrumbsChange) {
+      onBreadcrumbsChange(newBreadcrumbs);
     }
   };
 
@@ -1068,50 +1148,86 @@ function DumpTab({ onFilterChange }: { onFilterChange?: (filter: BreadcrumbItem)
 export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
   const [currentFilter, setCurrentFilter] = useState<BreadcrumbItem>({ type: 'all', value: '', label: 'all' });
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([{ type: 'all', value: '', label: 'all' }]);
+  const [breadcrumbClickIndex, setBreadcrumbClickIndex] = useState<number | null>(null);
   
   const handleHomeClick = () => {
     setViewMode('explore');
-    setCurrentFilter({ type: 'all', value: '', label: 'all' });
+    const resetBreadcrumbs: BreadcrumbItem[] = [{ type: 'all', value: '', label: 'all' }];
+    setBreadcrumbs(resetBreadcrumbs);
+    setCurrentFilter(resetBreadcrumbs[0]);
+    setBreadcrumbClickIndex(0);
+  };
+  
+  const handleBreadcrumbClick = (index: number) => {
+    const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+    setBreadcrumbs(newBreadcrumbs);
+    setCurrentFilter(newBreadcrumbs[newBreadcrumbs.length - 1]);
+    setBreadcrumbClickIndex(index);
   };
   
   return (
     <div className="min-h-screen bg-[var(--bg-main)]">
-      {/* Top Navigation - 3 Icons */}
+      {/* Top Navigation - 3 Icons + Breadcrumbs */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-[var(--bg-main)]/90 backdrop-blur-sm border-b border-[var(--border-subtle)]">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
-          {/* Home (Inbox) - deselects when filtering */}
-          <button
-            onClick={handleHomeClick}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === 'explore' && currentFilter.type === 'all'
-                ? 'text-[var(--text-on-dark)] bg-[var(--bg-active)]'
-                : 'text-[var(--text-sidebar)] hover:text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)]'
-            }`}
-            title="Home (Inbox)"
-          >
-            <HomeIcon className="w-5 h-5" />
-          </button>
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          {/* Left: Navigation Icons + Breadcrumbs */}
+          <div className="flex items-center gap-3">
+            {/* Home (Inbox) - deselects when filtering */}
+            <button
+              onClick={handleHomeClick}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'explore' && currentFilter.type === 'all'
+                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
+                  : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+              }`}
+              title="Home (Inbox)"
+            >
+              <HomeIcon className="w-5 h-5" />
+            </button>
+            
+            {/* Calendar */}
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'calendar'
+                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
+                  : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+              }`}
+              title="Calendar"
+            >
+              <CalendarIcon className="w-5 h-5" />
+            </button>
+            
+            {/* Breadcrumbs - show when in explore mode */}
+            {viewMode === 'explore' && breadcrumbs.length > 0 && (
+              <div className="flex items-center gap-2 ml-2">
+                {breadcrumbs.map((crumb, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    {i > 0 && <span className="text-[var(--text-meta)]">/</span>}
+                    <button
+                      onClick={() => handleBreadcrumbClick(i)}
+                      className={`text-sm transition-colors ${
+                        i === breadcrumbs.length - 1
+                          ? 'text-[var(--text-on-dark)]'
+                          : 'text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] px-2 py-1 rounded'
+                      }`}
+                    >
+                      {crumb.label}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           
-          {/* Calendar */}
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === 'calendar'
-                ? 'text-[var(--text-on-dark)] bg-[var(--bg-active)]'
-                : 'text-[var(--text-sidebar)] hover:text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)]'
-            }`}
-            title="Calendar"
-          >
-            <CalendarIcon className="w-5 h-5" />
-          </button>
-          
-          {/* Upload */}
+          {/* Right: Upload Icon */}
           <button
             onClick={() => setViewMode('uploads')}
             className={`p-2 rounded-lg transition-colors ${
               viewMode === 'uploads'
-                ? 'text-[var(--text-on-dark)] bg-[var(--bg-active)]'
-                : 'text-[var(--text-sidebar)] hover:text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)]'
+                ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
+                : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
             }`}
             title="Uploads"
           >
@@ -1122,7 +1238,14 @@ export default function Home() {
 
       {/* Main Content - Full Width */}
       <main className="pt-14">
-        <DumpTab onFilterChange={setCurrentFilter} />
+        <DumpTab 
+          viewMode={viewMode} 
+          setViewMode={setViewMode}
+          onFilterChange={setCurrentFilter}
+          onBreadcrumbsChange={setBreadcrumbs}
+          breadcrumbClickIndex={breadcrumbClickIndex}
+          resetBreadcrumbClick={() => setBreadcrumbClickIndex(null)}
+        />
       </main>
     </div>
   );

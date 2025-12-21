@@ -1222,7 +1222,13 @@ function DumpTab() {
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       <span className="text-[var(--text-meta)] uppercase tracking-wide font-mono">{fact.category}</span>
                       {fact.timeRef && (
-                        <button onClick={() => navigateTo('time', fact.timeRef!.toLowerCase(), fact.timeRef!)} className="text-[var(--highlight-blue)] hover:bg-[rgba(52,124,147,0.16)] hover:rounded px-1 font-mono transition-colors">
+                        <button 
+                          onClick={() => {
+                            setViewMode('calendar');
+                          }} 
+                          className="text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 font-mono transition-colors cursor-pointer"
+                          title="View in calendar"
+                        >
                           @{fact.timeRef}
                         </button>
                       )}

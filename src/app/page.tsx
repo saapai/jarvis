@@ -1698,7 +1698,8 @@ function DumpTab({
                 }
               }}
               rows={14}
-              className="w-full px-5 py-4 rounded-lg bg-[var(--card-bg)] border-none text-base text-[var(--text-on-card)] placeholder-[var(--bg-main)] resize-none focus:outline-none focus:ring-0 transition-all font-mono leading-relaxed"
+              className="w-full px-5 py-4 bg-[var(--card-bg)] text-base text-[var(--text-on-card)] placeholder-[var(--bg-main)] resize-none outline-none border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 font-mono leading-relaxed"
+              style={{ border: 'none', outline: 'none' }}
             />
             <div className="mt-6 flex justify-end gap-4">
               <button 

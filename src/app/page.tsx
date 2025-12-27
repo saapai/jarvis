@@ -382,6 +382,11 @@ function DumpTab({
   }, [setParentViewMode]);
   
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({
+    recurring: true,
+    facts: true,
+    past: true,
+  });
   const [deletingUpload, setDeletingUpload] = useState<string | null>(null);
   
   const [calendarDate, setCalendarDate] = useState(() => {
@@ -634,6 +639,10 @@ function DumpTab({
 
   const toggleCard = (id: string) => {
     setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleCategoryCollapse = (category: 'recurring' | 'facts' | 'past') => {
+    setCollapsedCategories(prev => ({ ...prev, [category]: !prev[category] }));
   };
 
   // Group facts by subcategory
@@ -1198,39 +1207,189 @@ function DumpTab({
                   {/* Recurring Section */}
                   {groupedFacts.recurringFacts.length > 0 && (
                     <div>
-                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">↻ Recurring</h4>
-                      <div className="space-y-3">
-                        {groupedFacts.recurringFacts.map(fact => {
-                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'right', false);
-                        })}
-                      </div>
+                      {/* Category Header with Arrow */}
+                      <button
+                        onClick={() => toggleCategoryCollapse('recurring')}
+                        className="w-full flex items-center gap-2 mb-3 group"
+                      >
+                        <span className="text-[var(--text-meta)] text-sm group-hover:text-[var(--text-on-dark)] transition-colors">
+                          {collapsedCategories.recurring ? '▸' : '▾'}
+                        </span>
+                        <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] font-mono group-hover:text-[var(--text-on-dark)] transition-colors">
+                          ↻ Recurring
+                        </h4>
+                      </button>
+                      
+                      {/* Cards Stack or Expanded */}
+                      {collapsedCategories.recurring ? (
+                        <div
+                          className="relative cursor-pointer"
+                          onClick={() => toggleCategoryCollapse('recurring')}
+                        >
+                          {groupedFacts.recurringFacts.slice(0, Math.min(3, groupedFacts.recurringFacts.length)).map((fact, index) => {
+                            const offset = index * 4;
+                            const isLast = index === Math.min(2, groupedFacts.recurringFacts.length - 1);
+                            return (
+                              <div
+                                key={fact.id}
+                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
+                                style={{
+                                  ...getColumnCardStyle('right'),
+                                  position: index === 0 ? 'relative' : 'absolute',
+                                  top: index === 0 ? 0 : `${offset}px`,
+                                  left: 0,
+                                  right: 0,
+                                  zIndex: 10 - index,
+                                  opacity: isLast ? 0.6 : index === 1 ? 0.8 : 1,
+                                }}
+                              >
+                                <div className="p-4">
+                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
+                                    {fact.subcategory}
+                                  </h3>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {/* Spacer for stacked cards */}
+                          {groupedFacts.recurringFacts.length > 1 && (
+                            <div style={{ height: `${Math.min(2, groupedFacts.recurringFacts.length - 1) * 4}px` }} />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {groupedFacts.recurringFacts.map(fact => {
+                            const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                            return renderFactCard(fact, groupFacts, 'right', false);
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                   
                   {/* Facts Section */}
                   {groupedFacts.staticFacts.length > 0 && (
                     <div>
-                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Facts</h4>
-                      <div className="space-y-3">
-                        {groupedFacts.staticFacts.map(fact => {
-                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'right', false);
-                        })}
-                      </div>
+                      {/* Category Header with Arrow */}
+                      <button
+                        onClick={() => toggleCategoryCollapse('facts')}
+                        className="w-full flex items-center gap-2 mb-3 group"
+                      >
+                        <span className="text-[var(--text-meta)] text-sm group-hover:text-[var(--text-on-dark)] transition-colors">
+                          {collapsedCategories.facts ? '▸' : '▾'}
+                        </span>
+                        <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] font-mono group-hover:text-[var(--text-on-dark)] transition-colors">
+                          Facts
+                        </h4>
+                      </button>
+                      
+                      {/* Cards Stack or Expanded */}
+                      {collapsedCategories.facts ? (
+                        <div
+                          className="relative cursor-pointer"
+                          onClick={() => toggleCategoryCollapse('facts')}
+                        >
+                          {groupedFacts.staticFacts.slice(0, Math.min(3, groupedFacts.staticFacts.length)).map((fact, index) => {
+                            const offset = index * 4;
+                            const isLast = index === Math.min(2, groupedFacts.staticFacts.length - 1);
+                            return (
+                              <div
+                                key={fact.id}
+                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
+                                style={{
+                                  ...getColumnCardStyle('right'),
+                                  position: index === 0 ? 'relative' : 'absolute',
+                                  top: index === 0 ? 0 : `${offset}px`,
+                                  left: 0,
+                                  right: 0,
+                                  zIndex: 10 - index,
+                                  opacity: isLast ? 0.6 : index === 1 ? 0.8 : 1,
+                                }}
+                              >
+                                <div className="p-4">
+                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
+                                    {fact.subcategory}
+                                  </h3>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {/* Spacer for stacked cards */}
+                          {groupedFacts.staticFacts.length > 1 && (
+                            <div style={{ height: `${Math.min(2, groupedFacts.staticFacts.length - 1) * 4}px` }} />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {groupedFacts.staticFacts.map(fact => {
+                            const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                            return renderFactCard(fact, groupFacts, 'right', false);
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                   
                   {/* Old Events Section */}
                   {groupedFacts.oldFacts.length > 0 && (
                     <div>
-                      <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Past</h4>
-                      <div className="space-y-3">
-                        {groupedFacts.oldFacts.map(fact => {
-                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
-                          return renderFactCard(fact, groupFacts, 'right', true);
-                        })}
-                      </div>
+                      {/* Category Header with Arrow */}
+                      <button
+                        onClick={() => toggleCategoryCollapse('past')}
+                        className="w-full flex items-center gap-2 mb-3 group"
+                      >
+                        <span className="text-[var(--text-meta)] text-sm group-hover:text-[var(--text-on-dark)] transition-colors">
+                          {collapsedCategories.past ? '▸' : '▾'}
+                        </span>
+                        <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] font-mono group-hover:text-[var(--text-on-dark)] transition-colors">
+                          Past
+                        </h4>
+                      </button>
+                      
+                      {/* Cards Stack or Expanded */}
+                      {collapsedCategories.past ? (
+                        <div
+                          className="relative cursor-pointer"
+                          onClick={() => toggleCategoryCollapse('past')}
+                        >
+                          {groupedFacts.oldFacts.slice(0, Math.min(3, groupedFacts.oldFacts.length)).map((fact, index) => {
+                            const offset = index * 4;
+                            const isLast = index === Math.min(2, groupedFacts.oldFacts.length - 1);
+                            return (
+                              <div
+                                key={fact.id}
+                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
+                                style={{
+                                  ...getColumnCardStyle('right'),
+                                  position: index === 0 ? 'relative' : 'absolute',
+                                  top: index === 0 ? 0 : `${offset}px`,
+                                  left: 0,
+                                  right: 0,
+                                  zIndex: 10 - index,
+                                  opacity: isLast ? 0.6 : index === 1 ? 0.8 : 1,
+                                }}
+                              >
+                                <div className="p-4">
+                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
+                                    {fact.subcategory}
+                                  </h3>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {/* Spacer for stacked cards */}
+                          {groupedFacts.oldFacts.length > 1 && (
+                            <div style={{ height: `${Math.min(2, groupedFacts.oldFacts.length - 1) * 4}px` }} />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {groupedFacts.oldFacts.map(fact => {
+                            const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                            return renderFactCard(fact, groupFacts, 'right', true);
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1593,7 +1752,6 @@ export default function Home() {
           
           {/* Center: Brand Name */}
           <div className="absolute left-1/2 transform -translate-x-1/2 font-extrabold text-base tracking-tight">
-            <span className="text-[var(--highlight-blue)]">/</span>
             <span className="text-[var(--text-on-dark)]">enclave</span>
             <span className="text-[var(--highlight-red)]">_</span>
           </div>

@@ -322,9 +322,9 @@ function CalendarIcon({ className }: { className?: string }) {
 function UploadIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      {/* Open folder icon */}
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" strokeWidth="2" />
-      <path d="M2 7h20" strokeWidth="2" />
+      {/* Open folder icon with flap */}
+      <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-8l-2-2H5a2 2 0 0 0-2 2z" strokeWidth="2" fill="none" />
+      <path d="M3 7h18" strokeWidth="2" />
     </svg>
   );
 }
@@ -883,6 +883,8 @@ function DumpTab({
     const staticFacts: Fact[] = []; // Facts without dates
     const oldFacts: Fact[] = [];
     
+    console.log('[Inbox] Today string for comparison:', todayStr);
+    
     for (const fact of facts) {
       // Group by subcategory for card rendering
       if (fact.subcategory) {
@@ -902,12 +904,23 @@ function DumpTab({
           if (fact.dateStr) {
             if (fact.dateStr.startsWith('recurring:')) {
               recurringFacts.push(fact);
-            } else if (fact.dateStr === todayStr) {
-              todayFacts.push(fact);
-            } else if (fact.dateStr > todayStr) {
-              upcomingFacts.push(fact);
             } else {
-              oldFacts.push(fact);
+              // Parse dates properly to compare
+              const factDate = new Date(fact.dateStr);
+              factDate.setHours(0, 0, 0, 0);
+              const todayDate = new Date(todayStr);
+              todayDate.setHours(0, 0, 0, 0);
+              
+              if (factDate.getTime() === todayDate.getTime()) {
+                console.log('[Inbox] Today:', fact.subcategory, fact.dateStr);
+                todayFacts.push(fact);
+              } else if (factDate.getTime() > todayDate.getTime()) {
+                console.log('[Inbox] Upcoming:', fact.subcategory, fact.dateStr);
+                upcomingFacts.push(fact);
+              } else {
+                console.log('[Inbox] Past:', fact.subcategory, fact.dateStr);
+                oldFacts.push(fact);
+              }
             }
           } else {
             staticFacts.push(fact);
@@ -918,12 +931,20 @@ function DumpTab({
         if (fact.dateStr) {
           if (fact.dateStr.startsWith('recurring:')) {
             recurringFacts.push(fact);
-          } else if (fact.dateStr === todayStr) {
-            todayFacts.push(fact);
-          } else if (fact.dateStr > todayStr) {
-            upcomingFacts.push(fact);
           } else {
-            oldFacts.push(fact);
+            // Parse dates properly to compare
+            const factDate = new Date(fact.dateStr);
+            factDate.setHours(0, 0, 0, 0);
+            const todayDate = new Date(todayStr);
+            todayDate.setHours(0, 0, 0, 0);
+            
+            if (factDate.getTime() === todayDate.getTime()) {
+              todayFacts.push(fact);
+            } else if (factDate.getTime() > todayDate.getTime()) {
+              upcomingFacts.push(fact);
+            } else {
+              oldFacts.push(fact);
+            }
           }
         } else {
           staticFacts.push(fact);
@@ -1624,10 +1645,10 @@ function DumpTab({
           }}
         >
           <div 
-            className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-lg border-2 border-[var(--card-border)] shadow-2xl p-8 animate-expand-in`} 
+            className={`w-full max-w-2xl bg-[var(--bg-main)] rounded-lg border-2 border-[var(--text-on-dark)]/20 shadow-2xl p-8 animate-expand-in`} 
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-semibold text-[var(--text-on-card)] mb-6 tracking-tight">
+            <h2 className="text-xl font-semibold text-[var(--text-on-dark)] mb-6 tracking-tight">
               dump text<span className="text-[var(--highlight-red)]">_</span>
             </h2>
             <textarea
@@ -1648,14 +1669,14 @@ function DumpTab({
                 }
               }}
               rows={14}
-              className="w-full px-5 py-4 rounded-lg bg-[var(--bg-main)] border-2 border-[rgba(255,255,255,0.08)] text-base text-[var(--text-on-dark)] placeholder-[rgba(246,238,223,0.35)] resize-none focus:outline-none focus:border-[var(--highlight-blue)]/50 transition-all font-mono leading-relaxed"
+              className="w-full px-5 py-4 rounded-lg bg-[var(--card-bg)] border-2 border-[var(--card-border)] text-base text-[var(--text-on-card)] placeholder-[var(--text-on-card)]/40 resize-none focus:outline-none focus:border-[var(--highlight-blue)]/50 transition-all font-mono leading-relaxed"
             />
             <div className="mt-6 flex justify-end gap-4">
               <button 
                 onClick={() => setShowUpload(false)} 
-                className="px-5 py-2.5 text-sm text-[var(--text-on-card)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.12)] rounded-lg transition-all font-mono"
+                className="px-5 py-2.5 text-sm text-[var(--text-on-dark)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.12)] rounded-lg transition-all font-mono flex items-center gap-3"
               >
-                cancel<span className="ml-3 text-xs opacity-50">esc</span>
+                cancel<span className="text-xs opacity-50">esc</span>
               </button>
               <button 
                 onClick={() => {
@@ -1663,9 +1684,9 @@ function DumpTab({
                   setShowUpload(false); // Close modal immediately
                 }} 
                 disabled={uploading || !uploadText.trim()} 
-                className="px-6 py-2.5 text-sm font-mono bg-[var(--bg-main)] text-[var(--text-on-dark)] border-2 border-[var(--text-on-dark)]/20 hover:border-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.12)] rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-6 py-2.5 text-sm font-mono bg-[var(--card-bg)] text-[var(--text-on-card)] border-2 border-[var(--card-border)] hover:border-[var(--highlight-red)] hover:bg-[var(--card-hover)] rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-3"
               >
-                extract facts<span className="ml-3 text-xs opacity-50">⌘↵</span>
+                extract facts<span className="text-xs opacity-50">⌘↵</span>
               </button>
             </div>
           </div>

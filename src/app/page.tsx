@@ -1229,6 +1229,8 @@ function DumpTab({
                           {/* Always show 3 cards for stacks */}
                           {[0, 1, 2].map((index) => {
                             const fact = groupedFacts.recurringFacts[Math.min(index, groupedFacts.recurringFacts.length - 1)];
+                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                            const mainFact = groupFacts?.[0];
                             const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
                               <div
@@ -1245,9 +1247,14 @@ function DumpTab({
                                 }}
                               >
                                 <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
+                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
                                     {fact?.subcategory || 'Event'}
                                   </h3>
+                                  {index === 0 && mainFact?.content && (
+                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                      {mainFact.content}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -1291,6 +1298,8 @@ function DumpTab({
                           {/* Always show 3 cards for stacks */}
                           {[0, 1, 2].map((index) => {
                             const fact = groupedFacts.staticFacts[Math.min(index, groupedFacts.staticFacts.length - 1)];
+                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                            const mainFact = groupFacts?.[0];
                             const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
                               <div
@@ -1307,9 +1316,14 @@ function DumpTab({
                                 }}
                               >
                                 <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
+                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
                                     {fact?.subcategory || 'Fact'}
                                   </h3>
+                                  {index === 0 && mainFact?.content && (
+                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                      {mainFact.content}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -1353,6 +1367,8 @@ function DumpTab({
                           {/* Always show 3 cards for stacks */}
                           {[0, 1, 2].map((index) => {
                             const fact = groupedFacts.oldFacts[Math.min(index, groupedFacts.oldFacts.length - 1)];
+                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                            const mainFact = groupFacts?.[0];
                             const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
                               <div
@@ -1369,9 +1385,14 @@ function DumpTab({
                                 }}
                               >
                                 <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
+                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
                                     {fact?.subcategory || 'Event'}
                                   </h3>
+                                  {index === 0 && mainFact?.content && (
+                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                      {mainFact.content}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             );

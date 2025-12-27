@@ -868,33 +868,6 @@ function DumpTab({
     );
   };
 
-  // Helper to normalize date string with year inference (same logic as calendar)
-  const normalizeDateWithYearInference = (dateStr: string): string => {
-    try {
-      // Validate it's a proper date format (YYYY-MM-DD)
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        return dateStr; // Return as-is if not valid format
-      }
-      
-      const parsedDate = new Date(dateStr);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // If the date is in the past, increment the year (same logic as calendar)
-      if (parsedDate < today) {
-        const [year, month, day] = dateStr.split('-');
-        const nextYear = parseInt(year, 10) + 1;
-        const normalized = `${nextYear}-${month}-${day}`;
-        console.log('[Inbox] Date in past, adjusted:', dateStr, '->', normalized);
-        return normalized;
-      }
-      
-      return dateStr;
-    } catch (e) {
-      return dateStr; // Return as-is on error
-    }
-  };
-
   const groupedFacts = useMemo(() => {
     const groups: Record<string, Fact[]> = {};
     const ungrouped: Fact[] = [];
@@ -913,18 +886,38 @@ function DumpTab({
     console.log('[Inbox] Today string for comparison:', todayStr);
     
     for (const fact of facts) {
-      // Group by subcategory for card rendering
+      // Group by subcategory + date (so each date occurrence gets its own card)
+      // Unless it's recurring, then group by subcategory alone
       if (fact.subcategory) {
-        const key = fact.subcategory.toLowerCase();
+        let key: string;
+        if (fact.dateStr && fact.dateStr.startsWith('recurring:')) {
+          // Recurring events: group by subcategory only
+          key = fact.subcategory.toLowerCase();
+        } else if (fact.dateStr) {
+          // Specific dates: group by subcategory + date (each date gets own card)
+          key = `${fact.subcategory.toLowerCase()}__${fact.dateStr}`;
+        } else {
+          // No date: group by subcategory
+          key = fact.subcategory.toLowerCase();
+        }
+        
         if (!groups[key]) groups[key] = [];
         groups[key].push(fact);
       } else {
         ungrouped.push(fact);
       }
       
-      // Categorize by time (use first fact of each subcategory to avoid duplicates)
+      // Categorize by time (use first fact of each group to avoid duplicates)
       if (fact.subcategory) {
-        const key = fact.subcategory.toLowerCase();
+        let key: string;
+        if (fact.dateStr && fact.dateStr.startsWith('recurring:')) {
+          key = fact.subcategory.toLowerCase();
+        } else if (fact.dateStr) {
+          key = `${fact.subcategory.toLowerCase()}__${fact.dateStr}`;
+        } else {
+          key = fact.subcategory.toLowerCase();
+        }
+        
         const isFirstInGroup = groups[key][0] === fact;
         
         if (isFirstInGroup) {
@@ -932,21 +925,21 @@ function DumpTab({
             if (fact.dateStr.startsWith('recurring:')) {
               recurringFacts.push(fact);
             } else {
-              // Normalize date with year inference (same as calendar)
-              const normalizedDateStr = normalizeDateWithYearInference(fact.dateStr);
-              const factDate = new Date(normalizedDateStr);
+              // Use the stored dateStr as-is (no dynamic year inference)
+              // The upload logic should have already set the correct year
+              const factDate = new Date(fact.dateStr);
               factDate.setHours(0, 0, 0, 0);
               const todayDate = new Date(todayStr);
               todayDate.setHours(0, 0, 0, 0);
               
               if (factDate.getTime() === todayDate.getTime()) {
-                console.log('[Inbox] Today:', fact.subcategory, fact.dateStr, '->', normalizedDateStr);
+                console.log('[Inbox] Today:', fact.subcategory, fact.dateStr);
                 todayFacts.push(fact);
               } else if (factDate.getTime() > todayDate.getTime()) {
-                console.log('[Inbox] Upcoming:', fact.subcategory, fact.dateStr, '->', normalizedDateStr);
+                console.log('[Inbox] Upcoming:', fact.subcategory, fact.dateStr);
                 upcomingFacts.push(fact);
               } else {
-                console.log('[Inbox] Past:', fact.subcategory, fact.dateStr, '->', normalizedDateStr);
+                console.log('[Inbox] Past:', fact.subcategory, fact.dateStr);
                 oldFacts.push(fact);
               }
             }
@@ -960,9 +953,8 @@ function DumpTab({
           if (fact.dateStr.startsWith('recurring:')) {
             recurringFacts.push(fact);
           } else {
-            // Normalize date with year inference (same as calendar)
-            const normalizedDateStr = normalizeDateWithYearInference(fact.dateStr);
-            const factDate = new Date(normalizedDateStr);
+            // Use the stored dateStr as-is (no dynamic year inference)
+            const factDate = new Date(fact.dateStr);
             factDate.setHours(0, 0, 0, 0);
             const todayDate = new Date(todayStr);
             todayDate.setHours(0, 0, 0, 0);
@@ -981,16 +973,16 @@ function DumpTab({
       }
     }
     
-    // Sort upcoming by date (nearest first)
+    // Sort upcoming by date (nearest first → farthest)
     upcomingFacts.sort((a, b) => {
       if (!a.dateStr || !b.dateStr) return 0;
       return a.dateStr.localeCompare(b.dateStr);
     });
     
-    // Sort old events by date (most recent first - yesterday first)
+    // Sort past events by date (yesterday first → earliest/farthest in past)
     oldFacts.sort((a, b) => {
       if (!a.dateStr || !b.dateStr) return 0;
-      return b.dateStr.localeCompare(a.dateStr);
+      return b.dateStr.localeCompare(a.dateStr); // Descending order
     });
     
     // Sort recurring by weekday

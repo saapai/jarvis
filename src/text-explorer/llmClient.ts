@@ -28,17 +28,21 @@ For each distinct topic/section in the text, create ONE fact entry with:
 4. subcategory: The specific event/topic name (e.g., "Study Hall", "Creatathon", "Big Little")
 5. timeRef: The exact time reference ("November 8th", "every Wednesday at 8:00 PM", "January 15th")
 6. dateStr: Parse to date format:
-   - Specific dates WITHOUT year: If the date would be in the past (before today), use ${currentYear + 1}, otherwise use ${currentYear}
-     Examples: "January 8th" -> "${currentYear + 1}-01-08" (if today is December), "March 15th" -> "${currentYear + 1}-03-15" (if today is December)
-   - Specific dates WITH year: Use the year specified (e.g., "November 8th, 2025" -> "${currentYear}-11-08")
+   - For dates WITHOUT a year specified: Determine which occurrence is closer (past or future):
+     * Calculate days to past occurrence (this year) 
+     * Calculate days to future occurrence (next year)
+     * Use whichever is closer
+     * Example: If today is Dec 26, "November 8" -> past is 48 days ago, future is 317 days away, so use ${currentYear}-11-08
+     * Example: If today is Dec 26, "February 5" -> past is 325 days ago, future is 41 days away, so use ${currentYear + 1}-02-05
+   - Specific dates WITH year: Use the year specified (e.g., "November 8th, 2025" -> "2025-11-08")
    - Recurring: "recurring:dayname" (e.g., "recurring:wednesday")
    - TBD/unknown: null
 7. entities: ALL important entities (people, places, groups, concepts, locations, times)
 
-CRITICAL RULE FOR DATES:
-- If a date without a year would be in the PAST relative to today, assume it's for NEXT YEAR (${currentYear + 1})
-- If a date without a year is in the FUTURE relative to today, use THIS YEAR (${currentYear})
-- Always ensure dates are in the future unless explicitly stated otherwise
+CRITICAL RULE FOR DATES WITHOUT YEAR:
+- Calculate distance to BOTH the past occurrence (earlier this year) and future occurrence (next year)
+- Use whichever date is CLOSER to today
+- This ensures "November 8" in December refers to the recent past November, not next year's November
 
 IMPORTANT RULES:
 - Group related sentences about the same topic into ONE fact

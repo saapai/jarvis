@@ -868,6 +868,33 @@ function DumpTab({
     );
   };
 
+  // Helper to normalize date string with year inference (same logic as calendar)
+  const normalizeDateWithYearInference = (dateStr: string): string => {
+    try {
+      // Validate it's a proper date format (YYYY-MM-DD)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr; // Return as-is if not valid format
+      }
+      
+      const parsedDate = new Date(dateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // If the date is in the past, increment the year (same logic as calendar)
+      if (parsedDate < today) {
+        const [year, month, day] = dateStr.split('-');
+        const nextYear = parseInt(year, 10) + 1;
+        const normalized = `${nextYear}-${month}-${day}`;
+        console.log('[Inbox] Date in past, adjusted:', dateStr, '->', normalized);
+        return normalized;
+      }
+      
+      return dateStr;
+    } catch (e) {
+      return dateStr; // Return as-is on error
+    }
+  };
+
   const groupedFacts = useMemo(() => {
     const groups: Record<string, Fact[]> = {};
     const ungrouped: Fact[] = [];
@@ -905,20 +932,21 @@ function DumpTab({
             if (fact.dateStr.startsWith('recurring:')) {
               recurringFacts.push(fact);
             } else {
-              // Parse dates properly to compare
-              const factDate = new Date(fact.dateStr);
+              // Normalize date with year inference (same as calendar)
+              const normalizedDateStr = normalizeDateWithYearInference(fact.dateStr);
+              const factDate = new Date(normalizedDateStr);
               factDate.setHours(0, 0, 0, 0);
               const todayDate = new Date(todayStr);
               todayDate.setHours(0, 0, 0, 0);
               
               if (factDate.getTime() === todayDate.getTime()) {
-                console.log('[Inbox] Today:', fact.subcategory, fact.dateStr);
+                console.log('[Inbox] Today:', fact.subcategory, fact.dateStr, '->', normalizedDateStr);
                 todayFacts.push(fact);
               } else if (factDate.getTime() > todayDate.getTime()) {
-                console.log('[Inbox] Upcoming:', fact.subcategory, fact.dateStr);
+                console.log('[Inbox] Upcoming:', fact.subcategory, fact.dateStr, '->', normalizedDateStr);
                 upcomingFacts.push(fact);
               } else {
-                console.log('[Inbox] Past:', fact.subcategory, fact.dateStr);
+                console.log('[Inbox] Past:', fact.subcategory, fact.dateStr, '->', normalizedDateStr);
                 oldFacts.push(fact);
               }
             }
@@ -932,8 +960,9 @@ function DumpTab({
           if (fact.dateStr.startsWith('recurring:')) {
             recurringFacts.push(fact);
           } else {
-            // Parse dates properly to compare
-            const factDate = new Date(fact.dateStr);
+            // Normalize date with year inference (same as calendar)
+            const normalizedDateStr = normalizeDateWithYearInference(fact.dateStr);
+            const factDate = new Date(normalizedDateStr);
             factDate.setHours(0, 0, 0, 0);
             const todayDate = new Date(todayStr);
             todayDate.setHours(0, 0, 0, 0);

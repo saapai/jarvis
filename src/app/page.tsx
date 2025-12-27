@@ -1226,41 +1226,68 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('recurring')}
                         >
-                          {/* Always show 3 cards for stacks */}
-                          {[0, 1, 2].map((index) => {
-                            const fact = groupedFacts.recurringFacts[Math.min(index, groupedFacts.recurringFacts.length - 1)];
-                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
-                            const mainFact = groupFacts?.[0];
-                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
-                            return (
-                              <div
-                                key={`stack-${index}`}
-                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
-                                style={{
-                                  ...getColumnCardStyle('right'),
-                                  position: index === 0 ? 'relative' : 'absolute',
-                                  top: index === 0 ? 0 : `${offset}px`,
-                                  left: 0,
-                                  right: 0,
-                                  zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
-                                }}
-                              >
-                                <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
-                                    {fact?.subcategory || 'Event'}
-                                  </h3>
-                                  {index === 0 && mainFact?.content && (
-                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-                                      {mainFact.content}
-                                    </p>
-                                  )}
+                          {/* Always show 3 cards for stacks when there are 2+ items */}
+                          {groupedFacts.recurringFacts.length >= 2 ? (
+                            [0, 1, 2].map((index) => {
+                              const factIndex = Math.min(index, groupedFacts.recurringFacts.length - 1);
+                              const fact = groupedFacts.recurringFacts[factIndex];
+                              const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                              const mainFact = groupFacts?.[0];
+                              const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
+                              return (
+                                <div
+                                  key={`stack-${index}`}
+                                  className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
+                                  style={{
+                                    ...getColumnCardStyle('right'),
+                                    position: index === 0 ? 'relative' : 'absolute',
+                                    top: index === 0 ? 0 : `${offset}px`,
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 10 - index,
+                                    opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
+                                  }}
+                                >
+                                  <div className="p-4">
+                                    <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                      {fact?.subcategory || 'Event'}
+                                    </h3>
+                                    {index === 0 && mainFact?.content && (
+                                      <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                        {mainFact.content}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })
+                          ) : (
+                            // Single card - no stack
+                            groupedFacts.recurringFacts[0] && (() => {
+                              const fact = groupedFacts.recurringFacts[0];
+                              const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                              const mainFact = groupFacts?.[0];
+                              return (
+                                <div
+                                  className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                                  style={getColumnCardStyle('right')}
+                                >
+                                  <div className="p-4">
+                                    <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                      {fact.subcategory}
+                                    </h3>
+                                    {mainFact?.content && (
+                                      <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                        {mainFact.content}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                          {groupedFacts.recurringFacts.length >= 2 && <div style={{ height: '16px' }} />}
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1295,41 +1322,68 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('facts')}
                         >
-                          {/* Always show 3 cards for stacks */}
-                          {[0, 1, 2].map((index) => {
-                            const fact = groupedFacts.staticFacts[Math.min(index, groupedFacts.staticFacts.length - 1)];
-                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
-                            const mainFact = groupFacts?.[0];
-                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
-                            return (
-                              <div
-                                key={`stack-${index}`}
-                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
-                                style={{
-                                  ...getColumnCardStyle('right'),
-                                  position: index === 0 ? 'relative' : 'absolute',
-                                  top: index === 0 ? 0 : `${offset}px`,
-                                  left: 0,
-                                  right: 0,
-                                  zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
-                                }}
-                              >
-                                <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
-                                    {fact?.subcategory || 'Fact'}
-                                  </h3>
-                                  {index === 0 && mainFact?.content && (
-                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-                                      {mainFact.content}
-                                    </p>
-                                  )}
+                          {/* Always show 3 cards for stacks when there are 2+ items */}
+                          {groupedFacts.staticFacts.length >= 2 ? (
+                            [0, 1, 2].map((index) => {
+                              const factIndex = Math.min(index, groupedFacts.staticFacts.length - 1);
+                              const fact = groupedFacts.staticFacts[factIndex];
+                              const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                              const mainFact = groupFacts?.[0];
+                              const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
+                              return (
+                                <div
+                                  key={`stack-${index}`}
+                                  className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
+                                  style={{
+                                    ...getColumnCardStyle('right'),
+                                    position: index === 0 ? 'relative' : 'absolute',
+                                    top: index === 0 ? 0 : `${offset}px`,
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 10 - index,
+                                    opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
+                                  }}
+                                >
+                                  <div className="p-4">
+                                    <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                      {fact?.subcategory || 'Fact'}
+                                    </h3>
+                                    {index === 0 && mainFact?.content && (
+                                      <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                        {mainFact.content}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })
+                          ) : (
+                            // Single card - no stack
+                            groupedFacts.staticFacts[0] && (() => {
+                              const fact = groupedFacts.staticFacts[0];
+                              const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                              const mainFact = groupFacts?.[0];
+                              return (
+                                <div
+                                  className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                                  style={getColumnCardStyle('right')}
+                                >
+                                  <div className="p-4">
+                                    <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                      {fact.subcategory}
+                                    </h3>
+                                    {mainFact?.content && (
+                                      <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                        {mainFact.content}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                          {groupedFacts.staticFacts.length >= 2 && <div style={{ height: '16px' }} />}
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1364,41 +1418,68 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('past')}
                         >
-                          {/* Always show 3 cards for stacks */}
-                          {[0, 1, 2].map((index) => {
-                            const fact = groupedFacts.oldFacts[Math.min(index, groupedFacts.oldFacts.length - 1)];
-                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
-                            const mainFact = groupFacts?.[0];
-                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
-                            return (
-                              <div
-                                key={`stack-${index}`}
-                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
-                                style={{
-                                  ...getColumnCardStyle('right'),
-                                  position: index === 0 ? 'relative' : 'absolute',
-                                  top: index === 0 ? 0 : `${offset}px`,
-                                  left: 0,
-                                  right: 0,
-                                  zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
-                                }}
-                              >
-                                <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
-                                    {fact?.subcategory || 'Event'}
-                                  </h3>
-                                  {index === 0 && mainFact?.content && (
-                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-                                      {mainFact.content}
-                                    </p>
-                                  )}
+                          {/* Always show 3 cards for stacks when there are 2+ items */}
+                          {groupedFacts.oldFacts.length >= 2 ? (
+                            [0, 1, 2].map((index) => {
+                              const factIndex = Math.min(index, groupedFacts.oldFacts.length - 1);
+                              const fact = groupedFacts.oldFacts[factIndex];
+                              const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                              const mainFact = groupFacts?.[0];
+                              const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
+                              return (
+                                <div
+                                  key={`stack-${index}`}
+                                  className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
+                                  style={{
+                                    ...getColumnCardStyle('right'),
+                                    position: index === 0 ? 'relative' : 'absolute',
+                                    top: index === 0 ? 0 : `${offset}px`,
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 10 - index,
+                                    opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
+                                  }}
+                                >
+                                  <div className="p-4">
+                                    <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                      {fact?.subcategory || 'Event'}
+                                    </h3>
+                                    {index === 0 && mainFact?.content && (
+                                      <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                        {mainFact.content}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })
+                          ) : (
+                            // Single card - no stack
+                            groupedFacts.oldFacts[0] && (() => {
+                              const fact = groupedFacts.oldFacts[0];
+                              const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                              const mainFact = groupFacts?.[0];
+                              return (
+                                <div
+                                  className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                                  style={getColumnCardStyle('right')}
+                                >
+                                  <div className="p-4">
+                                    <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                      {fact.subcategory}
+                                    </h3>
+                                    {mainFact?.content && (
+                                      <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
+                                        {mainFact.content}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                          {groupedFacts.oldFacts.length >= 2 && <div style={{ height: '16px' }} />}
                         </div>
                       ) : (
                         <div className="space-y-3">

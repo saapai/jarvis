@@ -322,8 +322,9 @@ function CalendarIcon({ className }: { className?: string }) {
 function UploadIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      {/* Folder icon */}
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeWidth="2" />
+      {/* Open folder icon */}
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" strokeWidth="2" />
+      <path d="M2 7h20" strokeWidth="2" />
     </svg>
   );
 }
@@ -1544,9 +1545,20 @@ function DumpTab({
             /* Uploads Management View */
             <div className="animate-fade-in space-y-4">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-medium text-[var(--text-on-dark)]">
-                  uploads<span className="text-[var(--highlight-red)]">_</span>
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-medium text-[var(--text-on-dark)]">
+                    uploads<span className="text-[var(--highlight-red)]">_</span>
+                  </h2>
+                  {uploading && (
+                    <div className="flex items-center gap-2 text-[var(--text-meta)] text-sm font-mono">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>processing...</span>
+                    </div>
+                  )}
+                </div>
                 <button 
                   onClick={() => setShowUpload(true)}
                   className="px-4 py-2 text-sm font-mono button"
@@ -1602,29 +1614,58 @@ function DumpTab({
 
       {/* Upload Modal */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-8 z-50 animate-fade-in" onClick={() => setShowUpload(false)}>
-          <div className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-lg border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] p-6 animate-expand-in`} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-medium text-[var(--text-on-card)] mb-4">dump text<span className="text-[var(--highlight-red)]">_</span></h2>
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-8 z-50 animate-fade-in" 
+          onClick={() => setShowUpload(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setShowUpload(false);
+            }
+          }}
+        >
+          <div 
+            className={`w-full max-w-2xl bg-[var(--card-bg)] rounded-lg border-2 border-[var(--card-border)] shadow-2xl p-8 animate-expand-in`} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-semibold text-[var(--text-on-card)] mb-6 tracking-tight">
+              dump text<span className="text-[var(--highlight-red)]">_</span>
+            </h2>
             <textarea
               autoFocus
               placeholder="paste or type text here..."
               value={uploadText}
               onChange={(e) => setUploadText(e.target.value)}
               onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowUpload(false);
+                }
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                   e.preventDefault();
                   if (!uploading && uploadText.trim()) {
                     handleUpload();
+                    setShowUpload(false); // Close modal immediately
                   }
                 }
               }}
-              rows={12}
-              className="w-full px-4 py-3 rounded-lg bg-[#1c1f23] border border-[rgba(255,255,255,0.12)] text-sm text-[#f6eedf] placeholder-[rgba(246,238,223,0.45)] resize-none focus:outline-none focus:border-[var(--highlight-blue)] transition-colors font-mono"
+              rows={14}
+              className="w-full px-5 py-4 rounded-lg bg-[var(--bg-main)] border-2 border-[rgba(255,255,255,0.08)] text-base text-[var(--text-on-dark)] placeholder-[rgba(246,238,223,0.35)] resize-none focus:outline-none focus:border-[var(--highlight-blue)]/50 transition-all font-mono leading-relaxed"
             />
-            <div className="mt-4 flex justify-end gap-3">
-              <button onClick={() => setShowUpload(false)} className="px-4 py-2 text-sm text-[var(--text-on-card)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] rounded transition-colors">cancel</button>
-              <button onClick={handleUpload} disabled={uploading || !uploadText.trim()} className="px-6 py-2 text-sm font-mono button disabled:opacity-50 disabled:cursor-not-allowed">
-                {uploading ? 'extracting...' : 'extract facts'}
+            <div className="mt-6 flex justify-end gap-4">
+              <button 
+                onClick={() => setShowUpload(false)} 
+                className="px-5 py-2.5 text-sm text-[var(--text-on-card)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.12)] rounded-lg transition-all font-mono"
+              >
+                cancel<span className="ml-3 text-xs opacity-50">esc</span>
+              </button>
+              <button 
+                onClick={() => {
+                  handleUpload();
+                  setShowUpload(false); // Close modal immediately
+                }} 
+                disabled={uploading || !uploadText.trim()} 
+                className="px-6 py-2.5 text-sm font-mono bg-[var(--bg-main)] text-[var(--text-on-dark)] border-2 border-[var(--text-on-dark)]/20 hover:border-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.12)] rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                extract facts<span className="ml-3 text-xs opacity-50">⌘↵</span>
               </button>
             </div>
           </div>

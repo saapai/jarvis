@@ -1226,12 +1226,13 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('recurring')}
                         >
-                          {groupedFacts.recurringFacts.slice(0, Math.min(3, groupedFacts.recurringFacts.length)).map((fact, index) => {
-                            const offset = index * 4;
-                            const isLast = index === Math.min(2, groupedFacts.recurringFacts.length - 1);
+                          {/* Always show 3 cards for stacks */}
+                          {[0, 1, 2].map((index) => {
+                            const fact = groupedFacts.recurringFacts[Math.min(index, groupedFacts.recurringFacts.length - 1)];
+                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
                               <div
-                                key={fact.id}
+                                key={`stack-${index}`}
                                 className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
                                 style={{
                                   ...getColumnCardStyle('right'),
@@ -1240,21 +1241,19 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: isLast ? 0.6 : index === 1 ? 0.8 : 1,
+                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
                                 }}
                               >
                                 <div className="p-4">
                                   <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
-                                    {fact.subcategory}
+                                    {fact?.subcategory || 'Event'}
                                   </h3>
                                 </div>
                               </div>
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          {groupedFacts.recurringFacts.length > 1 && (
-                            <div style={{ height: `${Math.min(2, groupedFacts.recurringFacts.length - 1) * 4}px` }} />
-                          )}
+                          <div style={{ height: '16px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1289,12 +1288,13 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('facts')}
                         >
-                          {groupedFacts.staticFacts.slice(0, Math.min(3, groupedFacts.staticFacts.length)).map((fact, index) => {
-                            const offset = index * 4;
-                            const isLast = index === Math.min(2, groupedFacts.staticFacts.length - 1);
+                          {/* Always show 3 cards for stacks */}
+                          {[0, 1, 2].map((index) => {
+                            const fact = groupedFacts.staticFacts[Math.min(index, groupedFacts.staticFacts.length - 1)];
+                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
                               <div
-                                key={fact.id}
+                                key={`stack-${index}`}
                                 className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
                                 style={{
                                   ...getColumnCardStyle('right'),
@@ -1303,21 +1303,19 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: isLast ? 0.6 : index === 1 ? 0.8 : 1,
+                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
                                 }}
                               >
                                 <div className="p-4">
                                   <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
-                                    {fact.subcategory}
+                                    {fact?.subcategory || 'Fact'}
                                   </h3>
                                 </div>
                               </div>
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          {groupedFacts.staticFacts.length > 1 && (
-                            <div style={{ height: `${Math.min(2, groupedFacts.staticFacts.length - 1) * 4}px` }} />
-                          )}
+                          <div style={{ height: '16px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1352,12 +1350,13 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('past')}
                         >
-                          {groupedFacts.oldFacts.slice(0, Math.min(3, groupedFacts.oldFacts.length)).map((fact, index) => {
-                            const offset = index * 4;
-                            const isLast = index === Math.min(2, groupedFacts.oldFacts.length - 1);
+                          {/* Always show 3 cards for stacks */}
+                          {[0, 1, 2].map((index) => {
+                            const fact = groupedFacts.oldFacts[Math.min(index, groupedFacts.oldFacts.length - 1)];
+                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
                               <div
-                                key={fact.id}
+                                key={`stack-${index}`}
                                 className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
                                 style={{
                                   ...getColumnCardStyle('right'),
@@ -1366,21 +1365,19 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: isLast ? 0.6 : index === 1 ? 0.8 : 1,
+                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
                                 }}
                               >
                                 <div className="p-4">
                                   <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight">
-                                    {fact.subcategory}
+                                    {fact?.subcategory || 'Event'}
                                   </h3>
                                 </div>
                               </div>
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          {groupedFacts.oldFacts.length > 1 && (
-                            <div style={{ height: `${Math.min(2, groupedFacts.oldFacts.length - 1) * 4}px` }} />
-                          )}
+                          <div style={{ height: '16px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">

@@ -1687,7 +1687,7 @@ function DumpTab({
           }}
         >
           <div 
-            className={`w-full max-w-2xl bg-[var(--bg-main)] rounded-lg border-2 border-[var(--text-on-dark)]/20 shadow-2xl p-8 animate-expand-in`} 
+            className={`w-full max-w-2xl bg-[var(--bg-main)] rounded-lg shadow-2xl p-8 animate-expand-in`} 
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-semibold text-[var(--text-on-dark)] mb-6 tracking-tight">

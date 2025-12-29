@@ -1287,10 +1287,7 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.recurringFacts.length - 1);
                             const fact = groupedFacts.recurringFacts[factIndex];
-                            const groupKey = fact ? getGroupKey(fact) : '';
-                            const groupFacts = fact ? (groupedFacts.groups[groupKey] || [fact]) : null;
-                            const mainFact = groupFacts?.[0];
-                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
+                            const offset = index * 12; // More obvious gaps
                             return (
                               <div
                                 key={`stack-${index}`}
@@ -1302,24 +1299,19 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
+                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
                                 }}
                               >
-                                <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                <div className="px-4 py-2">
+                                  <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
                                     {fact?.subcategory || 'Event'}
                                   </h3>
-                                  {index === 0 && mainFact?.content && (
-                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-                                      {mainFact.content}
-                                    </p>
-                                  )}
                                 </div>
                               </div>
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                          <div style={{ height: '24px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1359,10 +1351,7 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.staticFacts.length - 1);
                             const fact = groupedFacts.staticFacts[factIndex];
-                            const groupKey = fact ? getGroupKey(fact) : '';
-                            const groupFacts = fact ? (groupedFacts.groups[groupKey] || [fact]) : null;
-                            const mainFact = groupFacts?.[0];
-                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
+                            const offset = index * 12; // More obvious gaps
                             return (
                               <div
                                 key={`stack-${index}`}
@@ -1374,24 +1363,19 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
+                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
                                 }}
                               >
-                                <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                <div className="px-4 py-2">
+                                  <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
                                     {fact?.subcategory || 'Fact'}
                                   </h3>
-                                  {index === 0 && mainFact?.content && (
-                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-                                      {mainFact.content}
-                                    </p>
-                                  )}
                                 </div>
                               </div>
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                          <div style={{ height: '24px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1431,10 +1415,7 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.oldFacts.length - 1);
                             const fact = groupedFacts.oldFacts[factIndex];
-                            const groupKey = fact ? getGroupKey(fact) : '';
-                            const groupFacts = fact ? (groupedFacts.groups[groupKey] || [fact]) : null;
-                            const mainFact = groupFacts?.[0];
-                            const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
+                            const offset = index * 12; // More obvious gaps
                             return (
                               <div
                                 key={`stack-${index}`}
@@ -1446,24 +1427,19 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.5 : index === 1 ? 0.75 : 1,
+                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
                                 }}
                               >
-                                <div className="p-4">
-                                  <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight mb-2">
+                                <div className="px-4 py-2">
+                                  <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
                                     {fact?.subcategory || 'Event'}
                                   </h3>
-                                  {index === 0 && mainFact?.content && (
-                                    <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-                                      {mainFact.content}
-                                    </p>
-                                  )}
                                 </div>
                               </div>
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                          <div style={{ height: '24px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">

@@ -1287,7 +1287,7 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.recurringFacts.length - 1);
                             const fact = groupedFacts.recurringFacts[factIndex];
-                            const offset = index * 6; // Subtle offsets
+                            const offset = index * 8; // Visible stack offsets
                             return (
                               <div
                                 key={`stack-${index}`}
@@ -1299,12 +1299,12 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.3 : index === 1 ? 0.6 : 1,
-                                  height: index === 0 ? 'auto' : '12px',
+                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
+                                  height: index === 0 ? 'auto' : '20px',
                                 }}
                               >
                                 {index === 0 && (
-                                  <div className="px-4 py-2">
+                                  <div className="px-4 py-3.5">
                                     <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
                                       {fact?.subcategory || 'Event'}
                                     </h3>
@@ -1314,7 +1314,7 @@ function DumpTab({
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '12px' }} />
+                          <div style={{ height: '16px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1354,7 +1354,7 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.staticFacts.length - 1);
                             const fact = groupedFacts.staticFacts[factIndex];
-                            const offset = index * 6; // Subtle offsets
+                            const offset = index * 8; // Visible stack offsets
                             return (
                               <div
                                 key={`stack-${index}`}
@@ -1366,12 +1366,12 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.3 : index === 1 ? 0.6 : 1,
-                                  height: index === 0 ? 'auto' : '12px',
+                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
+                                  height: index === 0 ? 'auto' : '20px',
                                 }}
                               >
                                 {index === 0 && (
-                                  <div className="px-4 py-2">
+                                  <div className="px-4 py-3.5">
                                     <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
                                       {fact?.subcategory || 'Fact'}
                                     </h3>
@@ -1381,7 +1381,7 @@ function DumpTab({
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '12px' }} />
+                          <div style={{ height: '16px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1421,7 +1421,7 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.oldFacts.length - 1);
                             const fact = groupedFacts.oldFacts[factIndex];
-                            const offset = index * 6; // Subtle offsets
+                            const offset = index * 8; // Visible stack offsets
                             return (
                               <div
                                 key={`stack-${index}`}
@@ -1433,12 +1433,12 @@ function DumpTab({
                                   left: 0,
                                   right: 0,
                                   zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.3 : index === 1 ? 0.6 : 1,
-                                  height: index === 0 ? 'auto' : '12px',
+                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
+                                  height: index === 0 ? 'auto' : '20px',
                                 }}
                               >
                                 {index === 0 && (
-                                  <div className="px-4 py-2">
+                                  <div className="px-4 py-3.5">
                                     <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
                                       {fact?.subcategory || 'Event'}
                                     </h3>
@@ -1448,7 +1448,7 @@ function DumpTab({
                             );
                           })}
                           {/* Spacer for stacked cards */}
-                          <div style={{ height: '12px' }} />
+                          <div style={{ height: '16px' }} />
                         </div>
                       ) : (
                         <div className="space-y-3">

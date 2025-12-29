@@ -645,6 +645,19 @@ function DumpTab({
     setCollapsedCategories(prev => ({ ...prev, [category]: !prev[category] }));
   };
 
+  // Helper function to generate group key for a fact (must match grouping logic)
+  const getGroupKey = (fact: Fact): string => {
+    if (!fact.subcategory) return '';
+    
+    if (fact.dateStr && fact.dateStr.startsWith('recurring:')) {
+      return fact.subcategory.toLowerCase();
+    } else if (fact.dateStr) {
+      return `${fact.subcategory.toLowerCase()}__${fact.dateStr}`;
+    } else {
+      return fact.subcategory.toLowerCase();
+    }
+  };
+
   // Group facts by subcategory
   // Helper function to calculate days until/since event and map to urgency bucket
   const getUrgencyBucket = (dateStr: string | null, isPast: boolean): 'critical' | 'high' | 'medium' | 'low' | 'minimal' => {
@@ -734,7 +747,7 @@ function DumpTab({
     
     const subcategory = fact.subcategory.toLowerCase();
     const isExpanded = expandedCards[subcategory];
-    const mainFact = groupFacts[0];
+    const mainFact = groupFacts?.[0] || fact;
     
     // Show only ONE canonical date chip - the primary date (fix UTC offset issue)
     let dateChip = null;
@@ -1216,7 +1229,8 @@ function DumpTab({
                       <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Today</h4>
                       <div className="space-y-3">
                         {groupedFacts.todayFacts.map(fact => {
-                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                          const groupKey = getGroupKey(fact);
+                          const groupFacts = groupedFacts.groups[groupKey] || [fact];
                           return renderFactCard(fact, groupFacts, 'left', false);
                         })}
                       </div>
@@ -1229,7 +1243,8 @@ function DumpTab({
                       <h4 className="text-xs uppercase tracking-wider text-[var(--text-meta)] mb-3 font-mono">Upcoming</h4>
                       <div className="space-y-3">
                         {groupedFacts.upcomingFacts.map(fact => {
-                          const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                          const groupKey = getGroupKey(fact);
+                          const groupFacts = groupedFacts.groups[groupKey] || [fact];
                           return renderFactCard(fact, groupFacts, 'left', false);
                         })}
                       </div>
@@ -1272,7 +1287,8 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.recurringFacts.length - 1);
                             const fact = groupedFacts.recurringFacts[factIndex];
-                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                            const groupKey = fact ? getGroupKey(fact) : '';
+                            const groupFacts = fact ? (groupedFacts.groups[groupKey] || [fact]) : null;
                             const mainFact = groupFacts?.[0];
                             const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
@@ -1308,7 +1324,8 @@ function DumpTab({
                       ) : (
                         <div className="space-y-3">
                           {groupedFacts.recurringFacts.map(fact => {
-                            const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                            const groupKey = getGroupKey(fact);
+                            const groupFacts = groupedFacts.groups[groupKey] || [fact];
                             return renderFactCard(fact, groupFacts, 'right', false);
                           })}
                         </div>
@@ -1342,7 +1359,8 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.staticFacts.length - 1);
                             const fact = groupedFacts.staticFacts[factIndex];
-                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                            const groupKey = fact ? getGroupKey(fact) : '';
+                            const groupFacts = fact ? (groupedFacts.groups[groupKey] || [fact]) : null;
                             const mainFact = groupFacts?.[0];
                             const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
@@ -1378,7 +1396,8 @@ function DumpTab({
                       ) : (
                         <div className="space-y-3">
                           {groupedFacts.staticFacts.map(fact => {
-                            const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                            const groupKey = getGroupKey(fact);
+                            const groupFacts = groupedFacts.groups[groupKey] || [fact];
                             return renderFactCard(fact, groupFacts, 'right', false);
                           })}
                         </div>
@@ -1412,7 +1431,8 @@ function DumpTab({
                           {[0, 1, 2].map((index) => {
                             const factIndex = Math.min(index, groupedFacts.oldFacts.length - 1);
                             const fact = groupedFacts.oldFacts[factIndex];
-                            const groupFacts = fact ? groupedFacts.groups[fact.subcategory!.toLowerCase()] : null;
+                            const groupKey = fact ? getGroupKey(fact) : '';
+                            const groupFacts = fact ? (groupedFacts.groups[groupKey] || [fact]) : null;
                             const mainFact = groupFacts?.[0];
                             const offset = index * 8; // Increased from 4 to 8 for more obvious gaps
                             return (
@@ -1448,7 +1468,8 @@ function DumpTab({
                       ) : (
                         <div className="space-y-3">
                           {groupedFacts.oldFacts.map(fact => {
-                            const groupFacts = groupedFacts.groups[fact.subcategory!.toLowerCase()];
+                            const groupKey = getGroupKey(fact);
+                            const groupFacts = groupedFacts.groups[groupKey] || [fact];
                             return renderFactCard(fact, groupFacts, 'right', true);
                           })}
                         </div>

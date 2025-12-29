@@ -1283,38 +1283,42 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('recurring')}
                         >
-                          {/* Stacked card preview - only first card shows content */}
-                          {[0, 1, 2].map((index) => {
-                            const factIndex = Math.min(index, groupedFacts.recurringFacts.length - 1);
-                            const fact = groupedFacts.recurringFacts[factIndex];
-                            const offset = index * 8; // Visible stack offsets
-                            return (
-                              <div
-                                key={`stack-${index}`}
-                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
-                                style={{
-                                  ...getColumnCardStyle('right'),
-                                  position: index === 0 ? 'relative' : 'absolute',
-                                  top: index === 0 ? 0 : `${offset}px`,
-                                  left: 0,
-                                  right: 0,
-                                  zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
-                                  height: index === 0 ? 'auto' : '20px',
-                                }}
-                              >
-                                {index === 0 && (
-                                  <div className="px-4 py-3.5">
-                                    <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
-                                      {fact?.subcategory || 'Event'}
-                                    </h3>
-                                  </div>
-                                )}
+                          {/* Stacked card preview */}
+                          <div className="relative">
+                            {/* Bottom cards (stack effect) */}
+                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-4 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                opacity: 0.4,
+                                zIndex: 1,
+                              }}
+                            />
+                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                opacity: 0.7,
+                                zIndex: 2,
+                              }}
+                            />
+                            {/* Top card with content */}
+                            <div className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] relative`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                zIndex: 3,
+                              }}
+                            >
+                              <div className="px-4 py-3.5">
+                                <div className="text-sm font-semibold text-[var(--bg-main)] leading-tight space-y-1">
+                                  {groupedFacts.recurringFacts.slice(0, 3).map((fact, i) => (
+                                    <div key={i}>{fact.subcategory}</div>
+                                  ))}
+                                  {groupedFacts.recurringFacts.length > 3 && (
+                                    <div className="text-xs opacity-60">+{groupedFacts.recurringFacts.length - 3} more</div>
+                                  )}
+                                </div>
                               </div>
-                            );
-                          })}
-                          {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1350,38 +1354,42 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('facts')}
                         >
-                          {/* Stacked card preview - only first card shows content */}
-                          {[0, 1, 2].map((index) => {
-                            const factIndex = Math.min(index, groupedFacts.staticFacts.length - 1);
-                            const fact = groupedFacts.staticFacts[factIndex];
-                            const offset = index * 8; // Visible stack offsets
-                            return (
-                              <div
-                                key={`stack-${index}`}
-                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
-                                style={{
-                                  ...getColumnCardStyle('right'),
-                                  position: index === 0 ? 'relative' : 'absolute',
-                                  top: index === 0 ? 0 : `${offset}px`,
-                                  left: 0,
-                                  right: 0,
-                                  zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
-                                  height: index === 0 ? 'auto' : '20px',
-                                }}
-                              >
-                                {index === 0 && (
-                                  <div className="px-4 py-3.5">
-                                    <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
-                                      {fact?.subcategory || 'Fact'}
-                                    </h3>
-                                  </div>
-                                )}
+                          {/* Stacked card preview */}
+                          <div className="relative">
+                            {/* Bottom cards (stack effect) */}
+                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-4 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                opacity: 0.4,
+                                zIndex: 1,
+                              }}
+                            />
+                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                opacity: 0.7,
+                                zIndex: 2,
+                              }}
+                            />
+                            {/* Top card with content */}
+                            <div className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] relative`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                zIndex: 3,
+                              }}
+                            >
+                              <div className="px-4 py-3.5">
+                                <div className="text-sm font-semibold text-[var(--bg-main)] leading-tight space-y-1">
+                                  {groupedFacts.staticFacts.slice(0, 3).map((fact, i) => (
+                                    <div key={i}>{fact.subcategory || 'Fact'}</div>
+                                  ))}
+                                  {groupedFacts.staticFacts.length > 3 && (
+                                    <div className="text-xs opacity-60">+{groupedFacts.staticFacts.length - 3} more</div>
+                                  )}
+                                </div>
                               </div>
-                            );
-                          })}
-                          {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -1417,38 +1425,42 @@ function DumpTab({
                           className="relative cursor-pointer"
                           onClick={() => toggleCategoryCollapse('past')}
                         >
-                          {/* Stacked card preview - only first card shows content */}
-                          {[0, 1, 2].map((index) => {
-                            const factIndex = Math.min(index, groupedFacts.oldFacts.length - 1);
-                            const fact = groupedFacts.oldFacts[factIndex];
-                            const offset = index * 8; // Visible stack offsets
-                            return (
-                              <div
-                                key={`stack-${index}`}
-                                className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] transition-all`}
-                                style={{
-                                  ...getColumnCardStyle('right'),
-                                  position: index === 0 ? 'relative' : 'absolute',
-                                  top: index === 0 ? 0 : `${offset}px`,
-                                  left: 0,
-                                  right: 0,
-                                  zIndex: 10 - index,
-                                  opacity: index === 2 ? 0.4 : index === 1 ? 0.7 : 1,
-                                  height: index === 0 ? 'auto' : '20px',
-                                }}
-                              >
-                                {index === 0 && (
-                                  <div className="px-4 py-3.5">
-                                    <h3 className="text-sm font-semibold text-[var(--bg-main)] leading-tight">
-                                      {fact?.subcategory || 'Event'}
-                                    </h3>
-                                  </div>
-                                )}
+                          {/* Stacked card preview */}
+                          <div className="relative">
+                            {/* Bottom cards (stack effect) */}
+                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-4 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                opacity: 0.4,
+                                zIndex: 1,
+                              }}
+                            />
+                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                opacity: 0.7,
+                                zIndex: 2,
+                              }}
+                            />
+                            {/* Top card with content */}
+                            <div className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] relative`}
+                              style={{
+                                ...getColumnCardStyle('right'),
+                                zIndex: 3,
+                              }}
+                            >
+                              <div className="px-4 py-3.5">
+                                <div className="text-sm font-semibold text-[var(--bg-main)] leading-tight space-y-1">
+                                  {groupedFacts.oldFacts.slice(0, 3).map((fact, i) => (
+                                    <div key={i}>{fact.subcategory || 'Event'}</div>
+                                  ))}
+                                  {groupedFacts.oldFacts.length > 3 && (
+                                    <div className="text-xs opacity-60">+{groupedFacts.oldFacts.length - 3} more</div>
+                                  )}
+                                </div>
                               </div>
-                            );
-                          })}
-                          {/* Spacer for stacked cards */}
-                          <div style={{ height: '16px' }} />
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">

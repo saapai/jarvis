@@ -1280,34 +1280,37 @@ function DumpTab({
                       {/* Cards Stack or Expanded */}
                       {collapsedCategories.recurring ? (
                         <div
-                          className="relative cursor-pointer"
+                          className="relative pt-5 cursor-pointer"
                           onClick={() => toggleCategoryCollapse('recurring')}
                         >
                           {/* Stacked card preview */}
                           <div className="relative">
                             {/* Bottom cards (stack effect) */}
-                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-4 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                            <div
+                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-5 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
-                                opacity: 0.4,
+                                opacity: 0.35,
                                 zIndex: 1,
                               }}
                             />
-                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                            <div
+                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
-                                opacity: 0.7,
+                                opacity: 0.6,
                                 zIndex: 2,
                               }}
                             />
                             {/* Top card with content */}
-                            <div className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] relative`}
+                            <div
+                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 zIndex: 3,
                               }}
                             >
-                              <div className="px-4 py-3.5">
+                              <div className="px-4 py-4">
                                 <div className="text-sm font-semibold text-[var(--bg-main)] leading-tight space-y-1">
                                   {groupedFacts.recurringFacts.slice(0, 3).map((fact, i) => (
                                     <div key={i}>{fact.subcategory}</div>
@@ -1351,34 +1354,37 @@ function DumpTab({
                       {/* Cards Stack or Expanded */}
                       {collapsedCategories.facts ? (
                         <div
-                          className="relative cursor-pointer"
+                          className="relative pt-5 cursor-pointer"
                           onClick={() => toggleCategoryCollapse('facts')}
                         >
                           {/* Stacked card preview */}
                           <div className="relative">
                             {/* Bottom cards (stack effect) */}
-                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-4 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                            <div
+                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-5 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
-                                opacity: 0.4,
+                                opacity: 0.35,
                                 zIndex: 1,
                               }}
                             />
-                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                            <div
+                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
-                                opacity: 0.7,
+                                opacity: 0.6,
                                 zIndex: 2,
                               }}
                             />
                             {/* Top card with content */}
-                            <div className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] relative`}
+                            <div
+                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 zIndex: 3,
                               }}
                             >
-                              <div className="px-4 py-3.5">
+                              <div className="px-4 py-4">
                                 <div className="text-sm font-semibold text-[var(--bg-main)] leading-tight space-y-1">
                                   {groupedFacts.staticFacts.slice(0, 3).map((fact, i) => (
                                     <div key={i}>{fact.subcategory || 'Fact'}</div>
@@ -1422,34 +1428,37 @@ function DumpTab({
                       {/* Cards Stack or Expanded */}
                       {collapsedCategories.past ? (
                         <div
-                          className="relative cursor-pointer"
+                          className="relative pt-5 cursor-pointer"
                           onClick={() => toggleCategoryCollapse('past')}
                         >
                           {/* Stacked card preview */}
                           <div className="relative">
                             {/* Bottom cards (stack effect) */}
-                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-4 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                            <div
+                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-5 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
-                                opacity: 0.4,
+                                opacity: 0.35,
                                 zIndex: 1,
                               }}
                             />
-                            <div className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                            <div
+                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
-                                opacity: 0.7,
+                                opacity: 0.6,
                                 zIndex: 2,
                               }}
                             />
                             {/* Top card with content */}
-                            <div className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] relative`}
+                            <div
+                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 zIndex: 3,
                               }}
                             >
-                              <div className="px-4 py-3.5">
+                              <div className="px-4 py-4">
                                 <div className="text-sm font-semibold text-[var(--bg-main)] leading-tight space-y-1">
                                   {groupedFacts.oldFacts.slice(0, 3).map((fact, i) => (
                                     <div key={i}>{fact.subcategory || 'Event'}</div>

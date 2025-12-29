@@ -1280,14 +1280,14 @@ function DumpTab({
                       {/* Cards Stack or Expanded */}
                       {collapsedCategories.recurring ? (
                         <div
-                          className="relative pt-5 cursor-pointer"
+                          className="relative pb-6 cursor-pointer"
                           onClick={() => toggleCategoryCollapse('recurring')}
                         >
                           {/* Stacked card preview */}
-                          <div className="relative">
+                          <div className="relative overflow-visible">
                             {/* Bottom cards (stack effect) */}
                             <div
-                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-5 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`absolute inset-0 translate-y-4 scale-[0.97] rounded-lg ${CARD_BG} border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 opacity: 0.35,
@@ -1295,7 +1295,7 @@ function DumpTab({
                               }}
                             />
                             <div
-                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`absolute inset-0 translate-y-2 scale-[0.985] rounded-lg ${CARD_BG} border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 opacity: 0.6,
@@ -1304,7 +1304,7 @@ function DumpTab({
                             />
                             {/* Top card with content */}
                             <div
-                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] rounded-lg`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 zIndex: 3,
@@ -1354,14 +1354,14 @@ function DumpTab({
                       {/* Cards Stack or Expanded */}
                       {collapsedCategories.facts ? (
                         <div
-                          className="relative pt-5 cursor-pointer"
+                          className="relative pb-6 cursor-pointer"
                           onClick={() => toggleCategoryCollapse('facts')}
                         >
                           {/* Stacked card preview */}
-                          <div className="relative">
+                          <div className="relative overflow-visible">
                             {/* Bottom cards (stack effect) */}
                             <div
-                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-5 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`absolute inset-0 translate-y-4 scale-[0.97] rounded-lg ${CARD_BG} border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 opacity: 0.35,
@@ -1369,7 +1369,7 @@ function DumpTab({
                               }}
                             />
                             <div
-                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`absolute inset-0 translate-y-2 scale-[0.985] rounded-lg ${CARD_BG} border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 opacity: 0.6,
@@ -1378,7 +1378,7 @@ function DumpTab({
                             />
                             {/* Top card with content */}
                             <div
-                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] rounded-lg`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 zIndex: 3,
@@ -1428,14 +1428,14 @@ function DumpTab({
                       {/* Cards Stack or Expanded */}
                       {collapsedCategories.past ? (
                         <div
-                          className="relative pt-5 cursor-pointer"
+                          className="relative pb-6 cursor-pointer"
                           onClick={() => toggleCategoryCollapse('past')}
                         >
                           {/* Stacked card preview */}
-                          <div className="relative">
+                          <div className="relative overflow-visible">
                             {/* Bottom cards (stack effect) */}
                             <div
-                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-5 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`absolute inset-0 translate-y-4 scale-[0.97] rounded-lg ${CARD_BG} border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 opacity: 0.35,
@@ -1443,7 +1443,7 @@ function DumpTab({
                               }}
                             />
                             <div
-                              className={`w-full h-10 ${CARD_BG} border border-[var(--card-border)] rounded-lg absolute top-2 left-0 right-0 shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`absolute inset-0 translate-y-2 scale-[0.985] rounded-lg ${CARD_BG} border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 opacity: 0.6,
@@ -1452,7 +1452,7 @@ function DumpTab({
                             />
                             {/* Top card with content */}
                             <div
-                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                              className={`relative w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] rounded-lg`}
                               style={{
                                 ...getColumnCardStyle('right'),
                                 zIndex: 3,

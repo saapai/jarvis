@@ -125,17 +125,13 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   
   // Case 3: Existing draft in 'ready' state - user is editing
   if (existingDraft.status === 'ready') {
-    // Try LLM-based resolution first, fall back to rule-based edit
-    const llmEdited = await resolveDraftContent({
+    // Use LLM-based resolution with full context
+    const editedContent = await resolveDraftContent({
       message,
       draftType: existingDraft.type,
       previousContent: existingDraft.content,
       recentMessages
     })
-    
-    const editedContent = llmEdited && llmEdited.trim().length > 0
-      ? formatContent(llmEdited, existingDraft.type)
-      : applyEdit(existingDraft.content, message, existingDraft.type)
     
     // Update draft in DB
     await draftRepo.updateDraftByPhone(phone, { draftText: editedContent })
@@ -201,114 +197,6 @@ function formatContent(content: string, type: DraftType): string {
   return formatted
 }
 
-/**
- * Apply an edit instruction to existing content
- */
-function applyEdit(existingContent: string, editMessage: string, type: DraftType): string {
-  const lower = editMessage.toLowerCase()
-  
-  // Check for replacement patterns
-  // "no it should say X" or "make it say X" or "change it to X"
-  const replacementPatterns = [
-    /\b(no[,.]?\s*)?(it should|make it|change it to|should be|should say)\s+["']?(.+?)["']?$/i,
-    /\b(actually|instead)\s+["']?(.+?)["']?$/i,
-    /^["'](.+)["']$/  // Just quoted text = full replacement
-  ]
-  
-  for (const pattern of replacementPatterns) {
-    const match = editMessage.match(pattern)
-    if (match) {
-      // Get the last capture group (the actual content)
-      const newContent = match[match.length - 1]?.trim()
-      if (newContent && newContent.length > 3) {
-        return formatContent(newContent, type)
-      }
-    }
-  }
-  
-  // Check for additive patterns
-  // "add X" or "also mention X" or "include X"
-  const additivePatterns = [
-    /\b(add|also|include|mention|append)\s+["']?(.+?)["']?$/i,
-    /\bsay it'?s?\s+(.+)/i  // "say it's at 9pm"
-  ]
-  
-  for (const pattern of additivePatterns) {
-    const match = editMessage.match(pattern)
-    if (match) {
-      const addition = match[match.length - 1]?.trim()
-      if (addition && addition.length > 2) {
-        // Append to existing content
-        let combined = existingContent
-        if (!combined.endsWith('.') && !combined.endsWith('!') && !combined.endsWith('?')) {
-          combined += '.'
-        }
-        combined += ' ' + addition
-        return formatContent(combined, type)
-      }
-    }
-  }
-  
-  // Check for tone modifications
-  const tonePatterns = [
-    { pattern: /\b(make it|be)\s+(meaner|more aggressive|harsher|ruder)/i, tone: 'aggressive' },
-    { pattern: /\b(make it|be)\s+(nicer|friendlier|softer|kinder)/i, tone: 'friendly' },
-    { pattern: /\b(make it|be)\s+(funnier|more fun|sillier)/i, tone: 'funny' },
-    { pattern: /\b(make it|be)\s+(more serious|professional|formal)/i, tone: 'serious' },
-    { pattern: /\b(make it|be)\s+(shorter|more concise|brief)/i, tone: 'short' },
-    { pattern: /\b(make it|be)\s+(longer|more detailed)/i, tone: 'long' }
-  ]
-  
-  for (const { pattern, tone } of tonePatterns) {
-    if (pattern.test(lower)) {
-      return applyToneModification(existingContent, tone, type)
-    }
-  }
-  
-  // If no pattern matched, treat as full replacement
-  return formatContent(editMessage, type)
-}
-
-/**
- * Apply tone modification to content
- */
-function applyToneModification(content: string, tone: string, type: DraftType): string {
-  // Simple tone modifications (in production, could use LLM)
-  switch (tone) {
-    case 'aggressive':
-      // Add urgency
-      return content.replace(/please/gi, '').replace(/\.$/, '!').toUpperCase()
-    
-    case 'friendly':
-      // Add softeners
-      if (!content.toLowerCase().includes('please')) {
-        return content + ' please!'
-      }
-      return content
-    
-    case 'funny':
-      // Add emoji
-      return content + ' 🔥'
-    
-    case 'serious':
-      // Remove emoji and exclamation
-      return removeEmoji(content).replace(/!+/g, '.')
-    
-    case 'short':
-      // Truncate to first sentence
-      const firstSentence = content.match(/^[^.!?]+[.!?]?/)?.[0]
-      return firstSentence || content
-    
-    case 'long':
-      // Can't really make it longer without context
-      return content + ' (details to follow)'
-    
-    default:
-      return content
-  }
-}
-
-
 // ============================================
 // LLM-ASSISTED CONTENT RESOLUTION
 // ============================================
@@ -337,25 +225,47 @@ async function resolveDraftContent(params: ResolveDraftContentParams): Promise<s
     return extractContent(message, draftType)
   }
   
-  // Build a small conversation window (last 4 user messages)
+  // Build conversation context with both user and bot messages
   const history = (recentMessages || [])
-    .filter(m => m.direction === 'inbound')
-    .slice(-4)
-    .map(m => m.text)
+    .slice(-6) // Last 6 messages (3 exchanges)
+    .map(m => ({
+      role: m.direction === 'inbound' ? 'User' : 'Bot',
+      text: m.text
+    }))
   
-  const systemPrompt = `You are helping to draft a ${draftType} message.
-- Use only the latest user instruction to produce the final text to send.
-- If the user revises the message (e.g., "actually make it say X"), replace previous content with X.
-- Return ONLY the final text to send. No quotes, no extra wording.`
+  const systemPrompt = `You are extracting the exact message content that should be sent as a ${draftType}.
+
+CRITICAL RULES:
+1. VERBATIM CONTENT: When the user says "send out [type] saying X" or "send out [type] that X", X is EXACTLY what to send. Do NOT paraphrase.
+2. FOLLOW-UPS: Words like "wait", "no", "actually", "instead" indicate the user is EDITING. Extract only the NEW content they want.
+3. CONTEXT AWARENESS: Use conversation history to understand what they're referring to. If they say "say it's next week", "it's next week" is the content.
+4. NO META LANGUAGE: Never include phrases like "Send out an announcement" in the output. Only return the actual message content.
+5. EDITING SIGNALS:
+   - "wait say X" → content is "X"
+   - "no just say X" → content is "X"
+   - "actually X" → content is "X"
+   - "make it say X" → content is "X"
+   - "change it to X" → content is "X"
+
+Examples:
+- "send out an announcement saying soccer is tomorrow" → "soccer is tomorrow"
+- "wait say it's next week" → "it's next week"
+- "no just say jarvis is king" → "jarvis is king"
+- "send out a poll asking if jarvis is lit" → "is jarvis lit"
+
+Return ONLY the exact text to send. No quotes, no explanations.`
   
-  const userPrompt = `
-Conversation (newest last):
-${history.map((h, i) => `${i + 1}. ${h}`).join('\n') || '(no history)'}
+  const historyText = history.length > 0 
+    ? history.map(h => `${h.role}: ${h.text}`).join('\n')
+    : '(no history)'
+  
+  const userPrompt = `Recent conversation:
+${historyText}
 
-Most recent instruction: "${message}"
-Previous draft content: "${previousContent || '(none)'}"
+Current user message: "${message}"
+${previousContent ? `Previous draft: "${previousContent}"` : ''}
 
-Provide the exact text that should be sent.`
+Extract the exact text that should be sent:`
   
   try {
     const OpenAI = (await import('openai')).default
@@ -367,11 +277,13 @@ Provide the exact text that should be sent.`
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.2,
+      temperature: 0.1, // Lower temperature for more literal extraction
       max_tokens: 120
     })
     
     const content = completion.choices[0].message.content?.trim() || ''
+    console.log(`[DraftWrite] LLM extracted: "${content}"`)
+    
     if (!content) return extractContent(message, draftType)
     
     return formatContent(content, draftType)

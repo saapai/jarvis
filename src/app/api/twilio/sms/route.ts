@@ -183,12 +183,12 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   
   console.log(`[ActionRouter] Action complete, applying personality...`)
   
-  // 8. Apply personality to response (async LLM version for richer responses)
+  // 8. Apply personality to response (using LLM for context-aware personality)
   const finalResponse = await applyPersonalityAsync({
     baseResponse: actionResult.response,
     userMessage: message,
     userName: user.name,
-    useLLM: false // Set to true to use LLM personality (costs more)
+    useLLM: true // LLM-based personality for better context understanding
   })
   
   // 9. Log outbound message with draft content if applicable

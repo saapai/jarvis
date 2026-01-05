@@ -179,16 +179,22 @@ function checkRecentActions(
 function formatContentResponse(result: ContentResult, query: string): string {
   const { title, body } = result
   
+  // Clean the body by removing excessive emojis and formatting
+  let cleanedBody = body
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim()
+  
   // If body is short, return it directly
-  if (body.length < 200) {
-    return body
+  if (cleanedBody.length < 200) {
+    return cleanedBody
   }
   
   // Try to extract the most relevant part
   const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3)
   
   // Find sentence containing query words
-  const sentences = body.split(/[.!?]+/).filter(s => s.trim().length > 10)
+  const sentences = cleanedBody.split(/[.!?]+/).filter(s => s.trim().length > 10)
   
   for (const word of queryWords) {
     for (const sentence of sentences) {
@@ -199,7 +205,7 @@ function formatContentResponse(result: ContentResult, query: string): string {
   }
   
   // Fallback: return first 200 chars
-  return body.substring(0, 200) + '...'
+  return cleanedBody.substring(0, 200) + '...'
 }
 
 /**

@@ -1,6 +1,6 @@
 /**
  * Poll Response Parser
- * Parses user responses to poll questions
+ * Parses user responses to poll questions using LLM for better context understanding
  */
 
 export interface ParsedPollResponse {
@@ -9,88 +9,91 @@ export interface ParsedPollResponse {
 }
 
 /**
- * Parse poll response from user message
- * Uses semantic patterns to understand intent
+ * Parse poll response from user message using LLM
+ * Falls back to simple pattern matching if LLM unavailable
  */
-export function parsePollResponse(message: string): ParsedPollResponse {
-  const lower = message.toLowerCase().trim()
-  const original = message.trim()
-  
-  // NEGATIVE INTENT: Patterns indicating refusal, inability, or absence
-  const negativeIndicators = [
-    /\b(can'?t|cannot|cant|unable|won'?t|wont|will not)\s+(make|come|go|attend|be there|show|make it)\b/i,
-    /\b(not|no)\s+(coming|going|attending|making it|gonna make it|gonna come|gonna go)\b/i,
-    /\b(busy|unavailable|have to skip|gonna skip|skipping|can'?t make it|cant make it)\b/i,
-    /\b(sorry|unfortunately|regret)\s+(can'?t|cant|cannot|won'?t|wont|not)\b/i,
-    /\b(not|no|nope|nah)\s+(thanks|thank you|way|chance|problem)\b/i,
-    /^n\b/i
-  ]
-  
-  for (const pattern of negativeIndicators) {
-    if (pattern.test(lower)) {
-      let note = original
-      note = note.replace(/^(sorry|unfortunately|i'?m|im|i am|regret)\s*/i, '').trim()
-      note = note.replace(/^(can'?t|cannot|cant|won'?t|wont|not|no|nope|nah|n)\s*/i, '').trim()
-      return { response: 'No', notes: note || null }
-    }
-  }
-  
-  // AFFIRMATIVE INTENT: Patterns indicating agreement, confirmation, or attendance
-  const affirmativeIndicators = [
-    /\b(will|i'?ll|ill|gonna|going to|plan to|planning to)\s+(be there|come|go|attend|make it|show|show up)\b/i,
-    /\b(coming|going|attending|will attend|gonna attend|going to attend|be there|i'?ll be there|ill be there)\b/i,
-    /\b(see you|count me in|i'?m in|im in|absolutely|definitely|for sure|of course)\b/i,
-    /\b(late|running late|gonna be late|going to be late|might be late|will be late)\s+(but|though|however|just)\s*(coming|going|attending|be there|i'?ll|ill|will|gonna)?\b/i,
-    /\b(but|though|however|just)\s+(late|running late|gonna be late|going to be late)\b/i,
-    /^y\b/i
-  ]
-  
-  for (const pattern of affirmativeIndicators) {
-    if (pattern.test(lower)) {
-      let note = original
-      note = note.replace(/^(will|i'?ll|ill|gonna|going to|coming|going|attending|be there|see you|count me|i'?m in|im in|absolutely|definitely|for sure|of course|y)\s*/i, '').trim()
-      note = note.replace(/^(but|though|however|just|,)\s*/i, '').trim()
-      return { response: 'Yes', notes: note || null }
-    }
-  }
-  
-  // UNCERTAIN INTENT: Patterns indicating hesitation, possibility, or uncertainty
-  const uncertainIndicators = [
-    /\b(might|maybe|possibly|perhaps|could|may)\s+(come|go|attend|make it|be there|show)\b/i,
-    /\b(probably|likely|chances are)\s+(will|won'?t|wont|coming|going|attending)\b/i,
-    /\b(not sure|unsure|don'?t know|dont know|uncertain|not certain|idk|i don'?t know)\b/i,
-    /\b(if|depends|depending on)\s+(.*)\b/i,
-    /\b(probably|might)\s+(not|won'?t|wont)\b/i
-  ]
-  
-  for (const pattern of uncertainIndicators) {
-    if (pattern.test(lower)) {
-      let note = original
-      note = note.replace(/^(probably|might|maybe|possibly|perhaps|not sure|unsure|don'?t know|dont know|uncertain|not certain|idk|i don'?t know|if|depends)\s*/i, '').trim()
-      note = note.replace(/^(but|though|,)\s*/i, '').trim()
-      return { response: 'Maybe', notes: note || null }
-    }
-  }
-  
-  // Context-based fallbacks
-  if (/\b(late|running late|gonna be late|going to be late|might be late|will be late)\b/i.test(lower) &&
-      !/\b(not|won'?t|wont|can'?t|cant|cannot)\b/i.test(lower)) {
-    return { response: 'Yes', notes: original }
-  }
+export async function parsePollResponse(message: string): Promise<ParsedPollResponse> {
+  // Try LLM parsing first for better context understanding
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const OpenAI = (await import('openai')).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      
+      const systemPrompt = `You are parsing poll responses. Classify the response as Yes/No/Maybe and extract any notes.
 
-  if (/\b(busy|unavailable|can'?t|cant|cannot)\b/i.test(lower) &&
-      !/\b(but|though|however|still|will|gonna|coming|going)\b/i.test(lower)) {
-    return { response: 'No', notes: original }
+RULES:
+- Yes: Affirmative, attending, agreeing (even with caveats like "yes but late")
+- No: Negative, declining, can't make it, unavailable
+- Maybe: Uncertain, depends, not sure, possibly
+
+- Extract notes: Any additional context like "running late", "need to leave early", "if I finish work"
+- If the response is ONLY yes/no/maybe with no context, notes should be null
+
+Examples:
+- "yes but running late" → Yes, notes: "running late"
+- "can't make it, busy" → No, notes: "busy"
+- "maybe if I finish work" → Maybe, notes: "if I finish work"
+- "y" → Yes, notes: null
+- "nah" → No, notes: null`
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Parse this poll response: "${message}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 100,
+        response_format: { type: 'json_object' }
+      })
+      
+      const content = completion.choices[0].message.content
+      if (content) {
+        const parsed = JSON.parse(content)
+        const response = parsed.response as 'Yes' | 'No' | 'Maybe'
+        const notes = parsed.notes || null
+        
+        console.log(`[PollParser] LLM parsed "${message}" → ${response}${notes ? `, notes: "${notes}"` : ''}`)
+        return { response, notes }
+      }
+    } catch (error) {
+      console.error('[PollParser] LLM parsing failed, using fallback:', error)
+    }
   }
   
-  if (original.length <= 3) {
-    if (/^[yn]$/i.test(original)) {
-      return { response: /^y$/i.test(original) ? 'Yes' : 'No', notes: null }
-    }
-    if (/^(yea|yep|yup|nah|nope)$/i.test(original)) {
-      return { response: /^(yea|yep|yup)$/i.test(original) ? 'Yes' : 'No', notes: null }
-    }
+  // Fallback to simple pattern matching
+  return parsePollResponseSimple(message)
+}
+
+/**
+ * Simple pattern-based fallback parser
+ */
+function parsePollResponseSimple(message: string): ParsedPollResponse {
+  const lower = message.toLowerCase().trim()
+  
+  // Simple yes/no detection
+  if (/^(y|yes|yep|yup|yeah|yea|sure|ok|okay)$/i.test(lower)) {
+    return { response: 'Yes', notes: null }
   }
   
-  return { response: 'Maybe', notes: original }
+  if (/^(n|no|nah|nope)$/i.test(lower)) {
+    return { response: 'No', notes: null }
+  }
+  
+  if (/^(maybe|perhaps|possibly|idk|not sure)$/i.test(lower)) {
+    return { response: 'Maybe', notes: null }
+  }
+  
+  // Check for negative words
+  if (/\b(can'?t|cannot|won'?t|no|nope|busy|unavailable)\b/i.test(lower)) {
+    return { response: 'No', notes: message.trim() }
+  }
+  
+  // Check for affirmative words
+  if (/\b(yes|yep|coming|going|i'?ll be there|count me in)\b/i.test(lower)) {
+    return { response: 'Yes', notes: message.trim() }
+  }
+  
+  // Default to Maybe with full message as notes
+  return { response: 'Maybe', notes: message.trim() }
 }

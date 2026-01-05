@@ -28,7 +28,7 @@ export async function handlePollResponse(input: PollResponseInput): Promise<Acti
     }
   }
 
-  const parsed = parsePollResponse(message)
+  const parsed = await parsePollResponse(message)
 
   await pollRepo.savePollResponse(activePoll.id, phone, parsed.response, parsed.notes)
 
@@ -54,6 +54,7 @@ export async function hasActivePoll(): Promise<boolean> {
   const activePoll = await pollRepo.getActivePoll()
   return activePoll !== null
 }
+
 
 
 

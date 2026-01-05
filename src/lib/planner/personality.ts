@@ -109,59 +109,60 @@ export function analyzeTone(message: string): ToneAnalysis {
 
 /**
  * Add sass to a response based on tone level
+ * @param skipEmojis - if true, avoid adding emoji suffixes (for informational content)
  */
-function addSass(response: string, level: ToneLevel): string {
+function addSass(response: string, level: ToneLevel, skipEmojis: boolean = false): string {
+  // If response looks like factual information (long, has dates/times/etc), be minimal
+  const isFactual = response.length > 100 || /\b(at|on|from|to|in|when|where|who)\b/.test(response.toLowerCase())
+  
   const sassyPrefixes = {
     mild: [
       'okay so ',
       'alright ',
-      'fine ',
-      'look ',
+      '',
       ''
     ],
     medium: [
-      'ugh fine ',
       'okay okay ',
       'yeah yeah ',
-      'sigh... ',
-      'if you insist... '
+      '',
+      'alright '
     ],
     spicy: [
-      'oh my god fine ',
-      'jfc okay ',
-      'bro... ',
-      'seriously? okay ',
-      'do i have to do everything around here? '
+      'okay fine ',
+      'alright ',
+      'listen ',
+      ''
     ]
   }
   
   const sassySuffixes = {
     mild: [
       '',
-      ' 👀',
-      ' ✨',
+      ' 👍',
+      '',
       ''
     ],
     medium: [
-      ' 💅',
-      ' anyway',
       ' there you go',
-      ' happy?'
+      '',
+      ' anyway',
+      ''
     ],
     spicy: [
       ' you\'re welcome btw',
-      ' i guess',
-      ' smh',
-      ' 🙄'
+      ' happy?',
+      '',
+      ''
     ]
   }
   
   const prefixes = sassyPrefixes[level]
   const suffixes = sassySuffixes[level]
   
-  // Random selection
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]
-  const suffix = suffixes[Math.floor(Math.random() * suffixes.length)]
+  // Random selection - favor empty options for factual content
+  const prefixIndex = isFactual ? Math.floor(Math.random() * prefixes.length * 0.7) : Math.floor(Math.random() * prefixes.length)
+  const prefix = prefixes[Math.min(prefixIndex, prefixes.length - 1)]
   
   // Don't double-prefix if response already starts with similar
   let result = response
@@ -172,8 +173,9 @@ function addSass(response: string, level: ToneLevel): string {
     result = prefix + result
   }
   
-  // Don't double-suffix if response already ends with emoji
-  if (!endsWithEmoji(result)) {
+  // Skip emoji suffixes if requested or if response already has emoji
+  if (!skipEmojis && !endsWithEmoji(result) && !isFactual) {
+    const suffix = suffixes[Math.floor(Math.random() * suffixes.length)]
     result = result + suffix
   }
   
@@ -264,16 +266,28 @@ async function applyPersonalityLLM(
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     
-    const systemPrompt = `You are Jarvis, a sassy AI assistant for an organization.
+    const systemPrompt = `You are Jarvis, a sassy AI assistant for an organization via SMS.
 
-Personality traits:
-- Witty and slightly mean, but helpful
-- Lowercase messages, minimal punctuation
-- Uses emoji sparingly (${config.useEmoji ? 'yes' : 'no'})
-- Tone level: ${toneLevel} (mild=gentle sass, medium=normal sass, spicy=very sassy)
-- Match user energy: ${config.matchUserEnergy ? 'if they insult you, be meaner back' : 'stay consistent'}
+PERSONALITY:
+- Clever and witty, slightly sarcastic but ultimately helpful
+- Lowercase style, minimal punctuation (you're too cool for proper grammar)
+- Very sparing with emojis (0-1 per message, only when it adds meaning)
+- Concise - SMS-friendly, under 160 chars when possible
 
-Transform the base response below into your voice. Keep it under 160 characters if possible (SMS limit).`
+TONE: ${toneLevel}
+- mild: gentle teasing, friendly
+- medium: clear sass, confident
+- spicy: sharp wit, match their energy if they're rude
+
+CRITICAL RULES:
+- For factual/informational responses: be direct, minimal sass, NO excessive emojis
+- For content queries: present info cleanly without repetitive phrases
+- For casual chat: more personality, but still concise
+- Match user energy: ${config.matchUserEnergy ? 'mirror their tone' : 'stay consistent'}
+- Never use the same catchphrase twice in a row
+- Keep it natural and varied
+
+Transform the base response into your voice:`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -281,18 +295,19 @@ Transform the base response below into your voice. Keep it under 160 characters 
         { role: 'system', content: systemPrompt },
         { 
           role: 'user', 
-          content: `Base response: "${baseResponse}"\n\nUser said: "${userMessage}"\n\nTransform this into Jarvis's voice.` 
+          content: `User: "${userMessage}"\nBase response: "${baseResponse}"\n\nYour response (in Jarvis's voice):` 
         }
       ],
-      temperature: 0.8,
-      max_tokens: 100
+      temperature: 0.7,
+      max_tokens: 150
     })
     
     return response.choices[0].message.content || baseResponse
   } catch (error) {
     console.error('[Personality] LLM error:', error)
     // Fallback to rule-based personality
-    return addSass(baseResponse, config.baseTone)
+    const skipEmojis = baseResponse.length > 80
+    return addSass(baseResponse, config.baseTone, skipEmojis)
   }
 }
 
@@ -335,7 +350,9 @@ export function applyPersonality(input: PersonalityInput): string {
   }
   
   // 5. Apply sass to the base response
-  let result = addSass(baseResponse, toneLevel)
+  // Skip emojis for longer informational responses
+  const skipEmojis = baseResponse.length > 80
+  let result = addSass(baseResponse, toneLevel, skipEmojis)
   
   // 6. Lowercase the start (Jarvis doesn't do proper capitalization)
   if (result.length > 0 && /^[A-Z]/.test(result) && !/^[A-Z]{2,}/.test(result)) {

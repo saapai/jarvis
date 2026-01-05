@@ -11,7 +11,6 @@ import {
   WeightedTurn,
   Draft
 } from './types'
-import { parsePollResponse } from './pollResponseParser'
 
 // ============================================
 // PATTERN-BASED FAST PATH (no LLM needed)
@@ -24,153 +23,21 @@ interface PatternMatch {
 }
 
 /**
- * Fast pattern matching for obvious intents
- * Returns null if no confident match, triggering LLM fallback
+ * Fast pattern matching for ONLY the most explicit intents
+ * Returns null for everything else, triggering LLM classification
  */
 function patternMatch(message: string, context: ClassificationContext): PatternMatch | null {
   const lower = message.toLowerCase().trim()
-  const { activeDraft, hasActivePoll } = context
+  const { activeDraft } = context
   
-  // ============================================
-  // SEND COMMANDS (highest priority when draft exists)
-  // ============================================
-  if (activeDraft && (activeDraft.status === 'ready' || activeDraft.status === 'drafting')) {
-    if (/^(send|send it|go|ship|ship it|yes|yep|do it|blast it|fire)$/i.test(lower)) {
+  // ONLY match explicit send commands when draft is ready
+  if (activeDraft && activeDraft.status === 'ready') {
+    if (/^(send|send it|go|yes|yep)$/i.test(lower)) {
       return { action: 'draft_send', confidence: 0.95 }
     }
   }
   
-  // ============================================
-  // CANCEL/DELETE DRAFT
-  // ============================================
-  if (activeDraft) {
-    if (/^(cancel|nvm|nevermind|never mind|delete|discard|forget it|scratch that)$/i.test(lower)) {
-      return { action: 'chat', confidence: 0.9 } // Handle as chat, will clear draft
-    }
-  }
-  
-  // ============================================
-  // POLL RESPONSES (when a poll is active)
-  // ============================================
-  if (hasActivePoll && looksLikePollReply(lower)) {
-    return { action: 'poll_response', confidence: 0.9 }
-  }
-
-  // ============================================
-  // ANNOUNCEMENT INTENT
-  // ============================================
-  // Explicit "announce X" command
-  if (/^announce\s+.+/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.95, subtype: 'announcement' }
-  }
-  
-  // "make/send an announcement"
-  if (/\b(make|send|create|start)\s+(an?\s+)?announcement\b/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.9, subtype: 'announcement' }
-  }
-  
-  // "tell everyone X" / "let everyone know"
-  if (/\b(tell|notify|let)\s+(everyone|people|all|the group|everybody)\b/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.85, subtype: 'announcement' }
-  }
-  
-  // "send out a message"
-  if (/\b(send|send out)\s+(a\s+)?(message|text)\s+(to\s+)?(everyone|all|the group)\b/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.85, subtype: 'announcement' }
-  }
-  
-  // "send out a message about X" (without everyone)
-  if (/\b(send|send out)\s+(a\s+)?(message|text)\s+(about|for|regarding)\b/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.8, subtype: 'announcement' }
-  }
-  
-  // ============================================
-  // POLL INTENT
-  // ============================================
-  // Explicit "poll X" command
-  if (/^poll\s+.+/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.95, subtype: 'poll' }
-  }
-  
-  // "make/create/start a poll"
-  if (/\b(make|send|create|start)\s+(a\s+)?poll\b/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.9, subtype: 'poll' }
-  }
-  
-  // "ask everyone if/whether"
-  if (/\b(ask|asking)\s+(everyone|people|all|the group|everybody)\s+(if|whether|about)\b/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.85, subtype: 'poll' }
-  }
-  
-  // "who's coming to X" - poll intent
-  if (/\b(who'?s|who is|who can|who will)\s+(coming|going|attend(?:ing)?|free|available)\b/i.test(lower)) {
-    return { action: 'draft_write', confidence: 0.8, subtype: 'poll' }
-  }
-  
-  // ============================================
-  // CAPABILITY QUERIES (about Jarvis/Enclave)
-  // ============================================
-  const capabilityPatterns = [
-    /\b(what can you do|what do you do|how do you work)\b/i,
-    /\b(who are you|what are you|are you a bot|are you ai)\b/i,
-    /\b(help|commands|options)\b/i,
-    /\bwhat('?s| is) (jarvis|enclave)\b/i,
-    /\b(your|jarvis'?s?|enclave'?s?) (capabilities|features|functions)\b/i
-  ]
-  
-  for (const pattern of capabilityPatterns) {
-    if (pattern.test(lower)) {
-      return { action: 'capability_query', confidence: 0.85 }
-    }
-  }
-  
-  // ============================================
-  // CONTENT QUERIES (about org stuff)
-  // ============================================
-  const contentPatterns = [
-    /\b(what did|what have) (you|i) (just )?(send|sent|say|said|announce|do|did)\b/i,
-    /\bwhat (was|is) (that|the) (announcement|message|poll)\b/i,
-    /\b(when|what time|where) is\b/i,
-    /\b(what'?s|what is) (happening|going on|the plan)\b/i,
-    /\b(is there|are there) (a |an )?(meeting|event|active)\b/i,
-    /\b(tell me about|info on|details about)\b/i,
-    /\bwhat('?s| is) (tonight|today|tomorrow|this week)\b/i,
-    /\bwhat are we doing\b/i,
-    /\bwhen does [a-z0-9 ]+ start\b/i,
-    /\bwhat time should (i|we) (be there|arrive)\b/i,
-    /\bwhere should (we|i) (meet|go|be)\b/i
-  ]
-  
-  for (const pattern of contentPatterns) {
-    if (pattern.test(lower)) {
-      return { action: 'content_query', confidence: 0.8 }
-    }
-  }
-  
-  // ============================================
-  // CONTEXT-BASED: Awaiting draft input
-  // ============================================
-  if (activeDraft && activeDraft.status === 'drafting' && !activeDraft.content) {
-    // Bot asked for content, user is providing it (any non-cancel input)
-    if (!/^(cancel|nvm|help|stop)/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.85, subtype: activeDraft.type }
-    }
-  }
-  
-  // ============================================
-  // CONTEXT-BASED: Editing existing draft
-  // ============================================
-  if (activeDraft && activeDraft.status === 'ready') {
-    // User might be editing - check for edit indicators
-    if (
-      /\b(change|edit|update|make it|instead|actually)\b/i.test(lower) ||
-      /\bno[,.]?\s+(it should|make it|say)\b/i.test(lower)
-    ) {
-      return { action: 'draft_write', confidence: 0.8, subtype: activeDraft.type }
-    }
-  }
-  
-  // No confident pattern match
+  // Everything else goes to LLM for context-aware classification
   return null
 }
 
@@ -212,28 +79,42 @@ ${historyContext}${draftContext}${pollContext}
 Current message: "${currentMessage}"
 
 Classify this message into ONE of these actions:
-1. draft_write - Creating or editing an announcement or poll draft
-2. draft_send - ONLY explicit send commands like "send", "yes", "go", "send it" when a draft is ready. NOT requests to create announcements.
-3. content_query - Questions about organization content (events, meetings, schedules, people)
-4. capability_query - Questions about Jarvis/Enclave capabilities, help requests
-5. chat - Casual conversation, banter, insults, greetings, or anything else
 
-IMPORTANT:
-- draft_send should ONLY match explicit confirmation words like "send", "yes", "go", "do it", "blast it"
-- If the message is asking to create/send an announcement or poll (like "can you send out an announcement saying X"), classify as draft_write, NOT draft_send
-- If the message matches the draft content exactly, classify as chat (they're repeating themselves) unless it's an explicit send command
+1. **draft_write** - Creating or editing an announcement/poll draft
+   - Initial requests: "send out an announcement saying X", "create a poll asking Y"
+   - Edits to existing drafts: "wait say X instead", "no make it say Y", "actually change it to Z"
+   - Follow-ups providing content when bot asked for it
+   - Key: Look for content to send or modifications to existing drafts
 
-Consider:
-- The weighted history (higher weight = more relevant context)
-- Whether there's an active draft waiting for input or confirmation
-- The tone and intent of the message
+2. **draft_send** - ONLY explicit send confirmations when draft is ready
+   - Must have active draft AND explicit confirmation: "send", "yes", "go", "send it", "do it"
+   - NOT for: "send out an announcement" (that's draft_write)
+
+3. **poll_response** - Responding to an active poll
+   - Must have active poll AND response like: "yes", "no", "maybe" (with optional notes)
+
+4. **content_query** - Questions about organization content
+   - "when is X", "what's happening", "where is Y", "who is Z"
+
+5. **capability_query** - Questions about Jarvis itself
+   - "what can you do", "help", "how do you work"
+
+6. **chat** - Everything else
+   - Casual conversation, banter, greetings, insults
+   - Cancellations: "nevermind", "cancel"
+
+CONTEXT UNDERSTANDING:
+- Pay attention to conversation history - if user is editing a draft, recent messages show what they're referring to
+- Words like "wait", "no", "actually", "instead" signal draft edits, NOT new conversations
+- If draft exists and user says something new, it's likely an edit (draft_write), not chat
+- Use the weighted history (higher weight = more recent/relevant)
 
 Respond with JSON only:
 {
   "action": "draft_write" | "draft_send" | "poll_response" | "content_query" | "capability_query" | "chat",
   "confidence": 0.0-1.0,
   "subtype": "announcement" | "poll" | null,
-  "reasoning": "brief explanation"
+  "reasoning": "brief explanation including context used"
 }`
 
   return prompt
@@ -297,39 +178,26 @@ async function callLLMClassifier(prompt: string): Promise<ClassificationResult> 
 
 /**
  * Classify user intent with weighted conversation context
- * Uses fast pattern matching first, falls back to LLM
+ * LLM-first approach for better context understanding
  */
 export async function classifyIntent(context: ClassificationContext): Promise<ClassificationResult> {
   const { currentMessage } = context
   
-  // Try fast pattern matching first
+  // Only use pattern matching for super obvious cases (explicit send commands)
   const patternResult = patternMatch(currentMessage, context)
   
-  if (patternResult && patternResult.confidence >= 0.8) {
+  if (patternResult && patternResult.confidence >= 0.95) {
     return {
       action: patternResult.action,
       confidence: patternResult.confidence,
       subtype: patternResult.subtype,
-      reasoning: 'Pattern match'
+      reasoning: 'Explicit command match'
     }
   }
   
-  // Fall back to LLM for ambiguous cases
+  // Use LLM for all other cases (context-aware classification)
   const prompt = buildClassificationPrompt(context)
   const llmResult = await callLLMClassifier(prompt)
-  
-  // If pattern had some match, combine confidence
-  if (patternResult) {
-    // Use pattern result if LLM is less confident
-    if (patternResult.confidence > llmResult.confidence) {
-      return {
-        action: patternResult.action,
-        confidence: patternResult.confidence,
-        subtype: patternResult.subtype,
-        reasoning: 'Pattern match (LLM less confident)'
-      }
-    }
-  }
   
   return llmResult
 }
@@ -372,14 +240,6 @@ export function isShortResponse(message: string): boolean {
   return message.trim().length <= 20
 }
 
-/**
- * Check if a message likely represents a poll reply.
- * Uses existing poll response parser for consistent semantics.
- */
-function looksLikePollReply(message: string): boolean {
-  const parsed = parsePollResponse(message)
-  return parsed.response === 'Yes' || parsed.response === 'No' || parsed.response === 'Maybe'
-}
 
 /**
  * Extract poll/announcement content from message
@@ -387,15 +247,30 @@ function looksLikePollReply(message: string): boolean {
 export function extractContent(message: string, type: DraftType): string {
   let content = message.trim()
   
+  // Handle edit signals first (wait, no, actually, etc.)
+  const editPatterns = [
+    /^(wait|no|nah|nvm),?\s+(just\s+)?say\s+/i,
+    /^(wait|no|nah|actually),?\s+/i,
+    /^just\s+say\s+/i,
+    /^make\s+it\s+(say|be)\s+/i,
+    /^change\s+it\s+to\s+/i,
+    /^(it\s+should\s+say|it\s+should\s+be)\s+/i
+  ]
+  
+  for (const pattern of editPatterns) {
+    content = content.replace(pattern, '')
+  }
+  
   if (type === 'announcement') {
-    // Remove command prefixes
-    content = content.replace(/^announce(ment)?\s*/i, '')
-    content = content.replace(/^(send|make|create)\s+(an?\s+)?announcement\s*/i, '')
-    content = content.replace(/^(tell|notify|let)\s+(everyone|people|all|the group|everybody)\s*(about|that|to)?\s*/i, '')
+    // Remove command prefixes - look for "saying" or "that" to preserve verbatim content
+    content = content.replace(/^announce(ment)?\s+(saying|that)\s+/i, '')
+    content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+(saying|that)\s+/i, '')
+    content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+/i, '')
+    content = content.replace(/^(tell|notify|let)\s+(everyone|people|all|the group|everybody)\s*(about|that)?\s*/i, '')
   } else if (type === 'poll') {
     // Remove command prefixes
-    content = content.replace(/^poll\s*/i, '')
-    content = content.replace(/^(send|make|create|start)\s+(a\s+)?poll\s*/i, '')
+    content = content.replace(/^poll\s+(asking|saying)?\s*/i, '')
+    content = content.replace(/^(send|make|create|start)(\s+out)?\s+(a\s+)?poll\s+(asking|saying)?\s*/i, '')
     content = content.replace(/^(ask|asking)\s+(everyone|people|all|the group|everybody)\s*(if|whether|about)?\s*/i, '')
     
     // Ensure ends with question mark

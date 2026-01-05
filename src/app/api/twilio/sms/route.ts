@@ -369,6 +369,11 @@ async function sendPollToAll(question: string, senderPhone: string): Promise<num
   
   console.log(`[Poll] Sending poll "${question}" to ${users.length} users`)
   
+  // Pre-populate poll question column in Airtable for all users
+  // This ensures the column exists and users can see the question
+  const pollQuestionField = `POLL: ${question}`
+  console.log(`[Poll] Pre-populating Airtable field "${pollQuestionField}" for ${users.length} users`)
+  
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe (add notes like "yes but running late")`
   
   for (const user of users) {
@@ -376,6 +381,16 @@ async function sendPollToAll(question: string, senderPhone: string): Promise<num
     
     // Skip invalid phones only
     if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
+    
+    // Initialize poll question field in Airtable (creates the column if needed)
+    try {
+      await memberRepo.updateMember(user.id, {
+        [pollQuestionField]: question
+      })
+    } catch (airtableError) {
+      console.error(`[Poll] Failed to initialize Airtable field for user ${user.id}:`, airtableError)
+      // Continue anyway - response sync will handle it later
+    }
     
     const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
     if (result.ok) {

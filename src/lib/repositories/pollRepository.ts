@@ -1,9 +1,11 @@
 /**
  * Poll Repository
  * Manages poll creation and response tracking
+ * Syncs poll responses to Airtable
  */
 
 import { getPrisma } from '@/lib/prisma'
+import { updateUser, getUserByPhone } from '@/lib/db'
 
 export interface PollMeta {
   id: string
@@ -101,7 +103,23 @@ export async function getPollWithResponses(pollId: string): Promise<PollWithResp
 }
 
 /**
+ * Generate Airtable field names for a poll
+ */
+function getPollFieldNames(questionText: string): {
+  questionField: string
+  responseField: string
+  notesField: string
+} {
+  return {
+    questionField: `POLL: ${questionText}`,
+    responseField: `POLL_RESPONSE: ${questionText}`,
+    notesField: `POLL_NOTES: ${questionText}`
+  }
+}
+
+/**
  * Save or update a poll response
+ * Saves to both Prisma database and Airtable
  */
 export async function savePollResponse(
   pollId: string,
@@ -111,28 +129,61 @@ export async function savePollResponse(
 ): Promise<PollResponse> {
   const prisma = await getPrisma()
 
+  // Get the poll to retrieve the question text
+  const poll = await prisma.pollMeta.findUnique({ where: { id: pollId } })
+  
+  if (!poll) {
+    throw new Error(`Poll ${pollId} not found`)
+  }
+
+  // Save to Prisma database
   const existing = await prisma.pollResponse.findUnique({
     where: { pollId_phoneNumber: { pollId, phoneNumber } }
   })
 
+  let pollResponse: PollResponse
   if (existing) {
     const updated = await prisma.pollResponse.update({
       where: { pollId_phoneNumber: { pollId, phoneNumber } },
       data: { response, notes }
     })
-    return normalizePollResponse(updated)
+    pollResponse = normalizePollResponse(updated)
+  } else {
+    const created = await prisma.pollResponse.create({
+      data: {
+        pollId,
+        phoneNumber,
+        response,
+        notes
+      }
+    })
+    pollResponse = normalizePollResponse(created)
   }
 
-  const created = await prisma.pollResponse.create({
-    data: {
-      pollId,
-      phoneNumber,
-      response,
-      notes
+  // Sync to Airtable
+  try {
+    const user = await getUserByPhone(phoneNumber)
+    if (user) {
+      const fieldNames = getPollFieldNames(poll.questionText)
+      
+      const airtableUpdate: Record<string, unknown> = {
+        [fieldNames.questionField]: poll.questionText,
+        [fieldNames.responseField]: response,
+        [fieldNames.notesField]: notes || ''
+      }
+      
+      console.log(`[PollRepo] Syncing poll response to Airtable for user ${user.id}:`, airtableUpdate)
+      await updateUser(user.id, airtableUpdate)
+      console.log(`[PollRepo] Successfully synced poll response to Airtable`)
+    } else {
+      console.warn(`[PollRepo] User not found in Airtable for phone ${phoneNumber}, skipping Airtable sync`)
     }
-  })
+  } catch (airtableError) {
+    console.error(`[PollRepo] Failed to sync poll response to Airtable:`, airtableError)
+    // Don't fail the whole operation if Airtable sync fails
+  }
 
-  return normalizePollResponse(created)
+  return pollResponse
 }
 
 /**
@@ -185,6 +236,50 @@ export async function deactivatePoll(pollId: string): Promise<void> {
     where: { id: pollId },
     data: { isActive: false }
   })
+}
+
+/**
+ * Sync all poll responses to Airtable
+ * Useful for ensuring data consistency
+ */
+export async function syncPollResponsesToAirtable(pollId: string): Promise<{ synced: number; failed: number }> {
+  const prisma = await getPrisma()
+  
+  const poll = await prisma.pollMeta.findUnique({ where: { id: pollId } })
+  if (!poll) {
+    throw new Error(`Poll ${pollId} not found`)
+  }
+  
+  const responses = await prisma.pollResponse.findMany({ where: { pollId } })
+  const fieldNames = getPollFieldNames(poll.questionText)
+  
+  let synced = 0
+  let failed = 0
+  
+  for (const response of responses) {
+    try {
+      const user = await getUserByPhone(response.phoneNumber)
+      if (user) {
+        const airtableUpdate: Record<string, unknown> = {
+          [fieldNames.questionField]: poll.questionText,
+          [fieldNames.responseField]: response.response,
+          [fieldNames.notesField]: response.notes || ''
+        }
+        
+        await updateUser(user.id, airtableUpdate)
+        synced++
+      } else {
+        console.warn(`[PollRepo] User not found for ${response.phoneNumber}`)
+        failed++
+      }
+    } catch (error) {
+      console.error(`[PollRepo] Failed to sync response for ${response.phoneNumber}:`, error)
+      failed++
+    }
+  }
+  
+  console.log(`[PollRepo] Synced ${synced} responses, ${failed} failed`)
+  return { synced, failed }
 }
 
 function normalizePollResponse(record: {

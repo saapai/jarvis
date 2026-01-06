@@ -7,8 +7,8 @@ import { ActionResult } from '../types'
 import { applyPersonality } from '../personality'
 import * as eventRepo from '@/lib/repositories/eventRepository'
 import * as memberRepo from '@/lib/repositories/memberRepository'
-import { sendSms, toE164 } from '@/lib/twilio'
-import { normalizePhone } from '@/lib/db'
+import { sendSms } from '@/lib/twilio'
+import { normalizePhone, toE164 } from '@/lib/db'
 
 export interface EventUpdateInput {
   phone: string

@@ -170,7 +170,7 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
       break
     
     case 'capability_query':
-      result = handleCapabilityQuery({
+      result = await handleCapabilityQuery({
         phone,
         message,
         userName: user.name,

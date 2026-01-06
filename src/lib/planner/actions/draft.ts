@@ -14,6 +14,147 @@ import * as draftRepo from '@/lib/repositories/draftRepository'
 import { extractContent } from '../classifier'
 import { applyPersonality, TEMPLATES, removeEmoji } from '../personality'
 
+// ============================================
+// LINK DETECTION (LLM-BASED)
+// ============================================
+
+/**
+ * Use LLM to detect if a poll should require an excuse for "No"
+ */
+async function detectMandatoryPoll(message: string): Promise<{
+  isMandatory: boolean
+  reasoning: string
+}> {
+  if (!process.env.OPENAI_API_KEY) {
+    return { isMandatory: false, reasoning: 'No API key' }
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `You are analyzing whether a poll/event is mandatory or requires attendance.
+
+Indicators that something is MANDATORY:
+- Uses words like "mandatory", "required", "must attend"
+- Active meetings, required meetings
+- Chapter meetings, official events
+- Penalties mentioned for not attending
+- "Everyone needs to be there"
+
+NOT mandatory:
+- Optional events
+- Social gatherings  
+- Study sessions
+- Open invites
+- "If you're interested"
+
+Respond with JSON: { "isMandatory": boolean, "reasoning": string }`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Is this poll about a mandatory event? "${message}"` }
+      ],
+      temperature: 0.1,
+      max_tokens: 100,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      console.log(`[MandatoryDetection] isMandatory=${parsed.isMandatory}, reasoning=${parsed.reasoning}`)
+      return {
+        isMandatory: parsed.isMandatory || false,
+        reasoning: parsed.reasoning || 'LLM analysis'
+      }
+    }
+  } catch (error) {
+    console.error('[MandatoryDetection] LLM failed:', error)
+  }
+
+  return { isMandatory: false, reasoning: 'Fallback' }
+}
+
+/**
+ * Use LLM to detect and extract links from a message
+ */
+async function detectLinks(message: string): Promise<{
+  hasLinks: boolean
+  links: string[]
+  needsLink: boolean
+  reasoning: string
+}> {
+  if (!process.env.OPENAI_API_KEY) {
+    return { hasLinks: false, links: [], needsLink: false, reasoning: 'No API key' }
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `You are analyzing messages to detect:
+1. If the message contains any URLs/links
+2. If the message SHOULD have a link but doesn't
+
+Messages that typically need links:
+- RSVP requests
+- Sign-up forms
+- Registration
+- "Fill out this form"
+- "Click here"
+- "Check out"
+- Survey requests
+- External resources
+- Documents to review
+
+Extract all URLs and determine if more links are needed.
+
+Respond with JSON only: { "hasLinks": boolean, "links": string[], "needsLink": boolean, "reasoning": string }`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Analyze this message: "${message}"` }
+      ],
+      temperature: 0.1,
+      max_tokens: 200,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      console.log(`[LinkDetection] hasLinks=${parsed.hasLinks}, needsLink=${parsed.needsLink}, links=${JSON.stringify(parsed.links)}`)
+      return {
+        hasLinks: parsed.hasLinks || false,
+        links: parsed.links || [],
+        needsLink: parsed.needsLink || false,
+        reasoning: parsed.reasoning || 'LLM analysis'
+      }
+    }
+  } catch (error) {
+    console.error('[LinkDetection] LLM failed:', error)
+  }
+
+  return { hasLinks: false, links: [], needsLink: false, reasoning: 'Fallback' }
+}
+
+/**
+ * Validate that a string is a proper URL
+ */
+async function validateLink(link: string): Promise<boolean> {
+  try {
+    const url = new URL(link)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export interface DraftActionInput {
   phone: string
   message: string
@@ -66,9 +207,49 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       }
     }
     
-    // We have content - create draft with it
+    // We have content - check for links and if poll is mandatory
     const formattedContent = formatContent(content, draftType)
     console.log(`[DraftWrite] Creating draft with content: "${formattedContent}"`)
+    
+    const linkAnalysis = await detectLinks(formattedContent)
+    
+    // For polls, check if it's mandatory (requires excuse for "No")
+    let requiresExcuse = false
+    if (draftType === 'poll') {
+      const mandatoryAnalysis = await detectMandatoryPoll(message + ' ' + formattedContent)
+      requiresExcuse = mandatoryAnalysis.isMandatory
+      if (requiresExcuse) {
+        console.log(`[DraftWrite] Poll detected as mandatory - will require excuse for "No"`)
+      }
+    }
+    
+    // If it needs a link but doesn't have one, mark as pending
+    if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
+      console.log(`[DraftWrite] Draft needs a link but doesn't have one - setting pendingLink`)
+      await draftRepo.createDraft(phone, draftType, formattedContent)
+      
+      const newDraft: Draft = {
+        type: draftType,
+        content: formattedContent,
+        status: 'drafting',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        pendingLink: true,
+        requiresExcuse
+      }
+      
+      return {
+        action: 'draft_write',
+        response: applyPersonality({
+          baseResponse: `got it, but this looks like it needs a link (RSVP, form, etc.). send me the link and i'll add it to the ${draftType}`,
+          userMessage: message,
+          userName
+        }),
+        newDraft
+      }
+    }
+    
+    // Draft is ready (either has links or doesn't need them)
     await draftRepo.createDraft(phone, draftType, formattedContent)
     
     const newDraft: Draft = {
@@ -76,13 +257,17 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       content: formattedContent,
       status: 'ready',
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      links: linkAnalysis.links,
+      requiresExcuse
     }
+    
+    const excuseNote = requiresExcuse ? ' (mandatory - excuses required for "no")' : ''
     
     return {
       action: 'draft_write',
       response: applyPersonality({
-        baseResponse: TEMPLATES.draftCreated(draftType, newDraft.content),
+        baseResponse: TEMPLATES.draftCreated(draftType, newDraft.content) + excuseNote,
         userMessage: message,
         userName
       }),
@@ -90,7 +275,47 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     }
   }
   
-  // Case 2: Existing draft in 'drafting' state (waiting for content)
+  // Case 2a: Existing draft waiting for a link
+  if (existingDraft.pendingLink) {
+    const linkAnalysis = await detectLinks(message)
+    
+    if (linkAnalysis.hasLinks && linkAnalysis.links.length > 0) {
+      // Add link to the draft content
+      const updatedContent = `${existingDraft.content}\n\n${linkAnalysis.links.join('\n')}`
+      await draftRepo.updateDraftByPhone(phone, { draftText: updatedContent })
+      
+      const updatedDraft: Draft = {
+        ...existingDraft,
+        content: updatedContent,
+        status: 'ready',
+        updatedAt: Date.now(),
+        pendingLink: false,
+        links: linkAnalysis.links
+      }
+      
+      return {
+        action: 'draft_write',
+        response: applyPersonality({
+          baseResponse: `perfect! here's the ${existingDraft.type} with the link:\n\n"${updatedContent}"\n\nsay "send" when ready`,
+          userMessage: message,
+          userName
+        }),
+        newDraft: updatedDraft
+      }
+    } else {
+      // Didn't send a link - prompt again
+      return {
+        action: 'draft_write',
+        response: applyPersonality({
+          baseResponse: "didn't catch a link there. send me the URL for this " + existingDraft.type,
+          userMessage: message,
+          userName
+        })
+      }
+    }
+  }
+  
+  // Case 2b: Existing draft in 'drafting' state (waiting for content)
   if (existingDraft.status === 'drafting' && !existingDraft.content) {
     const content = formatContent(
       await resolveDraftContent({
@@ -102,6 +327,32 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       existingDraft.type
     )
     
+    // Check for links in the new content
+    const linkAnalysis = await detectLinks(content)
+    
+    if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
+      // Update draft but mark as pending link
+      await draftRepo.updateDraftByPhone(phone, { draftText: content })
+      
+      const updatedDraft: Draft = {
+        ...existingDraft,
+        content,
+        status: 'drafting',
+        updatedAt: Date.now(),
+        pendingLink: true
+      }
+      
+      return {
+        action: 'draft_write',
+        response: applyPersonality({
+          baseResponse: `got it, but this looks like it needs a link. send me the link and i'll add it`,
+          userMessage: message,
+          userName
+        }),
+        newDraft: updatedDraft
+      }
+    }
+    
     // Update draft in DB
     await draftRepo.updateDraftByPhone(phone, { draftText: content })
     
@@ -109,7 +360,8 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       ...existingDraft,
       content,
       status: 'ready',
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      links: linkAnalysis.links
     }
     
     return {

@@ -99,7 +99,17 @@ Classify this message into ONE of these actions:
 5. **capability_query** - Questions about Jarvis itself
    - "what can you do", "help", "how do you work"
 
-6. **chat** - Everything else
+6. **knowledge_upload** - Admin sharing factual information to add to knowledge base
+   - Examples: "ski retreat is jan 16-19 in utah", "meeting moved to thursday at 7pm"
+   - Must be declarative information, not questions or commands
+   - ONLY classify as this if user is admin (check context)
+
+7. **event_update** - Admin updating existing event details
+   - Examples: "change ski retreat to jan 20-22", "move chapter meeting to 7pm"
+   - Explicit modifications to existing events
+   - ONLY classify as this if user is admin and referencing an existing event
+
+8. **chat** - Everything else
    - Casual conversation, banter, greetings, insults
    - Cancellations: "nevermind", "cancel"
 
@@ -111,7 +121,7 @@ CONTEXT UNDERSTANDING:
 
 Respond with JSON only:
 {
-  "action": "draft_write" | "draft_send" | "poll_response" | "content_query" | "capability_query" | "chat",
+  "action": "draft_write" | "draft_send" | "poll_response" | "content_query" | "capability_query" | "knowledge_upload" | "event_update" | "chat",
   "confidence": 0.0-1.0,
   "subtype": "announcement" | "poll" | null,
   "reasoning": "brief explanation including context used"

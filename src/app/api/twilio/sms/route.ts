@@ -142,7 +142,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         message,
         userName: user.name,
         searchContent: searchFactsDatabase,
-        recentMessages
+        recentMessages,
+        searchPastActions: searchPastAnnouncements
       })
       console.log(`[ContentQuery] Result: ${actionResult.response.substring(0, 50)}...`)
       break
@@ -166,6 +167,33 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         isAdmin: memberRepo.isAdmin(phone)
       })
       console.log(`[CapabilityQuery] Result: ${actionResult.response.substring(0, 50)}...`)
+      break
+    
+    case 'knowledge_upload':
+      console.log(`[KnowledgeUpload] Admin uploading knowledge...`)
+      actionResult = await actions.handleKnowledgeUpload({
+        phone,
+        message,
+        userName: user.name,
+        isAdmin: memberRepo.isAdmin(phone)
+      })
+      console.log(`[KnowledgeUpload] Result: ${actionResult.response.substring(0, 50)}...`)
+      break
+    
+    case 'event_update':
+      console.log(`[EventUpdate] Admin updating event...`)
+      // Check if there's a pending confirmation from the last message
+      const lastMessage = recentMessages.length > 0 ? recentMessages[recentMessages.length - 1] : null
+      const pendingConfirmation = lastMessage?.meta?.pendingConfirmation || undefined
+      
+      actionResult = await actions.handleEventUpdate({
+        phone,
+        message,
+        userName: user.name,
+        isAdmin: memberRepo.isAdmin(phone),
+        pendingConfirmation
+      })
+      console.log(`[EventUpdate] Result: ${actionResult.response.substring(0, 50)}...`)
       break
     
     case 'chat':
@@ -202,6 +230,11 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     metadata.draftContent = activeDraft.content
   } else if (classification.action === 'draft_write' && actionResult.newDraft?.content) {
     metadata.draftContent = actionResult.newDraft.content
+  }
+  
+  // Store pending confirmation for event updates
+  if (actionResult.pendingConfirmation) {
+    metadata.pendingConfirmation = actionResult.pendingConfirmation
   }
   
   await messageRepo.logMessage(phone, 'outbound', finalResponse, metadata)
@@ -360,21 +393,22 @@ async function sendAnnouncementToAll(content: string, senderPhone: string): Prom
 // POLL SENDING
 // ============================================
 
-async function sendPollToAll(question: string, senderPhone: string): Promise<number> {
+async function sendPollToAll(question: string, senderPhone: string, requiresExcuse: boolean = false): Promise<number> {
   // Create poll in database
-  const poll = await pollRepo.createPoll(question, senderPhone, false)
+  const poll = await pollRepo.createPoll(question, senderPhone, requiresExcuse)
   
   const users = await memberRepo.getOptedInMembers()
   let sent = 0
   
-  console.log(`[Poll] Sending poll "${question}" to ${users.length} users`)
+  console.log(`[Poll] Sending poll "${question}" to ${users.length} users (requiresExcuse: ${requiresExcuse})`)
   
   // Pre-populate poll question column in Airtable for all users
   // This ensures the column exists and users can see the question
   const pollQuestionField = `POLL: ${question}`
   console.log(`[Poll] Pre-populating Airtable field "${pollQuestionField}" for ${users.length} users`)
   
-  const pollMessage = `📊 ${question}\n\nreply yes/no/maybe (add notes like "yes but running late")`
+  const excuseNote = requiresExcuse ? ' (excuse required if no)' : ''
+  const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote} (add notes like "yes but running late")`
   
   for (const user of users) {
     const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
@@ -414,6 +448,15 @@ interface ContentResult {
 
 async function searchFactsDatabase(query: string): Promise<ContentResult[]> {
   return routeContentSearch(query)
+}
+
+async function searchPastAnnouncements(): Promise<Array<{
+  type: 'announcement' | 'poll'
+  content: string
+  sentAt: Date
+  sentBy: string
+}>> {
+  return messageRepo.getPastActions()
 }
 
 // ============================================

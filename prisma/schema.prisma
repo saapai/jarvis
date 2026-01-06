@@ -37,6 +37,8 @@ model Fact {
   parent    Fact?    @relation("FactTree", fields: [parentId], references: [id])
   children  Fact[]   @relation("FactTree")
 
+  linkedEvents Event[]  // Events linked to this fact
+
   createdAt DateTime @default(now())
 }
 
@@ -95,5 +97,26 @@ model PollResponse {
   
   @@unique([pollId, phoneNumber])
   @@index([pollId, phoneNumber])
+}
+
+model Event {
+  id              String    @id @default(cuid())
+  title           String    // Event name/title
+  description     String?   // Full description
+  eventDate       DateTime  // When the event occurs
+  location        String?   // Where it happens
+  createdBy       String    // Phone number of creator
+  category        String?   // Type of event (social, professional, etc.)
+  reminderSent    Boolean   @default(false)  // Has 2-hour reminder been sent?
+  morningReminderSent Boolean @default(false) // Has 9am reminder been sent?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now())
+  
+  // Optional link to extracted facts
+  linkedFactId    String?
+  linkedFact      Fact?     @relation(fields: [linkedFactId], references: [id])
+  
+  @@index([eventDate, reminderSent])
+  @@index([eventDate, morningReminderSent])
 }
 

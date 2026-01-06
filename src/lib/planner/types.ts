@@ -13,6 +13,8 @@ export type ActionType =
   | 'poll_response'    // Reply to an active poll
   | 'content_query'    // Questions about org content (events, meetings, etc.)
   | 'capability_query' // Questions about Jarvis/Enclave capabilities
+  | 'knowledge_upload' // Add information to knowledge base (admin only)
+  | 'event_update'     // Update event details (admin only)
   | 'chat'             // Banter, insults, random conversation
 
 export type DraftType = 'announcement' | 'poll'
@@ -25,6 +27,9 @@ export interface Draft {
   status: DraftStatus
   createdAt: number
   updatedAt: number
+  pendingLink?: boolean      // Waiting for user to provide a link
+  links?: string[]           // Extracted links from the draft
+  requiresExcuse?: boolean   // For polls: require notes if answering "No"
 }
 
 // ============================================
@@ -93,6 +98,11 @@ export interface ActionResult {
   response: string        // The response to send
   newDraft?: Draft        // Updated draft state (if any)
   historyEntry?: ConversationTurn  // Entry to add to history
+  pendingConfirmation?: {
+    eventId: string
+    updates: Record<string, unknown>
+    description: string
+  }  // For event_update actions awaiting confirmation
 }
 
 export interface PlannerOutput {

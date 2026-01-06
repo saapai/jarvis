@@ -19,6 +19,13 @@ export interface ContentQueryInput {
     createdAt: Date
     meta?: { action?: string; draftContent?: string } | null
   }>
+  // Function to search past announcements/polls
+  searchPastActions?: () => Promise<Array<{
+    type: 'announcement' | 'poll'
+    content: string
+    sentAt: Date
+    sentBy: string
+  }>>
 }
 
 export interface ContentResult {
@@ -28,13 +35,107 @@ export interface ContentResult {
 }
 
 /**
+ * Use LLM to detect if user is asking about past actions (announcements/polls)
+ */
+async function isAskingAboutPastActions(message: string): Promise<{
+  isPastActionQuery: boolean
+  reasoning: string
+}> {
+  if (!process.env.OPENAI_API_KEY) {
+    return { isPastActionQuery: false, reasoning: 'No API key' }
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `Determine if the user is asking about PAST announcements, polls, or messages that were sent.
+
+Examples of past action queries:
+- "what announcements have been sent?"
+- "show me recent polls"
+- "what did you send out yesterday?"
+- "list past announcements"
+- "what polls are active?"
+
+NOT past action queries:
+- "when is the event?" (asking about event timing)
+- "who's coming?" (asking about attendance)
+- "what's happening tonight?" (asking about upcoming events)
+
+Respond with JSON: { "isPastActionQuery": boolean, "reasoning": string }`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Is this asking about past actions? "${message}"` }
+      ],
+      temperature: 0.1,
+      max_tokens: 100,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      return {
+        isPastActionQuery: parsed.isPastActionQuery || false,
+        reasoning: parsed.reasoning || 'LLM analysis'
+      }
+    }
+  } catch (error) {
+    console.error('[ContentQuery] Past action detection failed:', error)
+  }
+
+  return { isPastActionQuery: false, reasoning: 'Fallback' }
+}
+
+/**
  * Handle content query action
  * Note: In MVP, this returns a placeholder. Will integrate with actual search.
  */
 export async function handleContentQuery(input: ContentQueryInput): Promise<ActionResult> {
-  const { phone, message, userName, searchContent, recentMessages } = input
+  const { phone, message, userName, searchContent, recentMessages, searchPastActions } = input
   
   console.log(`[ContentQuery] Processing query: "${message}"`)
+  
+  // Check if asking about past actions (announcements/polls)
+  const pastActionCheck = await isAskingAboutPastActions(message)
+  if (pastActionCheck.isPastActionQuery && searchPastActions) {
+    console.log(`[ContentQuery] Detected past action query`)
+    try {
+      const pastActions = await searchPastActions()
+      
+      if (pastActions.length === 0) {
+        return {
+          action: 'content_query',
+          response: applyPersonality({
+            baseResponse: "no announcements or polls have been sent recently",
+            userMessage: message,
+            userName
+          })
+        }
+      }
+      
+      // Format recent actions
+      const formatted = pastActions.slice(0, 5).map((action, idx) => {
+        const date = new Date(action.sentAt).toLocaleDateString()
+        return `${idx + 1}. ${action.type === 'poll' ? '📊' : '📢'} ${action.content.substring(0, 60)}${action.content.length > 60 ? '...' : ''} (${date})`
+      }).join('\n')
+      
+      return {
+        action: 'content_query',
+        response: applyPersonality({
+          baseResponse: `recent ${pastActions.length > 5 ? '5' : pastActions.length} sent:\n${formatted}`,
+          userMessage: message,
+          userName
+        })
+      }
+    } catch (error) {
+      console.error('[ContentQuery] Failed to search past actions:', error)
+    }
+  }
   
   // Check if asking about recent actions first
   const recentActionResponse = checkRecentActions(message, recentMessages)

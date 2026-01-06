@@ -14,7 +14,7 @@ export interface SendActionInput {
   isAdmin: boolean
   // Function to actually send the announcement/poll
   sendAnnouncement: (content: string, senderPhone: string) => Promise<number>
-  sendPoll: (question: string, senderPhone: string) => Promise<number>
+  sendPoll: (question: string, senderPhone: string, requiresExcuse?: boolean) => Promise<number>
 }
 
 /**
@@ -61,7 +61,7 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
     if (draft.type === 'announcement') {
       sentCount = await sendAnnouncement(draft.content, phone)
     } else {
-      sentCount = await sendPoll(draft.content, phone)
+      sentCount = await sendPoll(draft.content, phone, draft.requiresExcuse)
     }
     
     console.log(`[Send] Successfully sent to ${sentCount} users`)

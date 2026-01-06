@@ -1,6 +1,6 @@
 /**
  * Capability Query Handler
- * Handles questions about Jarvis/Enclave capabilities
+ * Handles questions about Jarvis/Enclave capabilities using LLM
  */
 
 import { ActionResult } from '../types'
@@ -14,119 +14,153 @@ export interface CapabilityQueryInput {
 }
 
 /**
- * Handle capability query action
+ * Use LLM to determine what type of capability query this is
+ * and whether it's asking about something Jarvis can't do
  */
-export function handleCapabilityQuery(input: CapabilityQueryInput): ActionResult {
-  const { phone, message, userName, isAdmin } = input
-  const lower = message.toLowerCase()
-  
-  // Specific capability questions
-  
-  // "who are you" / "what are you"
-  if (/\b(who|what) are you\b/i.test(lower)) {
-    return {
-      action: 'capability_query',
-      response: applyPersonality({
-        baseResponse: "i'm jarvis, your org's sassy ai assistant. powered by enclave. i help with announcements, polls, and answering questions about what's going on",
-        userMessage: message,
-        userName
-      })
-    }
+async function classifyCapabilityQuery(message: string, isAdmin: boolean): Promise<{
+  queryType: 'identity' | 'capabilities' | 'howItWorks' | 'help' | 'impossible' | 'general'
+  impossibleTask?: string
+  reasoning: string
+}> {
+  if (!process.env.OPENAI_API_KEY) {
+    return { queryType: 'general', reasoning: 'No API key' }
   }
-  
-  // "are you a bot"
-  if (/\bare you (a |an )?(bot|ai|robot|machine|computer)\b/i.test(lower)) {
-    return {
-      action: 'capability_query',
-      response: applyPersonality({
-        baseResponse: "yeah i'm a bot. jarvis, powered by enclave. got a problem with that? 🤖",
-        userMessage: message,
-        userName
-      })
-    }
-  }
-  
-  // "what can you do"
-  if (/\b(what can you do|what do you do|your capabilities|your features)\b/i.test(lower)) {
-    return {
-      action: 'capability_query',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.capabilities(isAdmin),
-        userMessage: message,
-        userName
-      })
-    }
-  }
-  
-  // "how do you work"
-  if (/\b(how do you work|how does this work|explain yourself)\b/i.test(lower)) {
-    return {
-      action: 'capability_query',
-      response: applyPersonality({
-        baseResponse: "i read your messages, figure out what you want, and do it. or roast you. depends on my mood 🤷",
-        userMessage: message,
-        userName
-      })
-    }
-  }
-  
-  // "help" command
-  if (/^help$/i.test(lower) || /\b(need help|help me|how to use)\b/i.test(lower)) {
-    return {
-      action: 'capability_query',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.capabilities(isAdmin),
-        userMessage: message,
-        userName
-      })
-    }
-  }
-  
-  // "what is jarvis" / "what is enclave"
-  if (/\bwhat('?s| is) (jarvis|enclave)\b/i.test(lower)) {
-    const isAskingAboutJarvis = /jarvis/i.test(lower)
-    
-    if (isAskingAboutJarvis) {
-      return {
-        action: 'capability_query',
-        response: applyPersonality({
-          baseResponse: "jarvis is me. your org's ai assistant for announcements, polls, and org questions. i'm kinda a big deal tbh",
-          userMessage: message,
-          userName
-        })
-      }
-    } else {
-      return {
-        action: 'capability_query',
-        response: applyPersonality({
-          baseResponse: "enclave is the platform that powers me. it's like a knowledge base + communication hub for orgs. pretty cool actually",
-          userMessage: message,
-          userName
-        })
-      }
-    }
-  }
-  
-  // "commands" / "options"
-  if (/\b(commands|options|what can i (say|do|ask))\b/i.test(lower)) {
-    return {
-      action: 'capability_query',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.capabilities(isAdmin),
-        userMessage: message,
-        userName
-      })
-    }
-  }
-  
-  // Generic capability response
-  return {
-    action: 'capability_query',
-    response: applyPersonality({
-      baseResponse: TEMPLATES.capabilities(isAdmin),
-      userMessage: message,
-      userName
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `You are analyzing a user's question about Jarvis, an SMS bot assistant for organizations.
+
+JARVIS CAN DO:
+- Send announcements to group members
+- Create and manage polls
+- Answer questions about the organization (events, meetings, schedules)
+- Provide help and explain capabilities
+- Have casual conversations with personality
+
+JARVIS CANNOT DO:
+- Book flights, hotels, or make reservations
+- Make purchases or payments
+- Access external services (Uber, food delivery, etc.)
+- Make phone calls
+- Send emails
+- Access calendars outside the org
+- Anything requiring external APIs or services
+
+Classify the user's message into one of these types:
+- "identity": Asking who/what Jarvis is, if it's a bot
+- "capabilities": Asking what Jarvis can do
+- "howItWorks": Asking how Jarvis works
+- "help": Asking for help or commands
+- "impossible": Asking Jarvis to do something it cannot do
+- "general": General capability question
+
+If it's "impossible", identify what impossible task they're asking for.
+
+Respond with JSON only.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: `User message: "${message}"\n\nClassify this query and explain your reasoning.`
+        }
+      ],
+      temperature: 0.2,
+      max_tokens: 200,
+      response_format: { type: 'json_object' }
     })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      return {
+        queryType: parsed.queryType || 'general',
+        impossibleTask: parsed.impossibleTask,
+        reasoning: parsed.reasoning || 'LLM classification'
+      }
+    }
+  } catch (error) {
+    console.error('[CapabilityQuery] LLM classification failed:', error)
+  }
+
+  return { queryType: 'general', reasoning: 'Fallback' }
+}
+
+/**
+ * Handle capability query action using LLM-based classification
+ */
+export async function handleCapabilityQuery(input: CapabilityQueryInput): Promise<ActionResult> {
+  const { phone, message, userName, isAdmin } = input
+
+  const classification = await classifyCapabilityQuery(message, isAdmin)
+  console.log(`[CapabilityQuery] Classified as: ${classification.queryType} - ${classification.reasoning}`)
+
+  // Handle impossible requests with humorous responses
+  if (classification.queryType === 'impossible') {
+    const impossibleResponses = [
+      `sorry bro i wish i was smart enough to ${classification.impossibleTask || 'do that'} for you. i can help with announcements, polls, and org questions though`,
+      `nah i can't ${classification.impossibleTask || 'do that'}. i'm just a bot for org stuff - announcements, polls, and questions about events`,
+      `lol i wish. i can't ${classification.impossibleTask || 'help with that'}. but i can send announcements and polls if you need`,
+      `${classification.impossibleTask || 'that'} is way beyond my capabilities. i just do org communication stuff - announcements, polls, and answering questions`
+    ]
+
+    return {
+      action: 'capability_query',
+      response: applyPersonality({
+        baseResponse: impossibleResponses[Math.floor(Math.random() * impossibleResponses.length)],
+        userMessage: message,
+        userName
+      })
+    }
+  }
+
+  // Handle based on query type
+  switch (classification.queryType) {
+    case 'identity':
+      return {
+        action: 'capability_query',
+        response: applyPersonality({
+          baseResponse: "i'm jarvis, your org's sassy ai assistant. powered by enclave. i help with announcements, polls, and answering questions about what's going on",
+          userMessage: message,
+          userName
+        })
+      }
+
+    case 'howItWorks':
+      return {
+        action: 'capability_query',
+        response: applyPersonality({
+          baseResponse: "i read your messages, figure out what you want, and do it. or roast you. depends on my mood 🤷",
+          userMessage: message,
+          userName
+        })
+      }
+
+    case 'capabilities':
+    case 'help':
+      return {
+        action: 'capability_query',
+        response: applyPersonality({
+          baseResponse: TEMPLATES.capabilities(isAdmin),
+          userMessage: message,
+          userName
+        })
+      }
+
+    case 'general':
+    default:
+      return {
+        action: 'capability_query',
+        response: applyPersonality({
+          baseResponse: TEMPLATES.capabilities(isAdmin),
+          userMessage: message,
+          userName
+        })
+      }
   }
 }
 

@@ -30,6 +30,19 @@ export async function handlePollResponse(input: PollResponseInput): Promise<Acti
 
   const parsed = await parsePollResponse(message)
 
+  // Enforce excuse requirement for mandatory events
+  if (activePoll.requiresReasonForNo && parsed.response === 'No' && !parsed.notes) {
+    console.log(`[PollResponse] Poll requires excuse for "No" but none provided`)
+    return {
+      action: 'poll_response',
+      response: applyPersonality({
+        baseResponse: "this event is mandatory - can you tell me why you can't make it?",
+        userMessage: message,
+        userName
+      })
+    }
+  }
+
   await pollRepo.savePollResponse(activePoll.id, phone, parsed.response, parsed.notes)
 
   let confirmationMsg = `got it! recorded: ${parsed.response}`

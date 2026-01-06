@@ -46,3 +46,4 @@ coverage/
 
 
 prisma/dev.db
+.env

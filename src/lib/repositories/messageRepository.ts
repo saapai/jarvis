@@ -11,6 +11,12 @@ export interface MessageMeta {
   action?: string
   confidence?: number
   tags?: string[]
+  draftContent?: string
+  pendingConfirmation?: {
+    eventId: string
+    updates: Record<string, unknown>
+    description: string
+  }
 }
 
 export interface Message {
@@ -102,4 +108,53 @@ export async function deleteOldMessages(daysOld: number = 30): Promise<number> {
   })
 
   return result.count
+}
+
+/**
+ * Get recent announcements and polls that were sent
+ */
+export async function getPastActions(limit: number = 20): Promise<Array<{
+  type: 'announcement' | 'poll'
+  content: string
+  sentAt: Date
+  sentBy: string
+}>> {
+  const prisma = await getPrisma()
+
+  // Find outbound messages with draft_send action
+  const messages = await prisma.message.findMany({
+    where: {
+      direction: 'outbound',
+      meta: {
+        contains: 'draft_send'
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit
+  })
+
+  const actions: Array<{
+    type: 'announcement' | 'poll'
+    content: string
+    sentAt: Date
+    sentBy: string
+  }> = []
+
+  for (const message of messages) {
+    const meta = message.meta ? JSON.parse(message.meta) : null
+    
+    if (meta?.action === 'draft_send' && meta?.draftContent) {
+      // Determine type from content (polls end with ?)
+      const isPoll = meta.draftContent.includes('?') || message.text.includes('📊')
+      
+      actions.push({
+        type: isPoll ? 'poll' : 'announcement',
+        content: meta.draftContent,
+        sentAt: message.createdAt,
+        sentBy: message.phoneNumber
+      })
+    }
+  }
+
+  return actions
 }

@@ -14,6 +14,7 @@ export interface PollMeta {
   isActive: boolean
   createdBy: string
   createdAt: Date
+  pollIdentifier?: string  // Progressive ID like "1.0", "1.1"
 }
 
 export interface PollResponse {
@@ -31,14 +32,33 @@ export interface PollWithResponses extends PollMeta {
 }
 
 /**
+ * Generate next progressive poll ID (1.0, 1.1, 1.2, etc.)
+ */
+async function getNextPollId(): Promise<string> {
+  const prisma = await getPrisma()
+  
+  // Count all polls ever created
+  const totalPolls = await prisma.pollMeta.count()
+  
+  // Format: 1.0, 1.1, 1.2, etc.
+  const majorVersion = Math.floor(totalPolls / 10) + 1
+  const minorVersion = totalPolls % 10
+  
+  return `${majorVersion}.${minorVersion}`
+}
+
+/**
  * Create a new poll (deactivates previous ones)
  */
 export async function createPoll(
   questionText: string,
   createdBy: string,
   requiresReasonForNo: boolean = false
-): Promise<PollMeta> {
+): Promise<PollMeta & { pollIdentifier: string }> {
   const prisma = await getPrisma()
+
+  const pollIdentifier = await getNextPollId()
+  console.log(`[PollRepo] Creating poll with identifier: ${pollIdentifier}`)
 
   // Deactivate prior polls
   await prisma.pollMeta.updateMany({
@@ -57,19 +77,42 @@ export async function createPoll(
     }
   })
 
-  return poll
+  return {
+    ...poll,
+    pollIdentifier
+  }
 }
 
 /**
- * Get active poll
+ * Get active poll with pollIdentifier
  */
-export async function getActivePoll(): Promise<PollMeta | null> {
+export async function getActivePoll(): Promise<(PollMeta & { pollIdentifier: string }) | null> {
   const prisma = await getPrisma()
 
-  return prisma.pollMeta.findFirst({
+  const poll = await prisma.pollMeta.findFirst({
     where: { isActive: true },
     orderBy: { createdAt: 'desc' }
   })
+  
+  if (!poll) return null
+  
+  // Calculate poll identifier based on creation order
+  const totalPollsBefore = await prisma.pollMeta.count({
+    where: {
+      createdAt: {
+        lt: poll.createdAt
+      }
+    }
+  })
+  
+  const majorVersion = Math.floor(totalPollsBefore / 10) + 1
+  const minorVersion = totalPollsBefore % 10
+  const pollIdentifier = `${majorVersion}.${minorVersion}`
+  
+  return {
+    ...poll,
+    pollIdentifier
+  }
 }
 
 /**
@@ -105,17 +148,16 @@ export async function getPollWithResponses(pollId: string): Promise<PollWithResp
 /**
  * Generate Airtable field names for a poll
  */
-function getPollFieldNames(questionText: string): {
+function getPollFieldNames(pollId: string): {
   questionField: string
   responseField: string
   notesField: string
 } {
-  // Use fixed field names that can be reused for each poll
-  // (Airtable API doesn't support creating fields programmatically)
+  // Use progressive poll IDs (1.0, 1.1, 1.2, etc.)
   return {
-    questionField: 'POLL_LATEST_Q',
-    responseField: 'POLL_LATEST_R',
-    notesField: 'POLL_LATEST_N'
+    questionField: `POLL_Q_${pollId}`,
+    responseField: `POLL_R_${pollId}`,
+    notesField: `POLL_N_${pollId}`
   }
 }
 
@@ -131,12 +173,25 @@ export async function savePollResponse(
 ): Promise<PollResponse> {
   const prisma = await getPrisma()
 
-  // Get the poll to retrieve the question text
+  // Get the poll to retrieve the question text and calculate identifier
   const poll = await prisma.pollMeta.findUnique({ where: { id: pollId } })
   
   if (!poll) {
     throw new Error(`Poll ${pollId} not found`)
   }
+  
+  // Calculate poll identifier for Airtable field names
+  const totalPollsBefore = await prisma.pollMeta.count({
+    where: {
+      createdAt: {
+        lt: poll.createdAt
+      }
+    }
+  })
+  
+  const majorVersion = Math.floor(totalPollsBefore / 10) + 1
+  const minorVersion = totalPollsBefore % 10
+  const pollIdentifier = `${majorVersion}.${minorVersion}`
 
   // Save to Prisma database
   const existing = await prisma.pollResponse.findUnique({
@@ -162,11 +217,11 @@ export async function savePollResponse(
     pollResponse = normalizePollResponse(created)
   }
 
-  // Sync to Airtable
+  // Sync to Airtable (fields should already exist from poll creation)
   try {
     const user = await getUserByPhone(phoneNumber)
     if (user) {
-      const fieldNames = getPollFieldNames(poll.questionText)
+      const fieldNames = getPollFieldNames(pollIdentifier)
       
       const airtableUpdate: Record<string, unknown> = {
         [fieldNames.questionField]: poll.questionText,
@@ -174,15 +229,12 @@ export async function savePollResponse(
         [fieldNames.notesField]: notes || ''
       }
       
-      console.log(`[PollRepo] Syncing poll response to Airtable for user ${user.id}:`, airtableUpdate)
+      console.log(`[PollRepo] Syncing poll response to Airtable for user ${user.id}`)
       await updateUser(user.id, airtableUpdate)
       console.log(`[PollRepo] Successfully synced poll response to Airtable`)
-    } else {
-      console.warn(`[PollRepo] User not found in Airtable for phone ${phoneNumber}, skipping Airtable sync`)
     }
   } catch (airtableError) {
-    console.error(`[PollRepo] Failed to sync poll response to Airtable:`, airtableError)
-    // Don't fail the whole operation if Airtable sync fails
+    console.error(`[PollRepo] Airtable sync failed (non-critical):`, airtableError)
   }
 
   return pollResponse

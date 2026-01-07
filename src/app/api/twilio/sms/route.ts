@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateTwilioSignature, toTwiml, sendSms } from '@/lib/twilio'
-import { normalizePhone, toE164 } from '@/lib/db'
+import { normalizePhone, toE164, ensurePollFieldsExist } from '@/lib/db'
 import { classifyIntent } from '@/lib/planner/classifier'
 import { applyPersonalityAsync } from '@/lib/planner/personality'
 import { buildWeightedHistoryFromMessages } from '@/lib/planner/history'
@@ -394,22 +394,27 @@ async function sendAnnouncementToAll(content: string, senderPhone: string): Prom
 // ============================================
 
 async function sendPollToAll(question: string, senderPhone: string, requiresExcuse: boolean = false): Promise<number> {
-  // Create poll in database
+  // Create poll in database with progressive ID
   const poll = await pollRepo.createPoll(question, senderPhone, requiresExcuse)
+  
+  console.log(`[Poll] Created poll ${poll.pollIdentifier} in Postgres: "${question}"`)
+  
+  // Create Airtable fields for this poll using Metadata API
+  if (poll.pollIdentifier) {
+    console.log(`[Poll] Creating Airtable fields for poll ${poll.pollIdentifier}`)
+    const fieldsCreated = await ensurePollFieldsExist(poll.pollIdentifier)
+    
+    if (fieldsCreated) {
+      console.log(`[Poll] ✓ Airtable fields created successfully`)
+    } else {
+      console.warn(`[Poll] ⚠ Airtable field creation failed - responses stored in Postgres only`)
+    }
+  }
   
   const users = await memberRepo.getOptedInMembers()
   let sent = 0
   
   console.log(`[Poll] Sending poll "${question}" to ${users.length} users (requiresExcuse: ${requiresExcuse})`)
-  
-  // Use fixed Airtable field names (Airtable API doesn't support creating fields)
-  // These fields must exist in Airtable: POLL_LATEST_Q, POLL_LATEST_R, POLL_LATEST_N
-  const pollFields = {
-    questionField: 'POLL_LATEST_Q',
-    responseField: 'POLL_LATEST_R',
-    notesField: 'POLL_LATEST_N'
-  }
-  console.log(`[Poll] Updating Airtable poll fields for: "${question}"`)
   
   const excuseNote = requiresExcuse ? ' (if no explain why)' : ''
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote}`
@@ -419,18 +424,6 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
     
     // Skip invalid phones only
     if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
-    
-    // Initialize ALL poll fields in Airtable (creates the columns if needed)
-    try {
-      await memberRepo.updateMember(user.id, {
-        [pollFields.questionField]: question,
-        [pollFields.responseField]: '',  // Empty initially
-        [pollFields.notesField]: ''      // Empty initially
-      })
-    } catch (airtableError) {
-      console.error(`[Poll] Failed to initialize Airtable field for user ${user.id}:`, airtableError)
-      // Continue anyway - response sync will handle it later
-    }
     
     const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
     if (result.ok) {

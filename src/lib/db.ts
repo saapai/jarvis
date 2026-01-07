@@ -21,6 +21,14 @@ function getTableName(): string {
   return process.env.AIRTABLE_TABLE_NAME || 'Enclave'
 }
 
+function getBaseId(): string {
+  return process.env.AIRTABLE_BASE_ID || ''
+}
+
+function getApiKey(): string {
+  return process.env.AIRTABLE_API_KEY || ''
+}
+
 // ============================================
 // UTILITIES (defined early for use in user operations)
 // ============================================
@@ -465,5 +473,161 @@ export async function verifyAirtableFields(): Promise<{ success: boolean; missin
   } catch (error) {
     console.error('[DB] verifyAirtableFields error:', error)
     return { success: false, missingFields: [] }
+  }
+}
+
+// ============================================
+// AIRTABLE METADATA API - FIELD CREATION
+// ============================================
+
+/**
+ * Get table ID from table name using Airtable Metadata API
+ */
+async function getTableId(baseId: string, tableName: string, apiKey: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    })
+    
+    if (!response.ok) {
+      console.error(`[Airtable Meta] Failed to get tables: ${response.status}`)
+      return null
+    }
+    
+    const data = await response.json()
+    const table = data.tables?.find((t: any) => t.name === tableName)
+    
+    return table?.id || null
+  } catch (error) {
+    console.error('[Airtable Meta] Error getting table ID:', error)
+    return null
+  }
+}
+
+/**
+ * Check if fields exist in Airtable table
+ */
+async function checkFieldsExist(
+  baseId: string,
+  tableId: string,
+  fieldNames: string[],
+  apiKey: string
+): Promise<{ [fieldName: string]: boolean }> {
+  try {
+    const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    })
+    
+    if (!response.ok) {
+      console.error(`[Airtable Meta] Failed to get table schema: ${response.status}`)
+      return Object.fromEntries(fieldNames.map(f => [f, false]))
+    }
+    
+    const data = await response.json()
+    const existingFields = new Set(data.fields?.map((f: any) => f.name) || [])
+    
+    return Object.fromEntries(
+      fieldNames.map(name => [name, existingFields.has(name)])
+    )
+  } catch (error) {
+    console.error('[Airtable Meta] Error checking fields:', error)
+    return Object.fromEntries(fieldNames.map(f => [f, false]))
+  }
+}
+
+/**
+ * Create a field in Airtable using Metadata API
+ */
+async function createAirtableField(
+  baseId: string,
+  tableId: string,
+  fieldName: string,
+  fieldType: 'singleLineText' | 'multilineText' | 'singleSelect' | 'multipleSelects',
+  apiKey: string
+): Promise<boolean> {
+  try {
+    const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}/fields`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: fieldName,
+        type: fieldType
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error(`[Airtable Meta] Failed to create field "${fieldName}":`, errorData)
+      return false
+    }
+    
+    console.log(`[Airtable Meta] Successfully created field: ${fieldName}`)
+    return true
+  } catch (error) {
+    console.error(`[Airtable Meta] Error creating field "${fieldName}":`, error)
+    return false
+  }
+}
+
+/**
+ * Ensure poll fields exist in Airtable, creating them if necessary
+ */
+export async function ensurePollFieldsExist(pollId: string): Promise<boolean> {
+  const baseId = getBaseId()
+  const tableName = getTableName()
+  const apiKey = getApiKey()
+  
+  if (!baseId || !apiKey) {
+    console.warn('[Airtable Meta] Missing credentials, skipping field creation')
+    return false
+  }
+  
+  try {
+    // Get table ID
+    const tableId = await getTableId(baseId, tableName, apiKey)
+    if (!tableId) {
+      console.error('[Airtable Meta] Could not find table ID')
+      return false
+    }
+    
+    // Define field names for this poll
+    const fieldNames = [
+      `POLL_Q_${pollId}`,
+      `POLL_R_${pollId}`,
+      `POLL_N_${pollId}`
+    ]
+    
+    // Check which fields exist
+    const fieldStatus = await checkFieldsExist(baseId, tableId, fieldNames, apiKey)
+    
+    // Create missing fields
+    let allCreated = true
+    
+    if (!fieldStatus[`POLL_Q_${pollId}`]) {
+      const created = await createAirtableField(baseId, tableId, `POLL_Q_${pollId}`, 'singleLineText', apiKey)
+      allCreated = allCreated && created
+    }
+    
+    if (!fieldStatus[`POLL_R_${pollId}`]) {
+      const created = await createAirtableField(baseId, tableId, `POLL_R_${pollId}`, 'singleLineText', apiKey)
+      allCreated = allCreated && created
+    }
+    
+    if (!fieldStatus[`POLL_N_${pollId}`]) {
+      const created = await createAirtableField(baseId, tableId, `POLL_N_${pollId}`, 'multilineText', apiKey)
+      allCreated = allCreated && created
+    }
+    
+    return allCreated
+  } catch (error) {
+    console.error('[Airtable Meta] ensurePollFieldsExist failed:', error)
+    return false
   }
 }

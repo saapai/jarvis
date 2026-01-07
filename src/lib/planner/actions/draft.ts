@@ -375,11 +375,25 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     console.log(`[DraftWrite] Mandatory confirmation: requiresExcuse=${requiresExcuse}`)
     
     // Update draft with mandatory status and mark as ready
+    // Merge with existing structured payload to preserve other fields
+    const currentPayload = existingDraft.type === 'poll' ? {
+      type: 'poll' as const,
+      requiresExcuse: existingDraft.requiresExcuse || false,
+      links: existingDraft.links || [],
+      pendingMandatory: false
+    } : {
+      type: 'poll' as const,
+      requiresExcuse: false,
+      links: [],
+      pendingMandatory: false
+    }
+    
     await draftRepo.updateDraftByPhone(phone, { 
       draftText: existingDraft.content,
       structuredPayload: {
-        type: 'poll',
-        requiresExcuse
+        ...currentPayload,
+        requiresExcuse,
+        pendingMandatory: false
       }
     })
     

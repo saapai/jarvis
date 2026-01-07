@@ -390,6 +390,11 @@ async function sendAnnouncementToAll(content: string, senderPhone: string): Prom
     
     const result = await sendSms(toE164(userPhoneNormalized), content)
     if (result.ok) {
+      // Log message for this recipient
+      await messageRepo.logMessage(userPhoneNormalized, 'outbound', content, {
+        action: 'announcement',
+        senderPhone: normalizePhone(senderPhone)
+      })
       sent++
     } else {
       console.log(`[Announce] Failed to send to ${userPhoneNormalized}: ${result.error}`)
@@ -456,6 +461,12 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
     
     const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
     if (result.ok) {
+      // Log message for this recipient
+      await messageRepo.logMessage(userPhoneNormalized, 'outbound', pollMessage, {
+        action: 'poll',
+        pollId: poll.pollIdentifier,
+        senderPhone: normalizePhone(senderPhone)
+      })
       sent++
     }
   }

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as eventRepo from '@/lib/repositories/eventRepository'
 import * as memberRepo from '@/lib/repositories/memberRepository'
+import * as messageRepo from '@/lib/repositories/messageRepository'
 import { sendSms } from '@/lib/twilio'
 import { normalizePhone, toE164 } from '@/lib/db'
 
@@ -56,6 +57,13 @@ async function sendMorningReminders(): Promise<{ sent: number; failed: number }>
         
         const result = await sendSms(toE164(userPhone), message)
         if (result.ok) {
+          // Log message for this recipient
+          await messageRepo.logMessage(userPhone, 'outbound', message, {
+            action: 'event_nudge',
+            eventId: event.id,
+            eventTitle: event.title,
+            nudgeType: 'morning'
+          })
           sent++
         } else {
           failed++
@@ -97,6 +105,13 @@ async function send2HourReminders(): Promise<{ sent: number; failed: number }> {
         
         const result = await sendSms(toE164(userPhone), message)
         if (result.ok) {
+          // Log message for this recipient
+          await messageRepo.logMessage(userPhone, 'outbound', message, {
+            action: 'event_nudge',
+            eventId: event.id,
+            eventTitle: event.title,
+            nudgeType: 'twohour'
+          })
           sent++
         } else {
           failed++

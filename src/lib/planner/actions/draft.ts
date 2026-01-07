@@ -377,10 +377,10 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     // Update draft with mandatory status and mark as ready
     await draftRepo.updateDraftByPhone(phone, { 
       draftText: existingDraft.content,
-      structuredPayload: JSON.stringify({
+      structuredPayload: {
         type: 'poll',
         requiresExcuse
-      })
+      }
     })
     
     const updatedDraft: Draft = {

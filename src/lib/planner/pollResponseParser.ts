@@ -19,7 +19,7 @@ export async function parsePollResponse(message: string): Promise<ParsedPollResp
       const OpenAI = (await import('openai')).default
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
       
-      const systemPrompt = `You are parsing poll responses. Classify the response as Yes/No/Maybe and extract any notes.
+      const systemPrompt = `You are parsing poll responses. Classify the response as Yes/No/Maybe and extract any notes. Return JSON.
 
 RULES:
 - Yes: Affirmative, attending, agreeing (even with caveats like "yes but late")
@@ -29,12 +29,12 @@ RULES:
 - Extract notes: Any additional context like "running late", "need to leave early", "if I finish work"
 - If the response is ONLY yes/no/maybe with no context, notes should be null
 
-Examples:
-- "yes but running late" → Yes, notes: "running late"
-- "can't make it, busy" → No, notes: "busy"
-- "maybe if I finish work" → Maybe, notes: "if I finish work"
-- "y" → Yes, notes: null
-- "nah" → No, notes: null`
+Examples (return as JSON):
+- "yes but running late" → {"response": "Yes", "notes": "running late"}
+- "can't make it, busy" → {"response": "No", "notes": "busy"}
+- "maybe if I finish work" → {"response": "Maybe", "notes": "if I finish work"}
+- "y" → {"response": "Yes", "notes": null}
+- "nah" → {"response": "No", "notes": null}`
 
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',

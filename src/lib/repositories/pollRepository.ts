@@ -110,10 +110,12 @@ function getPollFieldNames(questionText: string): {
   responseField: string
   notesField: string
 } {
+  // Use poll ID based on date to avoid long field names
+  const pollId = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
   return {
-    questionField: `POLL: ${questionText}`,
-    responseField: `POLL_RESPONSE: ${questionText}`,
-    notesField: `POLL_NOTES: ${questionText}`
+    questionField: `POLL_Q_${pollId}`,
+    responseField: `POLL_R_${pollId}`,
+    notesField: `POLL_N_${pollId}`
   }
 }
 

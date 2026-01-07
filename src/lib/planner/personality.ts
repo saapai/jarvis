@@ -409,7 +409,7 @@ export const TEMPLATES = {
     `updated:\n\n"${content}"\n\nlooks good? say "send" or keep editing`,
   
   draftSent: (count: number) =>
-    `done. sent to ${count} people 💅`,
+    `done. sent to ${count} people`,
   
   draftCancelled: () =>
     `scrapped. let me know if you wanna start over`,

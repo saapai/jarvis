@@ -92,6 +92,8 @@ Classify this message into ONE of these actions:
 
 3. **poll_response** - Responding to an active poll
    - Must have active poll AND response like: "yes", "no", "maybe" (with optional notes)
+   - INCLUDES changes to previous responses: "jk yes", "actually no", "wait I can come"
+   - Any message containing yes/no/maybe OR expressing ability to attend when poll is active
 
 4. **content_query** - Questions about organization content
    - "when is X", "what's happening", "where is Y", "who is Z"

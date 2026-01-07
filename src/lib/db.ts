@@ -549,7 +549,7 @@ async function createAirtableField(
   fieldType: 'singleLineText' | 'multilineText' | 'singleSelect' | 'multipleSelects',
   apiKey: string,
   description?: string
-): Promise<boolean> {
+): Promise<{ success: boolean, fieldId?: string }> {
   try {
     const fieldConfig: any = {
       name: fieldName,
@@ -573,13 +573,95 @@ async function createAirtableField(
     if (!response.ok) {
       const errorData = await response.json()
       console.error(`[Airtable Meta] Failed to create field "${fieldName}":`, errorData)
+      return { success: false }
+    }
+    
+    const result = await response.json()
+    console.log(`[Airtable Meta] Successfully created field: ${fieldName}`)
+    return { success: true, fieldId: result.id }
+  } catch (error) {
+    console.error(`[Airtable Meta] Error creating field "${fieldName}":`, error)
+    return { success: false }
+  }
+}
+
+/**
+ * Get the first/primary view ID for a table
+ */
+async function getFirstViewId(baseId: string, tableId: string, apiKey: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    })
+    
+    if (!response.ok) {
+      console.error(`[Airtable Meta] Failed to get views: ${response.status}`)
+      return null
+    }
+    
+    const data = await response.json()
+    const firstView = data.views?.[0]
+    
+    return firstView?.id || null
+  } catch (error) {
+    console.error('[Airtable Meta] Error getting view ID:', error)
+    return null
+  }
+}
+
+/**
+ * Update view to make fields visible
+ */
+async function makeFieldsVisibleInView(
+  baseId: string,
+  tableId: string,
+  viewId: string,
+  fieldIds: string[],
+  apiKey: string
+): Promise<boolean> {
+  try {
+    // Get current view configuration
+    const getResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}/views/${viewId}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    })
+    
+    if (!getResponse.ok) {
+      console.error(`[Airtable Meta] Failed to get view config: ${getResponse.status}`)
       return false
     }
     
-    console.log(`[Airtable Meta] Successfully created field: ${fieldName}`)
+    const viewData = await getResponse.json()
+    const existingVisibleFields = viewData.visibleFieldIds || []
+    
+    // Add new field IDs to visible fields (avoid duplicates)
+    const updatedVisibleFields = [...new Set([...existingVisibleFields, ...fieldIds])]
+    
+    // Update view
+    const updateResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}/views/${viewId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        visibleFieldIds: updatedVisibleFields
+      })
+    })
+    
+    if (!updateResponse.ok) {
+      const errorData = await updateResponse.json()
+      console.error(`[Airtable Meta] Failed to update view visibility:`, errorData)
+      return false
+    }
+    
+    console.log(`[Airtable Meta] Updated view to show ${fieldIds.length} new fields`)
     return true
   } catch (error) {
-    console.error(`[Airtable Meta] Error creating field "${fieldName}":`, error)
+    console.error('[Airtable Meta] Error updating view visibility:', error)
     return false
   }
 }
@@ -620,11 +702,12 @@ export async function ensurePollFieldsExist(pollId: string, questionText: string
     // Check which fields exist
     const fieldStatus = await checkFieldsExist(baseId, tableId, fieldNames, apiKey)
     
-    // Create missing fields with descriptions
+    // Create missing fields with descriptions and collect their IDs
     let allCreated = true
+    const createdFieldIds: string[] = []
     
     if (!fieldStatus[`POLL_Q_${pollId}`]) {
-      const created = await createAirtableField(
+      const result = await createAirtableField(
         baseId, 
         tableId, 
         `POLL_Q_${pollId}`, 
@@ -632,11 +715,12 @@ export async function ensurePollFieldsExist(pollId: string, questionText: string
         apiKey,
         `Poll ${pollId}: ${briefQuestion}`
       )
-      allCreated = allCreated && created
+      allCreated = allCreated && result.success
+      if (result.fieldId) createdFieldIds.push(result.fieldId)
     }
     
     if (!fieldStatus[`POLL_R_${pollId}`]) {
-      const created = await createAirtableField(
+      const result = await createAirtableField(
         baseId, 
         tableId, 
         `POLL_R_${pollId}`, 
@@ -644,11 +728,12 @@ export async function ensurePollFieldsExist(pollId: string, questionText: string
         apiKey,
         `Response for poll ${pollId} (Yes/No/Maybe)`
       )
-      allCreated = allCreated && created
+      allCreated = allCreated && result.success
+      if (result.fieldId) createdFieldIds.push(result.fieldId)
     }
     
     if (!fieldStatus[`POLL_N_${pollId}`]) {
-      const created = await createAirtableField(
+      const result = await createAirtableField(
         baseId, 
         tableId, 
         `POLL_N_${pollId}`, 
@@ -656,7 +741,18 @@ export async function ensurePollFieldsExist(pollId: string, questionText: string
         apiKey,
         `Notes/excuse for poll ${pollId}`
       )
-      allCreated = allCreated && created
+      allCreated = allCreated && result.success
+      if (result.fieldId) createdFieldIds.push(result.fieldId)
+    }
+    
+    // Make fields visible in the primary view
+    if (createdFieldIds.length > 0) {
+      const viewId = await getFirstViewId(baseId, tableId, apiKey)
+      if (viewId) {
+        await makeFieldsVisibleInView(baseId, tableId, viewId, createdFieldIds, apiKey)
+      } else {
+        console.warn('[Airtable Meta] Could not get view ID to set field visibility')
+      }
     }
     
     return allCreated

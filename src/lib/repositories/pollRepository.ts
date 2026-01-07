@@ -67,6 +67,7 @@ export async function createPoll(
   })
 
   // Create new poll
+  console.log(`[PollRepo] Creating poll with requiresReasonForNo=${requiresReasonForNo}`)
   const poll = await prisma.pollMeta.create({
     data: {
       questionText,
@@ -76,6 +77,7 @@ export async function createPoll(
       createdAt: new Date()
     }
   })
+  console.log(`[PollRepo] Created poll id=${poll.id}, requiresReasonForNo=${poll.requiresReasonForNo}`)
 
   return {
     ...poll,

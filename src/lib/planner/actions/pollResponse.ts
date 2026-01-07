@@ -30,6 +30,9 @@ export async function handlePollResponse(input: PollResponseInput): Promise<Acti
 
   const parsed = await parsePollResponse(message)
 
+  console.log(`[PollResponse] Active poll: id=${activePoll.id}, requiresReasonForNo=${activePoll.requiresReasonForNo}`)
+  console.log(`[PollResponse] Parsed response: ${parsed.response}, notes=${parsed.notes || 'null'}`)
+
   // Check if user has an existing "No" response without notes for this mandatory poll
   // If so, treat this message as an excuse/notes (unless they're changing their answer)
   if (activePoll.requiresReasonForNo) {
@@ -83,6 +86,7 @@ export async function handlePollResponse(input: PollResponseInput): Promise<Acti
     }
   }
 
+  console.log(`[PollResponse] Saving response: ${parsed.response}, notes=${parsed.notes || 'null'}`)
   await pollRepo.savePollResponse(activePoll.id, phone, parsed.response, parsed.notes)
 
   let confirmationMsg = `got it! recorded: ${parsed.response}`

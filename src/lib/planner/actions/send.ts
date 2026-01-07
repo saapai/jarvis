@@ -61,6 +61,7 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
     if (draft.type === 'announcement') {
       sentCount = await sendAnnouncement(draft.content, phone)
     } else {
+      console.log(`[Send] Sending poll with requiresExcuse=${draft.requiresExcuse}`)
       sentCount = await sendPoll(draft.content, phone, draft.requiresExcuse)
     }
     

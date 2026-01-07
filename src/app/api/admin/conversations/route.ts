@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPrisma } from '@/lib/prisma'
 import * as memberRepo from '@/lib/repositories/memberRepository'
+import { normalizePhone } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,18 +12,23 @@ export async function GET() {
     // Get all users from Airtable
     const users = await memberRepo.getAllMembers()
     
+    console.log(`[Admin] Found ${users.length} users from Airtable`)
+    
     // Get all messages grouped by phone number
     const messages = await prisma.message.findMany({
       orderBy: { createdAt: 'desc' }
     })
     
-    // Group messages by phone number
+    console.log(`[Admin] Found ${messages.length} messages from database`)
+    
+    // Group messages by NORMALIZED phone number
     const messagesByPhone: Record<string, any[]> = {}
     for (const msg of messages) {
-      if (!messagesByPhone[msg.phoneNumber]) {
-        messagesByPhone[msg.phoneNumber] = []
+      const normalized = normalizePhone(msg.phoneNumber)
+      if (!messagesByPhone[normalized]) {
+        messagesByPhone[normalized] = []
       }
-      messagesByPhone[msg.phoneNumber].push({
+      messagesByPhone[normalized].push({
         id: msg.id,
         direction: msg.direction,
         text: msg.text,
@@ -31,9 +37,14 @@ export async function GET() {
       })
     }
     
+    console.log(`[Admin] Grouped messages by phone:`, Object.keys(messagesByPhone))
+    
     // Combine user data with their messages
     const conversations = users.map(user => {
-      const userMessages = messagesByPhone[user.phone || ''] || []
+      const normalizedUserPhone = normalizePhone(user.phone || '')
+      const userMessages = messagesByPhone[normalizedUserPhone] || []
+      
+      console.log(`[Admin] User ${user.name} (${user.phone} -> ${normalizedUserPhone}): ${userMessages.length} messages`)
       
       return {
         id: user.id,
@@ -56,6 +67,9 @@ export async function GET() {
       if (!b.lastMessageAt) return -1
       return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
     })
+    
+    console.log(`[Admin] Returning ${conversations.length} conversations`)
+    console.log(`[Admin] Conversations with messages: ${conversations.filter(c => c.messageCount > 0).length}`)
     
     return NextResponse.json({ conversations })
   } catch (error) {

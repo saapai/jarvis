@@ -85,6 +85,16 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   const activeDraft = await draftRepo.getActiveDraft(phone)
   const activePoll = await pollRepo.getActivePoll()
   
+  // Check if user has pending excuse request (No response without notes for mandatory poll)
+  let pendingExcuseRequest = false
+  if (activePoll && activePoll.requiresReasonForNo) {
+    const existingResponse = await pollRepo.getPollResponse(activePoll.id, phone)
+    if (existingResponse && existingResponse.response === 'No' && !existingResponse.notes) {
+      pendingExcuseRequest = true
+      console.log(`[Classification] User has pending excuse request for poll ${activePoll.id}`)
+    }
+  }
+  
   // 6. Classify intent using LLM
   const context = {
     currentMessage: message,
@@ -92,7 +102,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     activeDraft,
     isAdmin: memberRepo.isAdmin(phone),
     userName: user.name,
-    hasActivePoll: Boolean(activePoll)
+    hasActivePoll: Boolean(activePoll),
+    pendingExcuseRequest
   }
   
   const classification = await classifyIntent(context)

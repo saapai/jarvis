@@ -28,7 +28,12 @@ interface PatternMatch {
  */
 function patternMatch(message: string, context: ClassificationContext): PatternMatch | null {
   const lower = message.toLowerCase().trim()
-  const { activeDraft } = context
+  const { activeDraft, pendingExcuseRequest } = context
+  
+  // If user has pending excuse request, any message is a poll_response (providing the excuse)
+  if (pendingExcuseRequest) {
+    return { action: 'poll_response', confidence: 0.95 }
+  }
   
   // ONLY match explicit send commands when draft is ready AND not waiting for mandatory confirmation
   if (activeDraft && activeDraft.status === 'ready' && !activeDraft.pendingMandatory) {
@@ -56,7 +61,7 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
  * Build the classification prompt with weighted history
  */
 function buildClassificationPrompt(context: ClassificationContext): string {
-  const { currentMessage, history, activeDraft, isAdmin, userName, hasActivePoll } = context
+  const { currentMessage, history, activeDraft, isAdmin, userName, hasActivePoll, pendingExcuseRequest } = context
   
   // Build weighted history context
   let historyContext = ''
@@ -78,14 +83,18 @@ function buildClassificationPrompt(context: ClassificationContext): string {
     }
   }
   
-  const pollContext = `\n\nActive poll: ${hasActivePoll ? 'yes' : 'no'}\n`
+  const pollContext = `\n\nActive poll: ${hasActivePoll ? 'yes' : 'no'}`
+  const excuseContext = pendingExcuseRequest 
+    ? `\n\n⚠️ PENDING EXCUSE REQUEST: User previously responded "No" to a mandatory poll without providing an excuse. Bot asked for an explanation.\n` +
+      `  → The current message should be classified as poll_response (providing the excuse), NOT chat\n`
+    : ''
 
   const prompt = `You are classifying the intent of an SMS message to Jarvis, a sassy AI assistant for an organization.
 
 User info:
 - Name: ${userName || 'Unknown'}
 - Is admin: ${isAdmin}
-${historyContext}${draftContext}${pollContext}
+${historyContext}${draftContext}${pollContext}${excuseContext}
 
 Current message: "${currentMessage}"
 

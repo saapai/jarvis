@@ -68,6 +68,7 @@ export interface ClassificationContext {
   isAdmin: boolean
   userName: string | null
   hasActivePoll?: boolean
+  pendingExcuseRequest?: boolean  // User has "No" response without notes for mandatory poll
 }
 
 // ============================================

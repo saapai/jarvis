@@ -110,12 +110,12 @@ function getPollFieldNames(questionText: string): {
   responseField: string
   notesField: string
 } {
-  // Use poll ID based on date to avoid long field names
-  const pollId = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
+  // Use fixed field names that can be reused for each poll
+  // (Airtable API doesn't support creating fields programmatically)
   return {
-    questionField: `POLL_Q_${pollId}`,
-    responseField: `POLL_R_${pollId}`,
-    notesField: `POLL_N_${pollId}`
+    questionField: 'POLL_LATEST_Q',
+    responseField: 'POLL_LATEST_R',
+    notesField: 'POLL_LATEST_N'
   }
 }
 

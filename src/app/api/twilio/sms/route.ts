@@ -402,15 +402,14 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
   
   console.log(`[Poll] Sending poll "${question}" to ${users.length} users (requiresExcuse: ${requiresExcuse})`)
   
-  // Pre-populate ALL poll columns in Airtable for all users
-  // Use date-based field names to avoid Airtable's field name length limits
-  const pollId = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
+  // Use fixed Airtable field names (Airtable API doesn't support creating fields)
+  // These fields must exist in Airtable: POLL_LATEST_Q, POLL_LATEST_R, POLL_LATEST_N
   const pollFields = {
-    questionField: `POLL_Q_${pollId}`,
-    responseField: `POLL_R_${pollId}`,
-    notesField: `POLL_N_${pollId}`
+    questionField: 'POLL_LATEST_Q',
+    responseField: 'POLL_LATEST_R',
+    notesField: 'POLL_LATEST_N'
   }
-  console.log(`[Poll] Pre-populating Airtable fields for poll (ID: ${pollId}): "${question}"`)
+  console.log(`[Poll] Updating Airtable poll fields for: "${question}"`)
   
   const excuseNote = requiresExcuse ? ' (if no explain why)' : ''
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote}`

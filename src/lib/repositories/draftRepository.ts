@@ -7,6 +7,8 @@ import { getPrisma } from '@/lib/prisma'
 import type { Draft, DraftType } from '@/lib/planner/types'
 
 export interface StructuredPayload {
+  type?: 'announcement' | 'poll'  // Track draft type
+  requiresExcuse?: boolean         // For polls: require notes if answering "No"
   event?: string
   time?: string
   date?: string
@@ -35,11 +37,17 @@ export async function createDraft(
 ): Promise<AnnouncementDraftDB> {
   const prisma = await getPrisma()
 
+  // Ensure type is stored in payload
+  const payloadWithType: StructuredPayload = {
+    ...structuredPayload,
+    type
+  }
+
   const draft = await prisma.announcementDraft.create({
     data: {
       phoneNumber,
       draftText: content,
-      structuredPayload: structuredPayload ? JSON.stringify(structuredPayload) : null,
+      structuredPayload: JSON.stringify(payloadWithType),
       status: 'in_progress',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -66,13 +74,21 @@ export async function getActiveDraft(phoneNumber: string): Promise<Draft | null>
 
   if (!draft) return null
 
-  // Convert to planner Draft format (type tracked elsewhere)
+  // Parse structured payload to get type and requiresExcuse
+  const payload: StructuredPayload = draft.structuredPayload 
+    ? JSON.parse(draft.structuredPayload) 
+    : {}
+  
+  const draftType = payload.type || 'announcement' // Default to announcement for backwards compatibility
+
+  // Convert to planner Draft format
   return {
-    type: 'announcement',
+    type: draftType,
     content: draft.draftText,
     status: draft.draftText ? 'ready' : 'drafting',
     createdAt: draft.createdAt.getTime(),
-    updatedAt: draft.updatedAt.getTime()
+    updatedAt: draft.updatedAt.getTime(),
+    requiresExcuse: payload.requiresExcuse
   }
 }
 

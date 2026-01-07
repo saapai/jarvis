@@ -276,7 +276,9 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       // If it needs a link but doesn't have one, mark as pending
       if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
         console.log(`[DraftWrite] Announcement needs a link but doesn't have one - setting pendingLink`)
-        await draftRepo.createDraft(phone, draftType, formattedContent)
+        await draftRepo.createDraft(phone, draftType, formattedContent, {
+          type: draftType
+        })
         
         const newDraft: Draft = {
           type: draftType,
@@ -313,7 +315,10 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     }
     
     // Draft is ready
-    await draftRepo.createDraft(phone, draftType, formattedContent)
+    await draftRepo.createDraft(phone, draftType, formattedContent, {
+      type: draftType,
+      requiresExcuse
+    })
     
     const newDraft: Draft = {
       type: draftType,

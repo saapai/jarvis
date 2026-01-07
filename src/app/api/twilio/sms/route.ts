@@ -411,8 +411,8 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
   }
   console.log(`[Poll] Pre-populating Airtable fields for "${question}"`)
   
-  const excuseNote = requiresExcuse ? ' (excuse required if no)' : ''
-  const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote} (add notes like "yes but running late")`
+  const excuseNote = requiresExcuse ? ' (if no explain why)' : ''
+  const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote}`
   
   for (const user of users) {
     const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''

@@ -9,6 +9,8 @@ import type { Draft, DraftType } from '@/lib/planner/types'
 export interface StructuredPayload {
   type?: 'announcement' | 'poll'  // Track draft type
   requiresExcuse?: boolean         // For polls: require notes if answering "No"
+  pendingMandatory?: boolean       // For polls: waiting for mandatory confirmation
+  links?: string[]                 // Extracted links
   event?: string
   time?: string
   date?: string
@@ -88,7 +90,9 @@ export async function getActiveDraft(phoneNumber: string): Promise<Draft | null>
     status: draft.draftText ? 'ready' : 'drafting',
     createdAt: draft.createdAt.getTime(),
     updatedAt: draft.updatedAt.getTime(),
-    requiresExcuse: payload.requiresExcuse
+    requiresExcuse: payload.requiresExcuse || false,
+    pendingMandatory: payload.pendingMandatory || false,
+    links: payload.links || []
   }
 }
 

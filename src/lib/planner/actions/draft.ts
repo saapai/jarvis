@@ -304,20 +304,43 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       linkAnalysis = { hasLinks: false, links: [], needsLink: false, reasoning: 'Poll - skip link detection' }
     }
     
-    // For polls, check if it's mandatory (requires excuse for "No")
-    let requiresExcuse = false
+    // For polls, ask if it should be mandatory (requires excuse for "No")
     if (draftType === 'poll') {
-      const mandatoryAnalysis = await detectMandatoryPoll(message + ' ' + formattedContent)
-      requiresExcuse = mandatoryAnalysis.isMandatory
-      if (requiresExcuse) {
-        console.log(`[DraftWrite] Poll detected as mandatory - will require excuse for "No"`)
+      console.log(`[DraftWrite] Poll created, asking about mandatory status...`)
+      
+      // Save draft as "drafting" until mandatory status is confirmed
+      await draftRepo.createDraft(phone, draftType, formattedContent, {
+        type: draftType,
+        requiresExcuse: false,  // Will be updated after confirmation
+        pendingMandatory: true
+      })
+      
+      const newDraft: Draft = {
+        type: draftType,
+        content: formattedContent,
+        status: 'drafting',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        links: linkAnalysis.links,
+        requiresExcuse: false,
+        pendingMandatory: true
+      }
+      
+      return {
+        action: 'draft_write',
+        response: applyPersonality({
+          baseResponse: `📝 here's the poll:\n\n"${formattedContent}"\n\nshould people need to give an excuse if they say no? (yes/no)`,
+          userMessage: message,
+          userName
+        }),
+        newDraft
       }
     }
     
-    // Draft is ready
+    // For announcements, draft is ready immediately
     await draftRepo.createDraft(phone, draftType, formattedContent, {
       type: draftType,
-      requiresExcuse
+      requiresExcuse: false
     })
     
     const newDraft: Draft = {
@@ -327,15 +350,13 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       createdAt: Date.now(),
       updatedAt: Date.now(),
       links: linkAnalysis.links,
-      requiresExcuse
+      requiresExcuse: false
     }
-    
-    const excuseNote = requiresExcuse ? ' (mandatory - excuses required for "no")' : ''
     
     return {
       action: 'draft_write',
       response: applyPersonality({
-        baseResponse: TEMPLATES.draftCreated(draftType, newDraft.content) + excuseNote,
+        baseResponse: TEMPLATES.draftCreated(draftType, newDraft.content),
         userMessage: message,
         userName
       }),
@@ -343,7 +364,47 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     }
   }
   
-  // Case 2a: Existing draft waiting for a link
+  // Case 2a: Existing poll draft waiting for mandatory confirmation
+  if (existingDraft.pendingMandatory && existingDraft.type === 'poll') {
+    console.log(`[DraftWrite] Poll waiting for mandatory confirmation: "${message}"`)
+    
+    // Parse yes/no response
+    const lowerMsg = message.toLowerCase().trim()
+    const requiresExcuse = /\b(yes|y|yep|yeah|mandatory|required)\b/i.test(lowerMsg)
+    
+    console.log(`[DraftWrite] Mandatory confirmation: requiresExcuse=${requiresExcuse}`)
+    
+    // Update draft with mandatory status and mark as ready
+    await draftRepo.updateDraftByPhone(phone, { 
+      draftText: existingDraft.content,
+      structuredPayload: JSON.stringify({
+        type: 'poll',
+        requiresExcuse
+      })
+    })
+    
+    const updatedDraft: Draft = {
+      ...existingDraft,
+      status: 'ready',
+      requiresExcuse,
+      pendingMandatory: false,
+      updatedAt: Date.now()
+    }
+    
+    const excuseNote = requiresExcuse ? ' (mandatory - excuses required for "no")' : ''
+    
+    return {
+      action: 'draft_write',
+      response: applyPersonality({
+        baseResponse: `got it! here's the poll:\n\n"${existingDraft.content}"${excuseNote}\n\nsay "send" when ready`,
+        userMessage: message,
+        userName
+      }),
+      newDraft: updatedDraft
+    }
+  }
+  
+  // Case 2b: Existing draft waiting for a link
   if (existingDraft.pendingLink) {
     const linkAnalysis = await detectLinks(message)
     
@@ -383,7 +444,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     }
   }
   
-  // Case 2b: Existing draft in 'drafting' state (waiting for content)
+  // Case 2c: Existing draft in 'drafting' state (waiting for content)
   if (existingDraft.status === 'drafting' && !existingDraft.content) {
     const content = formatContent(
       await resolveDraftContent({
@@ -443,7 +504,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     }
   }
   
-  // Case 3: Existing draft in 'ready' state - user is editing
+  // Case 2d: Existing draft in 'ready' state - user is editing
   if (existingDraft.status === 'ready') {
     // Use LLM-based resolution with full context
     const editedContent = await resolveDraftContent({

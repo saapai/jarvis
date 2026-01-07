@@ -27,9 +27,10 @@ export interface Draft {
   status: DraftStatus
   createdAt: number
   updatedAt: number
-  pendingLink?: boolean      // Waiting for user to provide a link
-  links?: string[]           // Extracted links from the draft
-  requiresExcuse?: boolean   // For polls: require notes if answering "No"
+  pendingLink?: boolean        // Waiting for user to provide a link
+  pendingMandatory?: boolean   // Waiting for user to confirm if poll is mandatory
+  links?: string[]             // Extracted links from the draft
+  requiresExcuse?: boolean     // For polls: require notes if answering "No"
 }
 
 // ============================================

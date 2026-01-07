@@ -758,30 +758,12 @@ export async function ensurePollFieldsExist(pollId: string, questionText: string
       if (result.fieldId) createdFieldIds.push(result.fieldId)
     }
     
-    // Make fields visible in all views
+    // Note: Airtable API doesn't support updating view visibility programmatically
+    // Fields are created successfully but may be hidden by default
+    // User must manually unhide poll fields in Airtable once: click "Hide fields" and check the boxes
     if (createdFieldIds.length > 0) {
-      console.log(`[Airtable Meta] Making ${createdFieldIds.length} fields visible in views...`)
-      const views = await getTableViews(baseId, tableName, apiKey)
-      
-      if (views.length > 0) {
-        console.log(`[Airtable Meta] Found ${views.length} views, updating visibility...`)
-        let successCount = 0
-        
-        for (const view of views) {
-          const success = await makeFieldsVisibleInView(baseId, tableId, view.id, createdFieldIds, apiKey)
-          if (success) successCount++
-        }
-        
-        if (successCount > 0) {
-          console.log(`[Airtable Meta] ✓ Updated ${successCount}/${views.length} views`)
-        } else {
-          console.warn(`[Airtable Meta] ⚠ Could not update any views - fields may be hidden`)
-          console.warn(`[Airtable Meta] → Manually unhide fields in Airtable: POLL_Q_${pollId}, POLL_R_${pollId}, POLL_N_${pollId}`)
-        }
-      } else {
-        console.warn('[Airtable Meta] No views found - fields may be hidden by default')
-        console.warn(`[Airtable Meta] → Manually unhide fields in Airtable: POLL_Q_${pollId}, POLL_R_${pollId}, POLL_N_${pollId}`)
-      }
+      console.log(`[Airtable Meta] ✓ Created ${createdFieldIds.length} poll fields`)
+      console.log(`[Airtable Meta] Note: If fields appear hidden, manually unhide in Airtable view settings once`)
     }
     
     return allCreated

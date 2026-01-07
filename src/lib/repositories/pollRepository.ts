@@ -241,6 +241,18 @@ export async function savePollResponse(
 }
 
 /**
+ * Get a specific user's response to a poll
+ */
+export async function getPollResponse(pollId: string, phoneNumber: string): Promise<PollResponse | null> {
+  const prisma = await getPrisma()
+  const response = await prisma.pollResponse.findUnique({
+    where: { pollId_phoneNumber: { pollId, phoneNumber } }
+  })
+
+  return response ? normalizePollResponse(response) : null
+}
+
+/**
  * Get responses for a poll
  */
 export async function getPollResponses(pollId: string): Promise<PollResponse[]> {

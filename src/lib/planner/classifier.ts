@@ -30,10 +30,17 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
   const lower = message.toLowerCase().trim()
   const { activeDraft } = context
   
-  // ONLY match explicit send commands when draft is ready
-  if (activeDraft && activeDraft.status === 'ready') {
+  // ONLY match explicit send commands when draft is ready AND not waiting for mandatory confirmation
+  if (activeDraft && activeDraft.status === 'ready' && !activeDraft.pendingMandatory) {
     if (/^(send|send it|go|yes|yep)$/i.test(lower)) {
       return { action: 'draft_send', confidence: 0.95 }
+    }
+  }
+  
+  // If draft is waiting for mandatory confirmation, "yes" should be draft_write, not draft_send
+  if (activeDraft && activeDraft.pendingMandatory) {
+    if (/^(yes|y|yep|yeah|mandatory|required|no|n|nope|nah)$/i.test(lower)) {
+      return { action: 'draft_write', confidence: 0.95 }
     }
   }
   
@@ -65,6 +72,10 @@ function buildClassificationPrompt(context: ClassificationContext): string {
   let draftContext = ''
   if (activeDraft) {
     draftContext = `\n\nActive draft:\n- Type: ${activeDraft.type}\n- Status: ${activeDraft.status}\n- Content: "${activeDraft.content || '(empty)'}"\n`
+    if (activeDraft.pendingMandatory) {
+      draftContext += `- ⚠️ WAITING FOR MANDATORY CONFIRMATION: Bot asked "should they explain if they say no? (yes/no)"\n`
+      draftContext += `  → If user says "yes" or "no", this is draft_write (confirming mandatory status), NOT draft_send\n`
+    }
   }
   
   const pollContext = `\n\nActive poll: ${hasActivePoll ? 'yes' : 'no'}\n`

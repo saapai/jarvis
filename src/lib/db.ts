@@ -326,6 +326,48 @@ export async function updateUser(recordId: string, fields: Record<string, unknow
   }
 }
 
+export async function getAllUsers(): Promise<User[]> {
+  try {
+    const base = getBase()
+    const tableName = getTableName()
+    
+    // Get ALL records - filter in code to avoid field name issues
+    const records = await base(tableName)
+      .select({})
+      .all()
+    
+    console.log(`[DB] getAllUsers: found ${records.length} total records`)
+    
+    const users = records.map(r => {
+      const rawPhone = r.fields.Phone
+      const phone = extractPhone(rawPhone)
+      
+      // Get field values using helper (handles tab characters)
+      const pendingPoll = getFieldValue(r.fields, 'Pending_Poll')
+      const lastResponse = getFieldValue(r.fields, 'Last_Response')
+      const lastNotes = getFieldValue(r.fields, 'Last_Notes')
+      const needsName = getFieldValue(r.fields, 'Needs_Name')
+      const optedOut = getFieldValue(r.fields, 'Opted_Out')
+      
+      return {
+        id: r.id,
+        phone,
+        name: r.fields.Name ? String(r.fields.Name) : null,
+        needs_name: needsName === true,
+        opted_out: optedOut === true,
+        pending_poll: pendingPoll ? String(pendingPoll) : null,
+        last_response: lastResponse ? String(lastResponse) : null,
+        last_notes: lastNotes ? String(lastNotes) : null
+      }
+    })
+    
+    return users
+  } catch (error) {
+    console.error('getAllUsers error:', error)
+    return []
+  }
+}
+
 export async function getOptedInUsers(): Promise<User[]> {
   try {
     const base = getBase()

@@ -39,7 +39,7 @@ export async function GET() {
         id: user.id,
         name: user.name || 'Unknown',
         phone: user.phone || '',
-        optedOut: user.optedOut,
+        optedOut: user.opted_out,
         messageCount: userMessages.length,
         messages: userMessages.sort((a, b) => 
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -63,4 +63,5 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 })
   }
 }
+
 

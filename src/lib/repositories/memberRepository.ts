@@ -3,7 +3,7 @@
  * Wrapper around Airtable operations for user management
  */
 
-import { getUserByPhone, createUser, updateUser, getOptedInUsers, type User } from '@/lib/db'
+import { getUserByPhone, createUser, updateUser, getOptedInUsers, getAllUsers, type User } from '@/lib/db'
 
 /**
  * Get user by phone number
@@ -27,6 +27,13 @@ export async function updateMember(
   fields: Record<string, unknown>
 ): Promise<boolean> {
   return await updateUser(recordId, fields)
+}
+
+/**
+ * Get all members (including opted-out)
+ */
+export async function getAllMembers(): Promise<User[]> {
+  return await getAllUsers()
 }
 
 /**
@@ -81,6 +88,7 @@ export function isAdmin(phone: string): boolean {
 
   return adminList.some(admin => normalizePhone(admin) === normalized)
 }
+
 
 
 

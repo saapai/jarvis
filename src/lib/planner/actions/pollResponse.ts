@@ -51,7 +51,7 @@ export async function handlePollResponse(input: PollResponseInput): Promise<Acti
   }
 
   return {
-    action: 'chat',
+    action: 'poll_response',
     response: applyPersonality({
       baseResponse: confirmationMsg,
       userMessage: message,

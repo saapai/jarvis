@@ -19,6 +19,56 @@ import { applyPersonality, TEMPLATES, removeEmoji } from '../personality'
 // ============================================
 
 /**
+ * Use LLM to format poll question properly
+ */
+async function formatPollQuestion(rawQuestion: string): Promise<string> {
+  if (!process.env.OPENAI_API_KEY) {
+    return rawQuestion
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `You are formatting poll questions for an SMS bot.
+
+Take the user's raw input and turn it into a clear, grammatically correct yes/no question.
+
+Rules:
+- Keep it concise (under 100 characters if possible)
+- Make it a proper question (starts with "Are you", "Will you", "Can you", etc.)
+- Fix grammar and punctuation
+- Preserve key details (time, date, location)
+- Don't add extra information not in the original
+
+Examples:
+Input: "if people are coming to active meeting at 8pm at ash's at 610 levering apt 201"
+Output: "Are you coming to active meeting at 8pm at Ash's (610 Levering Apt 201)?"
+
+Input: "who's going to the game tomorrow"
+Output: "Are you going to the game tomorrow?"
+
+Return ONLY the formatted question, nothing else.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Format this poll question: "${rawQuestion}"` }
+      ],
+      temperature: 0.2,
+      max_tokens: 80
+    })
+
+    const formatted = response.choices[0].message.content?.trim() || rawQuestion
+    return formatted
+  } catch (error) {
+    console.error('[PollFormat] LLM formatting failed:', error)
+    return rawQuestion
+  }
+}
+
+/**
  * Use LLM to detect if a poll should require an excuse for "No"
  */
 async function detectMandatoryPoll(message: string): Promise<{
@@ -207,11 +257,50 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       }
     }
     
-    // We have content - check for links and if poll is mandatory
-    const formattedContent = formatContent(content, draftType)
+    // We have content - format it properly
+    let formattedContent = formatContent(content, draftType)
+    
+    // For POLLS: format as proper question using LLM
+    if (draftType === 'poll') {
+      formattedContent = await formatPollQuestion(formattedContent)
+      console.log(`[DraftWrite] Formatted poll question: "${formattedContent}"`)
+    }
+    
     console.log(`[DraftWrite] Creating draft with content: "${formattedContent}"`)
     
-    const linkAnalysis = await detectLinks(formattedContent)
+    // For ANNOUNCEMENTS ONLY: check for links
+    let linkAnalysis: { hasLinks: boolean; links: string[]; needsLink: boolean; reasoning: string }
+    if (draftType === 'announcement') {
+      linkAnalysis = await detectLinks(formattedContent)
+      
+      // If it needs a link but doesn't have one, mark as pending
+      if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
+        console.log(`[DraftWrite] Announcement needs a link but doesn't have one - setting pendingLink`)
+        await draftRepo.createDraft(phone, draftType, formattedContent)
+        
+        const newDraft: Draft = {
+          type: draftType,
+          content: formattedContent,
+          status: 'drafting',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          pendingLink: true
+        }
+        
+        return {
+          action: 'draft_write',
+          response: applyPersonality({
+            baseResponse: `got it, but this looks like it needs a link (RSVP, form, etc.). send me the link and i'll add it to the ${draftType}`,
+            userMessage: message,
+            userName
+          }),
+          newDraft
+        }
+      }
+    } else {
+      // Polls don't need link detection
+      linkAnalysis = { hasLinks: false, links: [], needsLink: false, reasoning: 'Poll - skip link detection' }
+    }
     
     // For polls, check if it's mandatory (requires excuse for "No")
     let requiresExcuse = false
@@ -223,33 +312,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       }
     }
     
-    // If it needs a link but doesn't have one, mark as pending
-    if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
-      console.log(`[DraftWrite] Draft needs a link but doesn't have one - setting pendingLink`)
-      await draftRepo.createDraft(phone, draftType, formattedContent)
-      
-      const newDraft: Draft = {
-        type: draftType,
-        content: formattedContent,
-        status: 'drafting',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        pendingLink: true,
-        requiresExcuse
-      }
-      
-      return {
-        action: 'draft_write',
-        response: applyPersonality({
-          baseResponse: `got it, but this looks like it needs a link (RSVP, form, etc.). send me the link and i'll add it to the ${draftType}`,
-          userMessage: message,
-          userName
-        }),
-        newDraft
-      }
-    }
-    
-    // Draft is ready (either has links or doesn't need them)
+    // Draft is ready
     await draftRepo.createDraft(phone, draftType, formattedContent)
     
     const newDraft: Draft = {

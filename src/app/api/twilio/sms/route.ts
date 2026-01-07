@@ -402,10 +402,14 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
   
   console.log(`[Poll] Sending poll "${question}" to ${users.length} users (requiresExcuse: ${requiresExcuse})`)
   
-  // Pre-populate poll question column in Airtable for all users
-  // This ensures the column exists and users can see the question
-  const pollQuestionField = `POLL: ${question}`
-  console.log(`[Poll] Pre-populating Airtable field "${pollQuestionField}" for ${users.length} users`)
+  // Pre-populate ALL poll columns in Airtable for all users
+  // This ensures all columns exist: question, response, and notes
+  const pollFields = {
+    questionField: `POLL: ${question}`,
+    responseField: `POLL_RESPONSE: ${question}`,
+    notesField: `POLL_NOTES: ${question}`
+  }
+  console.log(`[Poll] Pre-populating Airtable fields for "${question}"`)
   
   const excuseNote = requiresExcuse ? ' (excuse required if no)' : ''
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote} (add notes like "yes but running late")`
@@ -416,10 +420,12 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
     // Skip invalid phones only
     if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
     
-    // Initialize poll question field in Airtable (creates the column if needed)
+    // Initialize ALL poll fields in Airtable (creates the columns if needed)
     try {
       await memberRepo.updateMember(user.id, {
-        [pollQuestionField]: question
+        [pollFields.questionField]: question,
+        [pollFields.responseField]: '',  // Empty initially
+        [pollFields.notesField]: ''      // Empty initially
       })
     } catch (airtableError) {
       console.error(`[Poll] Failed to initialize Airtable field for user ${user.id}:`, airtableError)

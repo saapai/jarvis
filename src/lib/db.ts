@@ -586,28 +586,36 @@ async function createAirtableField(
 }
 
 /**
- * Get the first/primary view ID for a table
+ * Get all views for a table from the base metadata
  */
-async function getFirstViewId(baseId: string, tableId: string, apiKey: string): Promise<string | null> {
+async function getTableViews(baseId: string, tableName: string, apiKey: string): Promise<any[]> {
   try {
-    const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}`, {
+    // Get base schema which includes all tables and their views
+    const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
       headers: {
         'Authorization': `Bearer ${apiKey}`
       }
     })
     
     if (!response.ok) {
-      console.error(`[Airtable Meta] Failed to get views: ${response.status}`)
-      return null
+      const errorText = await response.text()
+      console.error(`[Airtable Meta] Failed to get base schema: ${response.status}`, errorText)
+      return []
     }
     
     const data = await response.json()
-    const firstView = data.views?.[0]
+    const table = data.tables?.find((t: any) => t.name === tableName)
     
-    return firstView?.id || null
+    if (!table) {
+      console.error(`[Airtable Meta] Table "${tableName}" not found in base`)
+      return []
+    }
+    
+    console.log(`[Airtable Meta] Found table "${tableName}" with ${table.views?.length || 0} views`)
+    return table.views || []
   } catch (error) {
-    console.error('[Airtable Meta] Error getting view ID:', error)
-    return null
+    console.error('[Airtable Meta] Error getting views:', error)
+    return []
   }
 }
 
@@ -622,25 +630,10 @@ async function makeFieldsVisibleInView(
   apiKey: string
 ): Promise<boolean> {
   try {
-    // Get current view configuration
-    const getResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}/views/${viewId}`, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      }
-    })
+    console.log(`[Airtable Meta] Attempting to update view ${viewId} with fields:`, fieldIds)
     
-    if (!getResponse.ok) {
-      console.error(`[Airtable Meta] Failed to get view config: ${getResponse.status}`)
-      return false
-    }
-    
-    const viewData = await getResponse.json()
-    const existingVisibleFields = viewData.visibleFieldIds || []
-    
-    // Add new field IDs to visible fields (avoid duplicates)
-    const updatedVisibleFields = [...new Set([...existingVisibleFields, ...fieldIds])]
-    
-    // Update view
+    // Try to update view directly without getting current config first
+    // Use empty visibleFieldIds array to show all fields
     const updateResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}/views/${viewId}`, {
       method: 'PATCH',
       headers: {
@@ -648,17 +641,37 @@ async function makeFieldsVisibleInView(
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        visibleFieldIds: updatedVisibleFields
+        visibleFieldIds: fieldIds
       })
     })
     
     if (!updateResponse.ok) {
-      const errorData = await updateResponse.json()
-      console.error(`[Airtable Meta] Failed to update view visibility:`, errorData)
-      return false
+      const errorText = await updateResponse.text()
+      console.error(`[Airtable Meta] Failed to update view visibility (${updateResponse.status}):`, errorText)
+      
+      // Try alternative: set visibleFieldIds to null to show all fields
+      const retryResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}/views/${viewId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          visibleFieldIds: null  // null means "show all fields"
+        })
+      })
+      
+      if (!retryResponse.ok) {
+        const retryError = await retryResponse.text()
+        console.error(`[Airtable Meta] Retry failed:`, retryError)
+        return false
+      }
+      
+      console.log(`[Airtable Meta] Successfully set view to show all fields`)
+      return true
     }
     
-    console.log(`[Airtable Meta] Updated view to show ${fieldIds.length} new fields`)
+    console.log(`[Airtable Meta] ✓ Updated view to show ${fieldIds.length} fields`)
     return true
   } catch (error) {
     console.error('[Airtable Meta] Error updating view visibility:', error)
@@ -745,13 +758,29 @@ export async function ensurePollFieldsExist(pollId: string, questionText: string
       if (result.fieldId) createdFieldIds.push(result.fieldId)
     }
     
-    // Make fields visible in the primary view
+    // Make fields visible in all views
     if (createdFieldIds.length > 0) {
-      const viewId = await getFirstViewId(baseId, tableId, apiKey)
-      if (viewId) {
-        await makeFieldsVisibleInView(baseId, tableId, viewId, createdFieldIds, apiKey)
+      console.log(`[Airtable Meta] Making ${createdFieldIds.length} fields visible in views...`)
+      const views = await getTableViews(baseId, tableName, apiKey)
+      
+      if (views.length > 0) {
+        console.log(`[Airtable Meta] Found ${views.length} views, updating visibility...`)
+        let successCount = 0
+        
+        for (const view of views) {
+          const success = await makeFieldsVisibleInView(baseId, tableId, view.id, createdFieldIds, apiKey)
+          if (success) successCount++
+        }
+        
+        if (successCount > 0) {
+          console.log(`[Airtable Meta] ✓ Updated ${successCount}/${views.length} views`)
+        } else {
+          console.warn(`[Airtable Meta] ⚠ Could not update any views - fields may be hidden`)
+          console.warn(`[Airtable Meta] → Manually unhide fields in Airtable: POLL_Q_${pollId}, POLL_R_${pollId}, POLL_N_${pollId}`)
+        }
       } else {
-        console.warn('[Airtable Meta] Could not get view ID to set field visibility')
+        console.warn('[Airtable Meta] No views found - fields may be hidden by default')
+        console.warn(`[Airtable Meta] → Manually unhide fields in Airtable: POLL_Q_${pollId}, POLL_R_${pollId}, POLL_N_${pollId}`)
       }
     }
     

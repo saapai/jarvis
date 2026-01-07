@@ -12,6 +12,10 @@ export interface MessageMeta {
   confidence?: number
   tags?: string[]
   draftContent?: string
+  senderPhone?: string
+  eventId?: string
+  eventTitle?: string
+  nudgeType?: 'morning' | 'twohour'
   pendingConfirmation?: {
     eventId: string
     updates: Record<string, unknown>

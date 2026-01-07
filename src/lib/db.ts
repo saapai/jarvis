@@ -547,19 +547,27 @@ async function createAirtableField(
   tableId: string,
   fieldName: string,
   fieldType: 'singleLineText' | 'multilineText' | 'singleSelect' | 'multipleSelects',
-  apiKey: string
+  apiKey: string,
+  description?: string
 ): Promise<boolean> {
   try {
+    const fieldConfig: any = {
+      name: fieldName,
+      type: fieldType
+    }
+    
+    // Add description if provided
+    if (description) {
+      fieldConfig.description = description
+    }
+    
     const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${tableId}/fields`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        name: fieldName,
-        type: fieldType
-      })
+      body: JSON.stringify(fieldConfig)
     })
     
     if (!response.ok) {
@@ -579,7 +587,7 @@ async function createAirtableField(
 /**
  * Ensure poll fields exist in Airtable, creating them if necessary
  */
-export async function ensurePollFieldsExist(pollId: string): Promise<boolean> {
+export async function ensurePollFieldsExist(pollId: string, questionText: string): Promise<boolean> {
   const baseId = getBaseId()
   const tableName = getTableName()
   const apiKey = getApiKey()
@@ -597,6 +605,11 @@ export async function ensurePollFieldsExist(pollId: string): Promise<boolean> {
       return false
     }
     
+    // Create brief description from question (first 50 chars)
+    const briefQuestion = questionText.length > 50 
+      ? questionText.substring(0, 47) + '...'
+      : questionText
+    
     // Define field names for this poll
     const fieldNames = [
       `POLL_Q_${pollId}`,
@@ -607,21 +620,42 @@ export async function ensurePollFieldsExist(pollId: string): Promise<boolean> {
     // Check which fields exist
     const fieldStatus = await checkFieldsExist(baseId, tableId, fieldNames, apiKey)
     
-    // Create missing fields
+    // Create missing fields with descriptions
     let allCreated = true
     
     if (!fieldStatus[`POLL_Q_${pollId}`]) {
-      const created = await createAirtableField(baseId, tableId, `POLL_Q_${pollId}`, 'singleLineText', apiKey)
+      const created = await createAirtableField(
+        baseId, 
+        tableId, 
+        `POLL_Q_${pollId}`, 
+        'singleLineText', 
+        apiKey,
+        `Poll ${pollId}: ${briefQuestion}`
+      )
       allCreated = allCreated && created
     }
     
     if (!fieldStatus[`POLL_R_${pollId}`]) {
-      const created = await createAirtableField(baseId, tableId, `POLL_R_${pollId}`, 'singleLineText', apiKey)
+      const created = await createAirtableField(
+        baseId, 
+        tableId, 
+        `POLL_R_${pollId}`, 
+        'singleLineText', 
+        apiKey,
+        `Response for poll ${pollId} (Yes/No/Maybe)`
+      )
       allCreated = allCreated && created
     }
     
     if (!fieldStatus[`POLL_N_${pollId}`]) {
-      const created = await createAirtableField(baseId, tableId, `POLL_N_${pollId}`, 'multilineText', apiKey)
+      const created = await createAirtableField(
+        baseId, 
+        tableId, 
+        `POLL_N_${pollId}`, 
+        'multilineText', 
+        apiKey,
+        `Notes/excuse for poll ${pollId}`
+      )
       allCreated = allCreated && created
     }
     

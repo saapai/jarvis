@@ -508,10 +508,12 @@ function formatContent(content: string, type: DraftType): string {
   let formatted = content.trim()
   
   if (type === 'poll') {
-    // Ensure poll ends with question mark
+    // Ensure poll ends with question mark (but avoid double ??)
     if (!formatted.endsWith('?')) {
       formatted += '?'
     }
+    // Remove double question marks
+    formatted = formatted.replace(/\?\?+/g, '?')
   }
   
   return formatted

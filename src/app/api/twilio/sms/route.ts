@@ -402,7 +402,7 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
   // Create Airtable fields for this poll using Metadata API
   if (poll.pollIdentifier) {
     console.log(`[Poll] Creating Airtable fields for poll ${poll.pollIdentifier}`)
-    const fieldsCreated = await ensurePollFieldsExist(poll.pollIdentifier)
+    const fieldsCreated = await ensurePollFieldsExist(poll.pollIdentifier, question)
     
     if (fieldsCreated) {
       console.log(`[Poll] ✓ Airtable fields created successfully`)
@@ -419,11 +419,29 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
   const excuseNote = requiresExcuse ? ' (if no explain why)' : ''
   const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote}`
   
+  // Get poll field names for Airtable
+  const pollFields = {
+    questionField: `POLL_Q_${poll.pollIdentifier}`,
+    responseField: `POLL_R_${poll.pollIdentifier}`,
+    notesField: `POLL_N_${poll.pollIdentifier}`
+  }
+  
   for (const user of users) {
     const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
     
     // Skip invalid phones only
     if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
+    
+    // Pre-populate poll fields in Airtable for this user
+    try {
+      await memberRepo.updateMember(user.id, {
+        [pollFields.questionField]: question,
+        [pollFields.responseField]: '',
+        [pollFields.notesField]: ''
+      })
+    } catch (err) {
+      console.warn(`[Poll] Could not pre-populate Airtable for user ${user.id} (fields may not exist yet)`)
+    }
     
     const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
     if (result.ok) {

@@ -129,6 +129,76 @@ Respond with JSON: { "isMandatory": boolean, "reasoning": string }`
 }
 
 /**
+ * Use LLM to detect if user is declining to provide a link
+ */
+async function detectLinkDecline(message: string): Promise<{
+  isDeclining: boolean
+  reasoning: string
+}> {
+  if (!process.env.OPENAI_API_KEY) {
+    return { isDeclining: false, reasoning: 'No API key' }
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `You are detecting if the user is declining or refusing to provide a link.
+
+The user was asked to provide a link for an announcement/poll. Determine if they are saying "no" or declining.
+
+Examples of declining:
+- "no"
+- "nope"
+- "nah"
+- "skip"
+- "none"
+- "don't need one"
+- "no link"
+- "no url"
+- "without a link"
+- "just send it"
+- "that's fine"
+- "it's okay"
+- "no thanks"
+
+NOT declining:
+- "here's the link: https://..."
+- "www.example.com"
+- "check this out"
+- "use this"
+- Any message that contains a URL or link
+
+Respond with JSON: { "isDeclining": boolean, "reasoning": string }`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Is the user declining to provide a link? "${message}"` }
+      ],
+      temperature: 0.1,
+      max_tokens: 100,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      console.log(`[LinkDecline] isDeclining=${parsed.isDeclining}, reasoning=${parsed.reasoning}`)
+      return {
+        isDeclining: parsed.isDeclining || false,
+        reasoning: parsed.reasoning || 'LLM analysis'
+      }
+    }
+  } catch (error) {
+    console.error('[LinkDecline] LLM failed:', error)
+  }
+
+  return { isDeclining: false, reasoning: 'Fallback' }
+}
+
+/**
  * Use LLM to detect and extract links from a message
  */
 async function detectLinks(message: string): Promise<{
@@ -429,13 +499,12 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   
   // Case 2b: Existing draft waiting for a link
   if (existingDraft.pendingLink) {
-    // Check if user said "no" to providing a link
-    const lowerMsg = message.toLowerCase().trim()
-    const isNo = /\b(no|nope|nah|skip|none|don't|dont|without|no link|no url)\b/i.test(lowerMsg)
+    // Use LLM to detect if user is declining to provide a link
+    const declineCheck = await detectLinkDecline(message)
     
-    if (isNo) {
+    if (declineCheck.isDeclining) {
       // User doesn't want to add a link - mark draft as ready
-      console.log(`[DraftWrite] User declined to add link, marking draft as ready`)
+      console.log(`[DraftWrite] User declined to add link: ${declineCheck.reasoning}`)
       await draftRepo.updateDraftByPhone(phone, { 
         draftText: existingDraft.content,
         structuredPayload: {
@@ -494,7 +563,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       return {
         action: 'draft_write',
         response: applyPersonality({
-          baseResponse: "didn't catch a link there. send me the URL, or say 'no' to skip the link",
+          baseResponse: "didn't catch a link there. send me the URL for this " + existingDraft.type,
           userMessage: message,
           userName
         })

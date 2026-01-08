@@ -51,7 +51,7 @@ interface Upload {
 }
 
 type FilterType = 'all' | 'category' | 'subcategory' | 'entity' | 'time' | 'upload';
-type ViewMode = 'explore' | 'calendar' | 'uploads';
+type ViewMode = 'explore' | 'calendar' | 'uploads' | 'announcements';
 type AppTab = 'info' | 'dump';
 
 interface BreadcrumbItem {
@@ -329,6 +329,16 @@ function UploadIcon({ className }: { className?: string }) {
   );
 }
 
+function AnnouncementsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
+      <circle cx="19" cy="8" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
 // ============================================
 // DUMP TAB CONTENT (Text Explorer)
 // ============================================
@@ -371,6 +381,13 @@ function DumpTab({
       setViewMode(parentViewMode);
     }
   }, [parentViewMode]);
+
+  // Fetch announcements when announcements view is active
+  useEffect(() => {
+    if (activeViewMode === 'announcements') {
+      fetchAnnouncements();
+    }
+  }, [activeViewMode, fetchAnnouncements]);
   
   // Helper to update viewMode (use parent setter if provided)
   const updateViewMode = useCallback((mode: ViewMode) => {
@@ -449,6 +466,17 @@ function DumpTab({
     uploads: false,
   });
 
+  // Announcements state
+  const [announcements, setAnnouncements] = useState<Array<{
+    id: string;
+    type: 'announcement' | 'poll';
+    content: string;
+    sentAt: string;
+    sentBy: string;
+    pollId: string | null;
+  }>>([]);
+  const [deletingAnnouncement, setDeletingAnnouncement] = useState<string | null>(null);
+
   const currentFilter = breadcrumbs[breadcrumbs.length - 1];
 
   const fetchTree = useCallback(async () => {
@@ -520,6 +548,32 @@ function DumpTab({
     }
   }, []);
 
+  const fetchAnnouncements = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/announcements');
+      const data = await res.json();
+      if (data && !data.error) {
+        setAnnouncements(data.announcements ?? []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch announcements:', error);
+    }
+  }, []);
+
+  const deleteAnnouncement = async (id: string) => {
+    setDeletingAnnouncement(id);
+    try {
+      const res = await fetch(`/api/admin/announcements?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAnnouncements();
+      }
+    } catch (error) {
+      console.error('Failed to delete announcement:', error);
+    } finally {
+      setDeletingAnnouncement(null);
+    }
+  };
+
   const deleteUpload = async (id: string) => {
     setDeletingUpload(id);
     try {
@@ -541,6 +595,7 @@ function DumpTab({
   useEffect(() => { fetchFacts(); }, [fetchFacts]);
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
   useEffect(() => { fetchAllFacts(); }, [fetchAllFacts]);
+  useEffect(() => { fetchAnnouncements(); }, [fetchAnnouncements]);
 
   const handleUpload = async () => {
     if (!uploadText.trim()) return;
@@ -1039,6 +1094,91 @@ function DumpTab({
     return days;
   }, [calendarDate]);
 
+  // Helper to parse date ranges from timeRef (e.g., "jan 16-19", "january 16-19")
+  const parseDateRangeFromTimeRef = (timeRef: string | null, year: number): string[] => {
+    if (!timeRef) return [];
+    
+    const lower = timeRef.toLowerCase().replace(/^@\s*/, ''); // Remove leading @
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                       'july', 'august', 'september', 'october', 'november', 'december'];
+    const monthAbbrevs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                         'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // 1-12
+    const currentDay = today.getDate();
+    
+    // Try to match date ranges (e.g., "jan 16-19", "january 16-19", "jan 16 to 19")
+    const rangePattern = /(\d+)\s*[-–—to]\s*(\d+)/;
+    const rangeMatch = lower.match(rangePattern);
+    
+    if (rangeMatch) {
+      const startDay = parseInt(rangeMatch[1], 10);
+      const endDay = parseInt(rangeMatch[2], 10);
+      
+      if (startDay >= 1 && startDay <= 31 && endDay >= 1 && endDay <= 31 && endDay >= startDay) {
+        // Try full month names first
+        for (let i = 0; i < monthNames.length; i++) {
+          if (lower.includes(monthNames[i])) {
+            const month = i + 1;
+            let dateYear = year;
+            
+            // If no explicit year in timeRef, check if date is in the past
+            if (!timeRef.match(/\b(20\d{2})\b/)) {
+              const parsedDate = new Date(year, month - 1, startDay);
+              const todayStart = new Date(currentYear, currentMonth - 1, currentDay);
+              todayStart.setHours(0, 0, 0, 0);
+              
+              if (parsedDate < todayStart) {
+                dateYear = currentYear + 1;
+              } else {
+                dateYear = currentYear;
+              }
+            }
+            
+            // Generate all dates in the range
+            const dates: string[] = [];
+            for (let day = startDay; day <= endDay; day++) {
+              dates.push(`${dateYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+            }
+            return dates;
+          }
+        }
+        
+        // Try abbreviated month names
+        for (let i = 0; i < monthAbbrevs.length; i++) {
+          if (lower.includes(monthAbbrevs[i])) {
+            const month = i + 1;
+            let dateYear = year;
+            
+            // If no explicit year in timeRef, check if date is in the past
+            if (!timeRef.match(/\b(20\d{2})\b/)) {
+              const parsedDate = new Date(year, month - 1, startDay);
+              const todayStart = new Date(currentYear, currentMonth - 1, currentDay);
+              todayStart.setHours(0, 0, 0, 0);
+              
+              if (parsedDate < todayStart) {
+                dateYear = currentYear + 1;
+              } else {
+                dateYear = currentYear;
+              }
+            }
+            
+            // Generate all dates in the range
+            const dates: string[] = [];
+            for (let day = startDay; day <= endDay; day++) {
+              dates.push(`${dateYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+            }
+            return dates;
+          }
+        }
+      }
+    }
+    
+    return [];
+  };
+
   // Helper to parse date from timeRef (e.g., "November 8th", "november 6th", "@November 8th")
   const parseDateFromTimeRef = (timeRef: string | null, year: number): string | null => {
     if (!timeRef) return null;
@@ -1161,6 +1301,21 @@ function DumpTab({
         const today = new Date();
         const currentYear = today.getFullYear();
         const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
+        
+        // First try to parse as a date range
+        const dateRange = parseDateRangeFromTimeRef(fact.timeRef, yearToUse);
+        if (dateRange.length > 0) {
+          // Add fact to all dates in the range
+          console.log('[Calendar] Parsed date range from timeRef:', fact.timeRef, '->', dateRange);
+          for (const rangeDateStr of dateRange) {
+            if (!map[rangeDateStr]) map[rangeDateStr] = [];
+            map[rangeDateStr].push(fact);
+          }
+          factsWithDates++;
+          continue; // Skip to next fact
+        }
+        
+        // If not a range, try parsing as single date
         dateStr = parseDateFromTimeRef(fact.timeRef, yearToUse);
         if (dateStr) {
           console.log('[Calendar] Parsed timeRef:', fact.timeRef, '->', dateStr);
@@ -1677,6 +1832,58 @@ function DumpTab({
                 </div>
               )}
             </div>
+          ) : activeViewMode === 'announcements' ? (
+            /* Announcements View */
+            <div className="animate-fade-in space-y-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-medium text-[var(--text-on-dark)]">
+                  announcements<span className="text-[var(--highlight-red)]">_</span>
+                </h2>
+              </div>
+              
+              {announcements.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <p className="text-[var(--text-meta)]">no announcements or polls yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {announcements.map((announcement) => (
+                    <div 
+                      key={announcement.id} 
+                      className={`p-4 ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} shadow-[inset_0_1px_0_rgba(0,0,0,0.15)]`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-mono">
+                              {announcement.type === 'poll' ? '📊' : '📢'}
+                            </span>
+                            <h3 className="font-medium text-[var(--text-on-card)]">
+                              {announcement.type === 'poll' ? 'Poll' : 'Announcement'}
+                            </h3>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-meta)]">
+                            <span>{new Date(announcement.sentAt).toLocaleDateString()}</span>
+                            <span>•</span>
+                            <span>{new Date(announcement.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                          </div>
+                          <p className="mt-2 text-sm text-[var(--text-on-card)] whitespace-pre-wrap">
+                            {announcement.content}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => deleteAnnouncement(announcement.id)}
+                          disabled={deletingAnnouncement === announcement.id}
+                          className="px-3 py-1.5 text-xs text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] rounded transition-colors disabled:opacity-50"
+                        >
+                          {deletingAnnouncement === announcement.id ? 'deleting...' : 'delete'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           ) : null}
         </div>
       </main>
@@ -1887,18 +2094,31 @@ export default function Home() {
             <span className="text-[var(--highlight-red)]">_</span>
           </div>
           
-          {/* Right: Upload Icon */}
-          <button
-            onClick={() => setViewMode('uploads')}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === 'uploads'
-                ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
-                : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
-            }`}
-            title="Uploads"
-          >
-            <UploadIcon className="w-5 h-5" />
-          </button>
+          {/* Right: Upload and Announcements Icons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('announcements')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'announcements'
+                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
+                  : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+              }`}
+              title="Announcements"
+            >
+              <AnnouncementsIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('uploads')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'uploads'
+                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
+                  : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+              }`}
+              title="Uploads"
+            >
+              <UploadIcon className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </header>
 

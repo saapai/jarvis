@@ -92,52 +92,65 @@ Respond with JSON: { "isPastActionQuery": boolean, "reasoning": string }`
 }
 
 /**
+ * Use LLM to filter and format relevant results
+ */
+async function filterAndFormatResultsWithLLM(
+  query: string,
+  allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll' }>
+): Promise<string> {
+  if (!process.env.OPENAI_API_KEY || allResults.length === 0) {
+    return allResults[0]?.body || TEMPLATES.noResults()
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Format results for LLM
+    const formattedResults = allResults.map((r, idx) => 
+      `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}\n${r.body}`
+    ).join('\n\n')
+
+    const systemPrompt = `You are a helpful assistant that answers questions using the provided search results.
+
+Your task:
+1. Filter out irrelevant results that don't answer the user's question
+2. Combine relevant information from multiple results into a clear, concise answer
+3. Focus on the most relevant details, ignoring extraneous information
+4. If multiple results are relevant, synthesize them into one coherent answer
+5. If no results are relevant, say you don't have that information
+
+Format your response naturally and conversationally, as if texting. Keep it concise but complete.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Question: "${query}"\n\nSearch Results:\n${formattedResults}\n\nProvide a clear, concise answer based only on the relevant results above.` }
+      ],
+      temperature: 0.3,
+      max_tokens: 300
+    })
+
+    const content = response.choices[0]?.message?.content
+    return content?.trim() || allResults[0]?.body || TEMPLATES.noResults()
+  } catch (error) {
+    console.error('[ContentQuery] LLM filtering failed:', error)
+    // Fallback to top result
+    return allResults[0]?.body || TEMPLATES.noResults()
+  }
+}
+
+/**
  * Handle content query action
- * Note: In MVP, this returns a placeholder. Will integrate with actual search.
+ * Searches both content database and past announcements/polls, then uses LLM to filter and format results.
  */
 export async function handleContentQuery(input: ContentQueryInput): Promise<ActionResult> {
   const { phone, message, userName, searchContent, recentMessages, searchPastActions } = input
   
   console.log(`[ContentQuery] Processing query: "${message}"`)
   
-  // Check if asking about past actions (announcements/polls)
-  const pastActionCheck = await isAskingAboutPastActions(message)
-  if (pastActionCheck.isPastActionQuery && searchPastActions) {
-    console.log(`[ContentQuery] Detected past action query`)
-    try {
-      const pastActions = await searchPastActions()
-      
-      if (pastActions.length === 0) {
-        return {
-          action: 'content_query',
-          response: applyPersonality({
-            baseResponse: "no announcements or polls have been sent recently",
-            userMessage: message,
-            userName
-          })
-        }
-      }
-      
-      // Format recent actions
-      const formatted = pastActions.slice(0, 5).map((action, idx) => {
-        const date = new Date(action.sentAt).toLocaleDateString()
-        return `${idx + 1}. ${action.type === 'poll' ? '📊' : '📢'} ${action.content.substring(0, 60)}${action.content.length > 60 ? '...' : ''} (${date})`
-      }).join('\n')
-      
-      return {
-        action: 'content_query',
-        response: applyPersonality({
-          baseResponse: `recent ${pastActions.length > 5 ? '5' : pastActions.length} sent:\n${formatted}`,
-          userMessage: message,
-          userName
-        })
-      }
-    } catch (error) {
-      console.error('[ContentQuery] Failed to search past actions:', error)
-    }
-  }
-  
-  // Check if asking about recent actions first
+  // Check if asking about recent actions first (highest priority)
   const recentActionResponse = checkRecentActions(message, recentMessages)
   if (recentActionResponse) {
     console.log(`[ContentQuery] Found recent action context`)
@@ -151,69 +164,74 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // If search function is provided, use it
+  // Collect all results from both sources
+  const allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll' }> = []
+  
+  // 1. Search content database
   if (searchContent) {
     console.log(`[ContentQuery] Searching content database...`)
     try {
-      const results = await searchContent(message)
-      console.log(`[ContentQuery] Found ${results.length} results`)
-      
-      if (results.length === 0) {
-        return {
-          action: 'content_query',
-          response: applyPersonality({
-            baseResponse: TEMPLATES.noResults(),
-            userMessage: message,
-            userName
-          })
-        }
-      }
-      
-      // If query is vague, provide a concise summary across top results
-      if (isVagueQuery(message) && results.length > 1) {
-        const summary = summarizeResults(results.slice(0, 3))
-        return {
-          action: 'content_query',
-          response: applyPersonality({
-            baseResponse: summary,
-            userMessage: message,
-            userName
-          })
-        }
-      }
-      
-      // Format top result as response
-      const topResult = results[0]
-      const response = formatContentResponse(topResult, message)
-      console.log(`[ContentQuery] Returning top result: ${response.substring(0, 50)}...`)
-      
-      return {
-        action: 'content_query',
-        response: applyPersonality({
-          baseResponse: response,
-          userMessage: message,
-          userName
-        })
-      }
+      const contentResults = await searchContent(message)
+      console.log(`[ContentQuery] Found ${contentResults.length} content results`)
+      allResults.push(...contentResults.map(r => ({ ...r, source: 'content' as const })))
     } catch (error) {
-      console.error('[ContentQuery] Search failed:', error)
-      return {
-        action: 'content_query',
-        response: applyPersonality({
-          baseResponse: "something went wrong searching. try again?",
-          userMessage: message,
-          userName
-        })
-      }
+      console.error('[ContentQuery] Content search failed:', error)
     }
   }
   
-  // No search function - return placeholder
-  console.log(`[ContentQuery] No search function available`)
+  // 2. Search past announcements/polls (always search, not just for past action queries)
+  if (searchPastActions) {
+    console.log(`[ContentQuery] Searching past announcements/polls...`)
+    try {
+      const pastActions = await searchPastActions()
+      console.log(`[ContentQuery] Found ${pastActions.length} past actions`)
+      
+      // Convert past actions to content results format and filter by relevance
+      const queryLower = message.toLowerCase()
+      const relevantActions = pastActions
+        .filter(action => {
+          const contentLower = action.content.toLowerCase()
+          const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2)
+          return queryWords.some(word => contentLower.includes(word))
+        })
+        .map(action => ({
+          title: action.type === 'poll' ? 'Poll' : 'Announcement',
+          body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}`,
+          score: 0.5, // Medium relevance for past actions
+          source: action.type === 'poll' ? 'poll' as const : 'announcement' as const
+        }))
+      
+      allResults.push(...relevantActions)
+      console.log(`[ContentQuery] Found ${relevantActions.length} relevant past actions`)
+    } catch (error) {
+      console.error('[ContentQuery] Past actions search failed:', error)
+    }
+  }
+  
+  // Sort all results by score (highest first)
+  allResults.sort((a, b) => b.score - a.score)
+  
+  // If no results, return no results message
+  if (allResults.length === 0) {
+    return {
+      action: 'content_query',
+      response: applyPersonality({
+        baseResponse: TEMPLATES.noResults(),
+        userMessage: message,
+        userName
+      })
+    }
+  }
+  
+  // Use LLM to filter and format the most relevant results
+  console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM...`)
+  const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults)
+  console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
+  
   return {
     action: 'content_query',
     response: applyPersonality({
-      baseResponse: "content search not set up yet. ask your admin to connect a knowledge base",
+      baseResponse: formattedResponse,
       userMessage: message,
       userName
     })

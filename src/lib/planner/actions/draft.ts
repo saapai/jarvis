@@ -429,6 +429,41 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
   
   // Case 2b: Existing draft waiting for a link
   if (existingDraft.pendingLink) {
+    // Check if user said "no" to providing a link
+    const lowerMsg = message.toLowerCase().trim()
+    const isNo = /\b(no|nope|nah|skip|none|don't|dont|without|no link|no url)\b/i.test(lowerMsg)
+    
+    if (isNo) {
+      // User doesn't want to add a link - mark draft as ready
+      console.log(`[DraftWrite] User declined to add link, marking draft as ready`)
+      await draftRepo.updateDraftByPhone(phone, { 
+        draftText: existingDraft.content,
+        structuredPayload: {
+          type: existingDraft.type,
+          links: [],
+          requiresExcuse: false
+        }
+      })
+      
+      const updatedDraft: Draft = {
+        ...existingDraft,
+        status: 'ready',
+        updatedAt: Date.now(),
+        pendingLink: false,
+        links: []
+      }
+      
+      return {
+        action: 'draft_write',
+        response: applyPersonality({
+          baseResponse: `got it! here's the ${existingDraft.type}:\n\n"${existingDraft.content}"\n\nsay "send" when ready`,
+          userMessage: message,
+          userName
+        }),
+        newDraft: updatedDraft
+      }
+    }
+    
     const linkAnalysis = await detectLinks(message)
     
     if (linkAnalysis.hasLinks && linkAnalysis.links.length > 0) {
@@ -459,7 +494,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       return {
         action: 'draft_write',
         response: applyPersonality({
-          baseResponse: "didn't catch a link there. send me the URL for this " + existingDraft.type,
+          baseResponse: "didn't catch a link there. send me the URL, or say 'no' to skip the link",
           userMessage: message,
           userName
         })

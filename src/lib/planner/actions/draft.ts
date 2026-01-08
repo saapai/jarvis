@@ -149,16 +149,25 @@ async function detectLinks(message: string): Promise<{
 1. If the message contains any URLs/links
 2. If the message SHOULD have a link but doesn't
 
-Messages that typically need links:
-- RSVP requests
-- Sign-up forms
-- Registration
-- "Fill out this form"
-- "Click here"
-- "Check out"
-- Survey requests
-- External resources
-- Documents to review
+IMPORTANT: Only mark needsLink=true if the message EXPLICITLY mentions needing a link or contains clear indicators like:
+- "RSVP" or "rsvp here" or "sign up"
+- "Fill out this form" or "complete this form"
+- "Click here" or "check out" or "visit"
+- "Register" or "registration"
+- "Survey" or "form"
+- "Link" or "URL" mentioned
+- "Document" or "file" to review
+
+DO NOT mark needsLink=true for:
+- Simple announcements about events, meetings, or information
+- Messages that just state facts or schedules
+- Messages without any link-related language
+
+Examples:
+- "IM soccer games are monday at 8pm" → needsLink=false (just an announcement)
+- "Meeting is at 7pm, RSVP here" → needsLink=true (mentions RSVP)
+- "Fill out the form for the event" → needsLink=true (mentions form)
+- "Soccer practice tomorrow" → needsLink=false (simple announcement)
 
 Extract all URLs and determine if more links are needed.
 

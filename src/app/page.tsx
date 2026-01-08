@@ -332,14 +332,14 @@ function UploadIcon({ className }: { className?: string }) {
 function AnnouncementsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {/* Megaphone cone - simple polygon shape */}
-      <path d="M5 8l-2 4v0l2 4h5l11-8-11-8H5z" />
-      {/* Handle */}
-      <line x1="3" y1="12" x2="2" y2="15" />
-      {/* Sound waves - simple curved lines */}
-      <path d="M18 8 Q21 8 22 10" />
-      <path d="M18.5 9.5 Q20.5 9.5 21.5 11" />
-      <path d="M19 11 Q20 11 21 12" />
+      {/* Megaphone cone - straight, horizontal */}
+      <path d="M5 9l-2 3v0l2 3h4l10-6-10-6H5z" />
+      {/* Handle - straight down */}
+      <line x1="3" y1="12" x2="3" y2="15" />
+      {/* Sound waves - horizontal curved lines */}
+      <path d="M17 9 Q20 9 21 11" />
+      <path d="M17.5 10.5 Q19.5 10.5 20.5 12" />
+      <path d="M18 12 Q19 12 20 13" />
     </svg>
   );
 }

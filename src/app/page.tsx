@@ -381,13 +381,6 @@ function DumpTab({
       setViewMode(parentViewMode);
     }
   }, [parentViewMode]);
-
-  // Fetch announcements when announcements view is active
-  useEffect(() => {
-    if (activeViewMode === 'announcements') {
-      fetchAnnouncements();
-    }
-  }, [activeViewMode, fetchAnnouncements]);
   
   // Helper to update viewMode (use parent setter if provided)
   const updateViewMode = useCallback((mode: ViewMode) => {
@@ -595,7 +588,13 @@ function DumpTab({
   useEffect(() => { fetchFacts(); }, [fetchFacts]);
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
   useEffect(() => { fetchAllFacts(); }, [fetchAllFacts]);
-  useEffect(() => { fetchAnnouncements(); }, [fetchAnnouncements]);
+  
+  // Fetch announcements when announcements view is active
+  useEffect(() => {
+    if (activeViewMode === 'announcements') {
+      fetchAnnouncements();
+    }
+  }, [activeViewMode, fetchAnnouncements]);
 
   const handleUpload = async () => {
     if (!uploadText.trim()) return;

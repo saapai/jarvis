@@ -1271,8 +1271,31 @@ function DumpTab({
     
     for (const fact of allFacts) {
       let dateStr: string | null = null;
+      let dateRange: string[] = [];
       
-      // First try dateStr (if it's a valid date string)
+      // First, ALWAYS check timeRef for date ranges (even if dateStr exists)
+      // This is important because dateStr might only have the start date
+      if (fact.timeRef) {
+        const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
+        
+        // Try to parse as a date range first
+        dateRange = parseDateRangeFromTimeRef(fact.timeRef, yearToUse);
+        if (dateRange.length > 0) {
+          // Add fact to all dates in the range
+          console.log('[Calendar] Parsed date range from timeRef:', fact.timeRef, '->', dateRange);
+          for (const rangeDateStr of dateRange) {
+            if (!map[rangeDateStr]) map[rangeDateStr] = [];
+            map[rangeDateStr].push(fact);
+          }
+          factsWithDates++;
+          continue; // Skip to next fact - range takes precedence
+        }
+      }
+      
+      // If no range found, try dateStr (if it's a valid date string)
       if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
         try {
           const parsed = fact.dateStr.split('T')[0];
@@ -1293,32 +1316,16 @@ function DumpTab({
             }
           }
         } catch (e) {
-          // Invalid dateStr, try timeRef
+          // Invalid dateStr, will try timeRef below
         }
       } 
       
-      // Fallback to parsing timeRef if dateStr wasn't valid
-      if (!dateStr && fact.timeRef) {
-        // Try to extract year from timeRef first, otherwise use current year
+      // Fallback to parsing timeRef as single date if dateStr wasn't valid and no range was found
+      if (!dateStr && fact.timeRef && dateRange.length === 0) {
         const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
         const today = new Date();
         const currentYear = today.getFullYear();
         const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
-        
-        // First try to parse as a date range
-        const dateRange = parseDateRangeFromTimeRef(fact.timeRef, yearToUse);
-        if (dateRange.length > 0) {
-          // Add fact to all dates in the range
-          console.log('[Calendar] Parsed date range from timeRef:', fact.timeRef, '->', dateRange);
-          for (const rangeDateStr of dateRange) {
-            if (!map[rangeDateStr]) map[rangeDateStr] = [];
-            map[rangeDateStr].push(fact);
-          }
-          factsWithDates++;
-          continue; // Skip to next fact
-        }
-        
-        // If not a range, try parsing as single date
         dateStr = parseDateFromTimeRef(fact.timeRef, yearToUse);
         if (dateStr) {
           console.log('[Calendar] Parsed timeRef:', fact.timeRef, '->', dateStr);

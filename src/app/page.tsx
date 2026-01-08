@@ -332,9 +332,13 @@ function UploadIcon({ className }: { className?: string }) {
 function AnnouncementsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-      <polyline points="22,6 12,13 2,6" />
-      <circle cx="19" cy="8" r="2" fill="currentColor" />
+      {/* Megaphone - horizontal, pointing right, with sound waves */}
+      <path d="M5 8l-2 3v2l2 3h6l8-8-8-8H5z" />
+      {/* Sound waves */}
+      <path d="M19 10h2" />
+      <path d="M19 14h2" />
+      {/* Handle */}
+      <path d="M3 11h-2" />
     </svg>
   );
 }
@@ -2096,17 +2100,6 @@ export default function Home() {
           {/* Right: Upload and Announcements Icons */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setViewMode('announcements')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'announcements'
-                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
-                  : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
-              }`}
-              title="Announcements"
-            >
-              <AnnouncementsIcon className="w-5 h-5" />
-            </button>
-            <button
               onClick={() => setViewMode('uploads')}
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === 'uploads'
@@ -2116,6 +2109,17 @@ export default function Home() {
               title="Uploads"
             >
               <UploadIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('announcements')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'announcements'
+                  ? 'text-[var(--highlight-red)] bg-[rgba(206,96,135,0.18)] border border-[var(--highlight-red)]'
+                  : 'text-[var(--text-sidebar)] hover:text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)]'
+              }`}
+              title="Announcements"
+            >
+              <AnnouncementsIcon className="w-5 h-5" />
             </button>
           </div>
         </div>

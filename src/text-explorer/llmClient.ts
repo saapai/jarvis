@@ -26,8 +26,10 @@ For each distinct topic/section in the text, create ONE fact entry with:
 2. sourceText: The FULL original text for that section (preserve exact wording)
 3. category: One of: social, professional, pledging, events, meetings, other
 4. subcategory: The specific event/topic name (e.g., "Study Hall", "Creatathon", "Big Little")
-5. timeRef: The exact time reference ("November 8th", "every Wednesday at 8:00 PM", "January 15th")
-6. dateStr: Parse to date format:
+5. timeRef: The exact time reference ("November 8th", "every Wednesday at 8:00 PM", "January 15th", "January 16 to January 19", "jan 16-19")
+6. dateStr: Parse to date format. IMPORTANT: For date RANGES, store only the START date:
+   - For date ranges (e.g., "January 16 to January 19", "jan 16-19", "16-19"): Store ONLY the start date (e.g., "2026-01-16")
+     The full range information should be in timeRef so it can be parsed later
    - For dates WITHOUT a year specified: Determine which occurrence is closer (past or future):
      * Calculate days to past occurrence (this year) 
      * Calculate days to future occurrence (next year)

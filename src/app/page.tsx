@@ -472,6 +472,9 @@ function DumpTab({
     pollId: string | null;
   }>>([]);
   const [deletingAnnouncement, setDeletingAnnouncement] = useState<string | null>(null);
+  
+  // Calendar date mapping state (computed with LLM)
+  const [factsByDateLLM, setFactsByDateLLM] = useState<Record<string, Fact[]>>({});
 
   const currentFilter = breadcrumbs[breadcrumbs.length - 1];
 
@@ -1096,6 +1099,65 @@ function DumpTab({
     return days;
   }, [calendarDate]);
 
+  // Use LLM to parse date ranges from fact content and timeRef
+  const parseDateRangeWithLLM = async (fact: Fact): Promise<string[]> => {
+    if (!fact.timeRef && !fact.content) return [];
+    
+    try {
+      // Import OpenAI client from lib
+      const { openai } = await import('@/lib/openai');
+      
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      
+      const prompt = `Extract ALL dates for this event and return them as an array of YYYY-MM-DD dates.
+
+If the event spans multiple days (e.g., "January 16 to January 19", "jan 16-19", "16-19", "Jan 24-25"), return ALL dates in the range.
+If it's a single date, return just that one date.
+If no date can be determined, return an empty array.
+
+Today's date: ${currentYear}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}
+
+Fact information:
+- timeRef: "${fact.timeRef || 'none'}"
+- content: "${fact.content?.substring(0, 200) || 'none'}"
+- dateStr: "${fact.dateStr || 'none'}"
+
+Examples:
+- "January 16 to January 19" or "jan 16-19" -> ["2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19"]
+- "jan 24-25" -> ["2026-01-24", "2026-01-25"]
+- "January 10" -> ["2026-01-10"]
+- "every Wednesday" -> [] (recurring, not a specific date range)
+
+Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a date parser. Extract all dates from natural language.' },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+        max_tokens: 200
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (content) {
+        const parsed = JSON.parse(content);
+        const dates = parsed.dates || [];
+        if (dates.length > 0) {
+          console.log('[Calendar] LLM parsed dates:', fact.subcategory, '->', dates);
+          return dates;
+        }
+      }
+    } catch (error) {
+      console.error('[Calendar] LLM date parsing failed:', error);
+    }
+    
+    return [];
+  };
+
   // Helper to parse date ranges from timeRef (e.g., "jan 16-19", "january 16-19")
   const parseDateRangeFromTimeRef = (timeRef: string | null, year: number): string[] => {
     if (!timeRef) return [];
@@ -1261,96 +1323,125 @@ function DumpTab({
   };
 
   // Calendar uses ALL facts, not just filtered ones
-  const factsByDate = useMemo(() => {
-    console.log('[Calendar] Computing factsByDate from', allFacts.length, 'facts');
-    const map: Record<string, Fact[]> = {};
-    const { year } = calendarDate;
-    let factsWithDates = 0;
-    let factsWithoutDates = 0;
-    
-    for (const fact of allFacts) {
-      let dateStr: string | null = null;
-      let dateRange: string[] = [];
+  // Process with LLM for better date range extraction
+  useEffect(() => {
+    const computeFactsByDate = async () => {
+      console.log('[Calendar] Computing factsByDate from', allFacts.length, 'facts');
+      const map: Record<string, Fact[]> = {};
+      let factsWithDates = 0;
+      let factsWithoutDates = 0;
       
-      // First, ALWAYS check timeRef for date ranges (even if dateStr exists)
-      // This is important because dateStr might only have the start date
-      if (fact.timeRef) {
-        const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
-        const today = new Date();
-        const currentYear = today.getFullYear();
-        const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
-        
-        // Try to parse as a date range first
-        dateRange = parseDateRangeFromTimeRef(fact.timeRef, yearToUse);
-        if (dateRange.length > 0) {
-          // Add fact to all dates in the range
-          console.log('[Calendar] Parsed date range from timeRef:', fact.timeRef, '->', dateRange);
-          for (const rangeDateStr of dateRange) {
-            if (!map[rangeDateStr]) map[rangeDateStr] = [];
-            map[rangeDateStr].push(fact);
+      // Process facts in batches to avoid rate limits
+      const batchSize = 10;
+      for (let i = 0; i < allFacts.length; i += batchSize) {
+        const batch = allFacts.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (fact) => {
+          let dateStr: string | null = null;
+          let dateRange: string[] = [];
+          
+          // First, try LLM-based parsing for natural language date ranges
+          dateRange = await parseDateRangeWithLLM(fact);
+          if (dateRange.length > 0) {
+            // Add fact to all dates in the range
+            console.log('[Calendar] LLM parsed date range:', fact.subcategory, fact.timeRef, '->', dateRange);
+            for (const rangeDateStr of dateRange) {
+              if (!map[rangeDateStr]) map[rangeDateStr] = [];
+              map[rangeDateStr].push(fact);
+            }
+            factsWithDates++;
+            return;
           }
-          factsWithDates++;
-          continue; // Skip to next fact - range takes precedence
-        }
-      }
-      
-      // If no range found, try dateStr (if it's a valid date string)
-      if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
-        try {
-          const parsed = fact.dateStr.split('T')[0];
-          // Validate it's a proper date format (YYYY-MM-DD)
-          if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
-            const parsedDate = new Date(parsed);
+          
+          // Fallback to regex-based parsing if LLM didn't find anything
+          // First, ALWAYS check timeRef for date ranges (even if dateStr exists)
+          // This is important because dateStr might only have the start date
+          if (fact.timeRef) {
+            const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
             const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const currentYear = today.getFullYear();
+            const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
             
-            // If the date is in the past, increment the year
-            if (parsedDate < today) {
-              const [year, month, day] = parsed.split('-');
-              const nextYear = parseInt(year, 10) + 1;
-              dateStr = `${nextYear}-${month}-${day}`;
-              console.log('[Calendar] Date in past, adjusted:', parsed, '->', dateStr);
-            } else {
-              dateStr = parsed;
+            // Try to parse as a date range first
+            dateRange = parseDateRangeFromTimeRef(fact.timeRef, yearToUse);
+            if (dateRange.length > 0) {
+              console.log('[Calendar] Parsed date range from timeRef:', fact.timeRef, '->', dateRange);
+              for (const rangeDateStr of dateRange) {
+                if (!map[rangeDateStr]) map[rangeDateStr] = [];
+                map[rangeDateStr].push(fact);
+              }
+              factsWithDates++;
+              return;
             }
           }
-        } catch (e) {
-          // Invalid dateStr, will try timeRef below
-        }
-      } 
-      
-      // Fallback to parsing timeRef as single date if dateStr wasn't valid and no range was found
-      if (!dateStr && fact.timeRef && dateRange.length === 0) {
-        const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
-        const today = new Date();
-        const currentYear = today.getFullYear();
-        const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
-        dateStr = parseDateFromTimeRef(fact.timeRef, yearToUse);
-        if (dateStr) {
-          console.log('[Calendar] Parsed timeRef:', fact.timeRef, '->', dateStr);
-        }
+          
+          // If no range found, try dateStr (if it's a valid date string)
+          if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
+            try {
+              const parsed = fact.dateStr.split('T')[0];
+              // Validate it's a proper date format (YYYY-MM-DD)
+              if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+                const parsedDate = new Date(parsed);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                // If the date is in the past, increment the year
+                if (parsedDate < today) {
+                  const [year, month, day] = parsed.split('-');
+                  const nextYear = parseInt(year, 10) + 1;
+                  dateStr = `${nextYear}-${month}-${day}`;
+                  console.log('[Calendar] Date in past, adjusted:', parsed, '->', dateStr);
+                } else {
+                  dateStr = parsed;
+                }
+              }
+            } catch (e) {
+              // Invalid dateStr, will try timeRef below
+            }
+          } 
+          
+          // Fallback to parsing timeRef as single date if dateStr wasn't valid and no range was found
+          if (!dateStr && fact.timeRef && dateRange.length === 0) {
+            const timeRefYear = fact.timeRef.match(/\b(20\d{2})\b/);
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const yearToUse = timeRefYear ? parseInt(timeRefYear[1], 10) : currentYear;
+            dateStr = parseDateFromTimeRef(fact.timeRef, yearToUse);
+            if (dateStr) {
+              console.log('[Calendar] Parsed timeRef:', fact.timeRef, '->', dateStr);
+            }
+          }
+          
+          if (dateStr) {
+            if (!map[dateStr]) map[dateStr] = [];
+            map[dateStr].push(fact);
+            factsWithDates++;
+          } else {
+            factsWithoutDates++;
+            if (factsWithoutDates <= 3) {
+              console.log('[Calendar] Fact without date:', {
+                id: fact.id,
+                content: fact.content?.substring(0, 50),
+                dateStr: fact.dateStr,
+                timeRef: fact.timeRef
+              });
+            }
+          }
+        }));
       }
-      
-      if (dateStr) {
-        if (!map[dateStr]) map[dateStr] = [];
-        map[dateStr].push(fact);
-        factsWithDates++;
-      } else {
-        factsWithoutDates++;
-        if (factsWithoutDates <= 3) {
-          console.log('[Calendar] Fact without date:', {
-            id: fact.id,
-            content: fact.content?.substring(0, 50),
-            dateStr: fact.dateStr,
-            timeRef: fact.timeRef
-          });
-        }
-      }
+      console.log('[Calendar] Facts with dates:', factsWithDates, 'without dates:', factsWithoutDates);
+      console.log('[Calendar] Date keys:', Object.keys(map).slice(0, 10));
+      setFactsByDateLLM(map);
+    };
+    
+    if (allFacts.length > 0) {
+      computeFactsByDate();
+    } else {
+      setFactsByDateLLM({});
     }
-    console.log('[Calendar] Facts with dates:', factsWithDates, 'without dates:', factsWithoutDates);
-    console.log('[Calendar] Date keys:', Object.keys(map).slice(0, 10));
-    return map;
   }, [allFacts, calendarDate]);
+  
+  // Use LLM-computed mapping
+  const factsByDate = factsByDateLLM;
 
 
   const recurringFacts = useMemo(() => allFacts.filter(f => f.dateStr?.startsWith('recurring:')), [allFacts]);

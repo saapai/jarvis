@@ -20,7 +20,7 @@ export const llmClient: LLMClient = {
             content: `You are an information extractor for club calendars, announcements, and bylaws.
 
 Your TOP priority is to extract **event-style facts** – things a member might want to see on a calendar or search for later.
-Your SECONDARY priority is to extract important evergreen facts (rules, programs, policies).
+Your SECONDARY priority is to extract **important evergreen facts and updates** (rules, programs, policies, systems, financial summaries, dues/membership rules, tools like Jarvis or the website, etc.).
 
 Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
 
@@ -39,9 +39,12 @@ For each extracted fact, create ONE entry with:
      * Use whichever is closer
      * Example: If today is Dec 26, "November 8" -> past is 48 days ago, future is 317 days away, so use ${currentYear}-11-08
      * Example: If today is Dec 26, "February 5" -> past is 325 days ago, future is 41 days away, so use ${currentYear + 1}-02-05
-   - Specific dates WITH year: Use the year specified (e.g., "November 8th, 2025" -> "2025-11-08")
-   - Recurring: "recurring:dayname" (e.g., "recurring:wednesday")
-   - TBD/unknown: null
+  - Specific dates WITH year: Use the year specified (e.g., "November 8th, 2025" -> "2025-11-08")
+  - Recurring: "recurring:dayname" (e.g., "recurring:wednesday")
+  - Week-based with no specific calendar date (e.g., "week 3", "week 4 ski trip"):
+    * Keep the human wording in timeRef (e.g., "week 3", "week 4 ski trip")
+    * Set dateStr to "week:<number>" (e.g., "week:3", "week:4") so events can be sorted by week
+  - TBD/unknown: null
 7. entities: ALL important entities (people, places, groups, concepts, locations, times)
 
 CRITICAL RULE FOR DATES WITHOUT YEAR:
@@ -51,10 +54,35 @@ CRITICAL RULE FOR DATES WITHOUT YEAR:
 
 EVENT PRIORITY RULES:
 - Treat each distinct event as its own fact, even if several events appear in one line or sentence.
-  Example: "week 4: ski trip ; week 5: pse x tbg x sep kegger ; week 10: formal"
-  MUST become THREE separate facts: one for Ski Trip, one for the PSE × TBG × SEP Kegger, one for the Formal.
+  Example calendar snippet:
+    "CALENDAR:
+     week 2: welcome mixer
+     week 3: retreat!
+     week 4: ski trip :)
+     week 5: sponsor mixer
+     week 6: tentative media day
+     week 8: hike/camping?
+     week 9: formal"
+  MUST become SEPARATE event facts:
+    - Week 2 Welcome Mixer
+    - Week 3 Retreat
+    - Week 4 Ski Trip
+    - Week 5 Sponsor Mixer
+    - Week 6 Tentative Media Day
+    - Week 8 Hike / Camping
+    - Week 9 Formal
 - Use "events" as the category for calendar-style listings; use "social" or other categories when appropriate.
 - If dates are vague ("week 3 weekend", "January formal"), still create an event fact and put the vague wording in timeRef.
+
+GENERAL FACT / UPDATE RULES:
+- In addition to events, extract key *non-event* facts as their own entries. Examples from similar text:
+  * Accountability / goal-tracking programs (teams, punishments, weekly check-ins, how it works).
+  * Financial summaries (total revenue, fundraising sources, dues amount, remaining balance).
+  * Points / operations systems (e.g., Sepoints rules, thresholds for active/inactive/suspended, how to earn/lose points).
+  * Dues amounts and membership classifications (what counts as active vs inactive vs suspended, consequences).
+  * Tooling and infrastructure (Jarvis bot phone number, what it does; website URL and what it offers).
+  * Bylaws / voting rules (how elections work, majority rules, special cases).
+- If multiple slides repeat the *same* program or rule, do NOT create duplicates; instead, create one fact that summarizes the important details.
 
 GENERAL RULES:
 - Group multiple sentences about the SAME event or topic into one fact.

@@ -230,19 +230,17 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
   return parts.length > 0 ? parts : [{ text, type: 'text' }];
 }
 
-// Semantic block component with hover physics
+// Semantic block component for clickable inline text (times, locations, people)
 function SemanticBlock({ 
   text, 
   type,
   onEntityClick,
   onTimeClick,
-  icon
 }: { 
   text: string;
   type: 'time' | 'location' | 'people';
   onEntityClick?: (entity: string) => void;
   onTimeClick?: (timeText: string) => void;
-  icon: string;
 }) {
   const handleClick = () => {
     if (type === 'time' && onTimeClick) {
@@ -252,56 +250,20 @@ function SemanticBlock({
     }
   };
 
-  // Color and styling based on type
-  const styles = {
-    time: {
-      textColor: 'text-[var(--highlight-red)]/85',
-      hoverBg: 'hover:bg-[var(--highlight-red)]/4',
-      hoverBorder: 'hover:border-[var(--highlight-red)]/15',
-      accentBar: 'before:bg-[var(--highlight-red)]/40',
-    },
-    location: {
-      textColor: 'text-[var(--highlight-blue)]/85',
-      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
-      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
-      accentBar: 'before:bg-[var(--highlight-blue)]/40',
-    },
-    people: {
-      textColor: 'text-[var(--highlight-blue)]/85',
-      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
-      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
-      accentBar: 'before:bg-[var(--highlight-blue)]/40',
-    },
-  };
-
-  const style = styles[type];
-
   return (
     <button
       onClick={handleClick}
       className={`
-        group relative inline-flex items-center gap-1.5 mx-0.5 px-2 py-0.5 rounded-md
-        ${style.textColor} font-mono text-sm leading-relaxed
-        ${style.hoverBg} ${style.hoverBorder}
+        inline mx-0.5 px-0.5 rounded-sm
+        text-[var(--highlight-blue)] font-normal text-sm leading-relaxed
+        hover:bg-[rgba(125,175,205,0.16)]
         border border-transparent
         transition-all duration-[120ms] ease-out
-        cursor-default
-        before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:rounded-l-md
-        before:opacity-0 group-hover:before:opacity-100
-        before:transition-opacity before:duration-[120ms]
-        ${style.accentBar}
-        hover:font-medium hover:scale-[1.005] hover:shadow-sm
         hover:cursor-pointer
+        underline-offset-2 hover:underline
       `}
     >
       <span className="relative z-10">{text}</span>
-      <span className={`
-        relative z-10 text-[10px] opacity-0 group-hover:opacity-60
-        transition-opacity duration-[120ms] ease-out
-        leading-none
-      `}>
-        {icon}
-      </span>
     </button>
   );
 }
@@ -335,7 +297,6 @@ function HighlightedText({
               text={part.text}
               type="time"
               onTimeClick={onTimeClick}
-              icon="↗"
             />
           );
         }
@@ -346,7 +307,6 @@ function HighlightedText({
               text={part.text}
               type="location"
               onEntityClick={onEntityClick}
-              icon="⧉"
             />
           );
         }
@@ -357,7 +317,6 @@ function HighlightedText({
               text={part.text}
               type="people"
               onEntityClick={onEntityClick}
-              icon="⤴"
             />
           );
         }
@@ -912,7 +871,7 @@ function DumpTab({
     if (currentFilter.type !== 'all' && facts.length > 0) {
       const cardsToExpand: Record<string, boolean> = {};
       facts.forEach(fact => {
-        if (fact.subcategory) {
+          if (fact.subcategory) {
           const key = fact.subcategory.toLowerCase();
           cardsToExpand[key] = true;
         }
@@ -1260,7 +1219,7 @@ function DumpTab({
                             setExpandedCards(prev => ({ ...prev, [key]: true }));
                           }
                         }}
-                        className="text-xs font-mono text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors"
+                        className="text-xs font-mono text-[var(--highlight-blue)] hover:bg-[rgba(125,175,205,0.16)] hover:rounded px-1 transition-colors"
                       >
                         {entity}
                       </button>
@@ -1295,7 +1254,7 @@ function DumpTab({
     for (const fact of facts) {
       // Group by subcategory + date (so each date occurrence gets its own card)
       // Unless it's recurring, then group by subcategory alone
-      if (fact.subcategory) {
+          if (fact.subcategory) {
         let key: string;
         if (fact.dateStr && fact.dateStr.startsWith('recurring:')) {
           // Recurring events: group by subcategory only
@@ -1350,6 +1309,9 @@ function DumpTab({
                 oldFacts.push(fact);
               }
             }
+          } else if (fact.dateStr && fact.dateStr.startsWith('week:')) {
+            // Week-based events (e.g., "week:3") – treat as upcoming and sort by week number
+            upcomingFacts.push(fact);
           } else {
             staticFacts.push(fact);
           }
@@ -1359,6 +1321,9 @@ function DumpTab({
         if (fact.dateStr) {
           if (fact.dateStr.startsWith('recurring:')) {
             recurringFacts.push(fact);
+          } else if (fact.dateStr.startsWith('week:')) {
+            // Week-based events without concrete dates → upcoming bucket
+            upcomingFacts.push(fact);
           } else {
             // Use the stored dateStr as-is (no dynamic year inference)
             const factDate = new Date(fact.dateStr);
@@ -1380,9 +1345,14 @@ function DumpTab({
       }
     }
     
-    // Sort upcoming by date (nearest first → farthest)
+    // Sort upcoming by date (nearest first → farthest) or by week number for "week:X"
     upcomingFacts.sort((a, b) => {
       if (!a.dateStr || !b.dateStr) return 0;
+      const aWeek = a.dateStr.startsWith('week:') ? parseInt(a.dateStr.split(':')[1] || '0', 10) : null;
+      const bWeek = b.dateStr.startsWith('week:') ? parseInt(b.dateStr.split(':')[1] || '0', 10) : null;
+      if (aWeek !== null && bWeek !== null) {
+        return aWeek - bWeek;
+      }
       return a.dateStr.localeCompare(b.dateStr);
     });
     

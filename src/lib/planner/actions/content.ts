@@ -124,14 +124,23 @@ async function filterAndFormatResultsWithLLM(
 
 IMPORTANT: For announcements and polls that include relative dates (e.g., "tomorrow", "tmr", "next week"), calculate these dates relative to the "sent on" date mentioned in the result, NOT today's date. For example, if an announcement was sent on January 6 and says "tomorrow", that means January 7.
 
+TREAT ALL SOURCES EQUALLY: Content database results (📋), announcements (📢), and polls (📊) are all part of the knowledge base. Extract relevant information from any source that answers the user's question.
+
 Your task:
 1. Filter out irrelevant results that don't answer the user's question
 2. Combine relevant information from multiple results into a clear, concise answer
 3. Focus on the most relevant details, ignoring extraneous information
 4. If multiple results are relevant, synthesize them into one coherent answer
-5. If no results are relevant, say you don't have that information
+5. Extract relevant information from ANY source type (content, announcements, polls) - don't favor one over another
+6. If no results are relevant, say you don't have that information
 
-Format your response naturally and conversationally, as if texting. Keep it concise but complete.`
+Format your response naturally and conversationally, as if texting. Keep it concise but complete.
+
+IMPORTANT FORMATTING RULES:
+- DO NOT use markdown formatting (no asterisks ** for bold, no markdown lists)
+- Write plain text as if sending a text message
+- Use simple dashes or numbers for lists if needed (e.g., "1. item" or "- item")
+- Keep formatting minimal and natural`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -178,7 +187,7 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   // Collect all results from both sources
   const allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }> = []
   
-  // 1. Search content database
+  // 1. Search content database (always try, even if it fails)
   if (searchContent) {
     console.log(`[ContentQuery] Searching content database...`)
     try {
@@ -187,6 +196,7 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       allResults.push(...contentResults.map(r => ({ ...r, source: 'content' as const })))
     } catch (error) {
       console.error('[ContentQuery] Content search failed:', error)
+      // Continue even if content search fails - we still have announcements
     }
   }
   

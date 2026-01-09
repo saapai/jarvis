@@ -551,6 +551,21 @@ function filterResultsByCategories(
 
   return results.filter(r => {
     const resultCategory = r.category || 'facts'
+
+    // Always include announcements and polls when the user is asking about
+    // events or facts, even if they didn't explicitly say "announcements" or "polls".
+    // This makes info that only lives in announcements/polls still queryable.
+    if (resultCategory === 'announcements' || resultCategory === 'polls') {
+      if (
+        targetCategories.includes('facts') ||
+        targetCategories.includes('upcoming') ||
+        targetCategories.includes('recurring') ||
+        targetCategories.includes('past')
+      ) {
+        return true
+      }
+    }
+
     return targetCategories.includes(resultCategory)
   })
 }

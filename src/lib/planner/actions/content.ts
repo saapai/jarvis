@@ -317,6 +317,13 @@ async function assignCategoryToResult(result: ContentResult & { source?: 'conten
     return 'recurring'
   }
 
+  // Week-of-term style events (e.g., "week:5") should behave like upcoming
+  // events in the inbox, even if they don't have a concrete calendar date.
+  // This keeps "Kegger" / "Formal" week cards queryable as upcoming.
+  if (result.dateStr?.startsWith('week:')) {
+    return 'upcoming'
+  }
+
   // Check if timeRef indicates recurring pattern (e.g., "every Wednesday")
   if (result.timeRef) {
     const timeRefLower = result.timeRef.toLowerCase()

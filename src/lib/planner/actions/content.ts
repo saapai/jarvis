@@ -208,11 +208,23 @@ async function filterAndFormatResultsWithLLM(
         }
       }
       
-      // Add context about sent date for relative date parsing
+      // Add context about sent date for relative date parsing and correlate with recurring patterns
       if (r.sentDate && (r.source === 'announcement' || r.source === 'poll')) {
         const sentDate = r.sentDate instanceof Date ? r.sentDate : new Date(r.sentDate)
         const dateStr = sentDate.toISOString().split('T')[0]
-        resultText += `\nNote: This was sent on ${dateStr}. When this mentions relative dates like "tomorrow", "tmr", "next week", calculate them relative to ${dateStr}, not today's date.`
+        const sentDayName = dayNames[sentDate.getDay()]
+        resultText += `\nNote: This was sent on ${dateStr} (${sentDayName}). When this mentions relative dates like "tomorrow", "tmr", "next week", calculate them relative to ${dateStr}, not today's date.`
+        
+        // Check if this announcement might be about a recurring event mentioned in other results
+        const titleLower = r.title.toLowerCase()
+        const bodyLower = r.body.toLowerCase()
+        const mentionsRecurring = filteredResults.some(other => 
+          other.dateStr?.startsWith('recurring:') && 
+          (other.title?.toLowerCase().includes(titleLower) || titleLower.includes(other.title?.toLowerCase() || ''))
+        )
+        if (mentionsRecurring) {
+          resultText += `\nWarning: This announcement may reference a recurring event. Cross-reference with recurring patterns in other results to determine the actual date.`
+        }
       }
       
       return resultText
@@ -264,11 +276,19 @@ YOUR TASK:
 7. DO NOT make up dates that aren't in the results or can't be calculated from them
 
 IMPORTANT DATE HANDLING EXAMPLES:
-- Example 1: Knowledge base says "Active Meeting every Wednesday", announcement sent Jan 6 says "active meeting is tmr"
-  * Announcement sent Jan 6, "tmr" = Jan 7
-  * Jan 7 is a Wednesday, so that was the last active meeting
-  * If today is Jan 9 (Tuesday), next Wednesday is Jan 14
-  * Response: "Active Meeting every Wednesday. Last one was Jan 7, next is Jan 14 (next Wednesday)"
+- Example 1: Knowledge base says "Active Meeting every Wednesday" (recurring:wednesday), announcement sent Jan 6 says "active meeting is tmr"
+  * Announcement sent Jan 6, "tmr" relative to Jan 6 = Jan 7
+  * Check if Jan 7 is a Wednesday (it should be, based on recurring pattern)
+  * If today is Jan 9 (Tuesday), calculate: last Wednesday was Jan 7, next Wednesday is Jan 14
+  * Response: "Active Meeting every Wednesday. Based on announcement from Jan 6, the last one was Jan 7. Next one is Jan 14 (next Wednesday)"
+  
+- CRITICAL: When you see BOTH a recurring pattern AND an announcement:
+  * The recurring pattern tells you the frequency (every Wednesday)
+  * The announcement tells you a specific occurrence date (calculated from its sent date + relative date)
+  * You MUST cross-reference: if announcement says "tmr" and was sent Jan 6, that's Jan 7
+  * Verify Jan 7 matches the recurring pattern (should be a Wednesday)
+  * Then calculate next occurrence from TODAY's date using the recurring pattern
+  * DO NOT just use the announcement date - use it to confirm the recurring pattern is correct
   
 - Example 2: Knowledge base says "IM soccer games every Monday"
   * If today is Jan 9 (Tuesday), next Monday is Jan 12

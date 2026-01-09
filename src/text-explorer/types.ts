@@ -8,6 +8,7 @@ export interface ExtractedFact {
   timeRef: string | null;
   dateStr: string | null;
   entities: string[];
+  embedding?: number[]; // Optional embedding vector
 }
 
 export interface ProcessResult {

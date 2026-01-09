@@ -120,11 +120,14 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // COMPONENTS
 // ============================================
 
-// Semantic text parser - colors times, locations, people
-function parseSemanticText(text: string, entities: string[], timeRef?: string): Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> {
-  const parts: Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> = [];
+// Semantic text parser - colors times, locations, people, and makes all significant words clickable
+function parseSemanticText(text: string, entities: string[], timeRef?: string): Array<{ text: string; type: 'time' | 'location' | 'people' | 'phrase' | 'text' }> {
+  const parts: Array<{ text: string; type: 'time' | 'location' | 'people' | 'phrase' | 'text' }> = [];
   
   if (!text) return [{ text, type: 'text' }];
+  
+  // Common stop words that shouldn't be clickable
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them']);
   
   // Time patterns - match dates, times, and timeRef
   const timePatterns: RegExp[] = [
@@ -148,13 +151,13 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
     .filter(e => e && e.length > 0)
     .sort((a, b) => b.length - a.length);
   
-  const matches: Array<{ index: number; endIndex: number; type: 'time' | 'location' | 'people'; text: string }> = [];
+  const matches: Array<{ index: number; endIndex: number; type: 'time' | 'location' | 'people' | 'phrase'; text: string }> = [];
   
   // Find all matches with their positions
   let match;
   
   // Helper to check if range overlaps with existing matches
-  const addMatch = (index: number, length: number, type: 'time' | 'location' | 'people', matchedText: string) => {
+  const addMatch = (index: number, length: number, type: 'time' | 'location' | 'people' | 'phrase', matchedText: string) => {
     const endIndex = index + length;
     
     // Check for overlaps - if this range overlaps with any existing match, skip it
@@ -191,6 +194,19 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
     entityPattern.lastIndex = 0;
     while ((match = entityPattern.exec(text)) !== null) {
       addMatch(match.index, match[0].length, 'people', match[0]);
+    }
+  }
+  
+  // Find all significant words/phrases to make clickable (2+ chars, not stop words, not already matched)
+  // Match words and word sequences (2-3 words)
+  const wordPattern = /\b\w{2,}(?:\s+\w{2,}){0,2}\b/gi;
+  wordPattern.lastIndex = 0;
+  while ((match = wordPattern.exec(text)) !== null) {
+    const matchedText = match[0].toLowerCase();
+    const words = matchedText.split(/\s+/);
+    // Skip if all words are stop words or if it's a single character after filtering
+    if (words.some(w => !stopWords.has(w) && w.length >= 2)) {
+      addMatch(match.index, match[0].length, 'phrase', match[0]);
     }
   }
   
@@ -267,6 +283,18 @@ function HighlightedText({
               onClick={() => onEntityClick?.(part.text.toLowerCase())}
               className="text-[var(--highlight-blue)] hover:bg-[rgba(59,124,150,0.16)] hover:rounded px-1 cursor-pointer font-mono transition-colors"
               title="Filter by entity"
+            >
+              {part.text}
+            </button>
+          );
+        }
+        if (part.type === 'phrase') {
+          return (
+            <button
+              key={i}
+              onClick={() => onEntityClick?.(part.text.toLowerCase())}
+              className="text-[var(--text-on-card)] hover:bg-[rgba(206,96,135,0.08)] hover:rounded px-0.5 transition-colors cursor-pointer underline decoration-dotted decoration-[var(--highlight-red)]/30 hover:decoration-[var(--highlight-red)]/60"
+              title="Filter by phrase"
             >
               {part.text}
             </button>
@@ -437,7 +465,14 @@ function DumpTab({
       } else if (targetCrumb.type === 'subcategory') {
         setFacts(allFacts.filter(f => f.subcategory === targetCrumb.value));
       } else if (targetCrumb.type === 'entity') {
-        setFacts(allFacts.filter(f => f.entities.some(e => e.toLowerCase() === targetCrumb.value.toLowerCase())));
+        // Search for phrase in entities, sourceText, and content (matches API behavior)
+        const searchTerm = targetCrumb.value.toLowerCase();
+        setFacts(allFacts.filter(f => {
+          const matchesEntity = f.entities.some(e => e.toLowerCase() === searchTerm);
+          const matchesSourceText = f.sourceText?.toLowerCase().includes(searchTerm) || false;
+          const matchesContent = f.content?.toLowerCase().includes(searchTerm) || false;
+          return matchesEntity || matchesSourceText || matchesContent;
+        }));
       } else if (targetCrumb.type === 'time') {
         setFacts(allFacts.filter(f => f.timeRef?.toLowerCase() === targetCrumb.value.toLowerCase()));
       }

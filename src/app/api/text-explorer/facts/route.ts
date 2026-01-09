@@ -15,32 +15,46 @@ export async function GET(req: NextRequest) {
     const timeRef = searchParams.get('timeRef');
     const month = searchParams.get('month');
 
-    const where: {
-      category?: string;
-      subcategory?: { contains: string };
-      entities?: { contains: string };
-      timeRef?: { contains: string };
-      dateStr?: { startsWith: string };
-    } = {};
+    const where: any = {};
+    const baseFilters: any = {};
 
     if (category && category !== 'all') {
-      where.category = category;
+      baseFilters.category = category;
     }
 
     if (subcategory) {
-      where.subcategory = { contains: subcategory };
-    }
-
-    if (entity) {
-      where.entities = { contains: entity };
+      baseFilters.subcategory = { contains: subcategory };
     }
 
     if (timeRef) {
-      where.timeRef = { contains: timeRef };
+      baseFilters.timeRef = { contains: timeRef };
     }
 
     if (month) {
-      where.dateStr = { startsWith: month };
+      baseFilters.dateStr = { startsWith: month };
+    }
+
+    if (entity) {
+      // Search for entity/phrase in entities, sourceText, and content
+      // This allows clicking on any phrase/keyword in the Wikipedia cards
+      // Combine with other filters using AND
+      const entityFilter = {
+        OR: [
+          { entities: { contains: entity, mode: 'insensitive' } },
+          { sourceText: { contains: entity, mode: 'insensitive' } },
+          { content: { contains: entity, mode: 'insensitive' } },
+        ],
+      };
+      
+      if (Object.keys(baseFilters).length > 0) {
+        // Combine entity filter with other filters using AND
+        where.AND = [entityFilter, baseFilters];
+      } else {
+        // Only entity filter, no need for AND
+        Object.assign(where, entityFilter);
+      }
+    } else {
+      Object.assign(where, baseFilters);
     }
 
     const prisma = await getPrisma();

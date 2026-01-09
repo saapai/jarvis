@@ -68,11 +68,18 @@ export async function GET() {
       }
       seenContent.add(contentKey)
       
+      // Use local date to avoid timezone issues
+      const sentDate = msg.createdAt
+      const year = sentDate.getFullYear()
+      const month = String(sentDate.getMonth() + 1).padStart(2, '0')
+      const day = String(sentDate.getDate()).padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}`
+      
       announcements.push({
         id: msg.id,
         type,
         content: content.trim(),
-        sentAt: msg.createdAt.toISOString(),
+        sentAt: dateStr, // Use local date string instead of ISO string
         sentBy: msg.phoneNumber,
         pollId: meta?.pollId || null
       })

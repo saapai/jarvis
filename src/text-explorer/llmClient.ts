@@ -17,16 +17,19 @@ export const llmClient: LLMClient = {
         messages: [
           {
             role: 'system',
-            content: `You are an information extractor. Split the text into logical sections/topics and extract facts.
+            content: `You are an information extractor for club calendars, announcements, and bylaws.
+
+Your TOP priority is to extract **event-style facts** – things a member might want to see on a calendar or search for later.
+Your SECONDARY priority is to extract important evergreen facts (rules, programs, policies).
 
 Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
 
-For each distinct topic/section in the text, create ONE fact entry with:
-1. content: A brief 1-2 sentence summary of the key points
-2. sourceText: The FULL original text for that section (preserve exact wording)
+For each extracted fact, create ONE entry with:
+1. content: A brief 1–2 sentence summary of the key point **focused on a single event or fact**
+2. sourceText: The FULL original text span for that fact (preserve exact wording)
 3. category: One of: social, professional, pledging, events, meetings, other
-4. subcategory: The specific event/topic name (e.g., "Study Hall", "Creatathon", "Big Little")
-5. timeRef: The exact time reference ("November 8th", "every Wednesday at 8:00 PM", "January 15th", "January 16 to January 19", "jan 16-19")
+4. subcategory: The specific event/topic name (e.g., "Study Hall", "Creatathon", "Big Little", "Kegger", "Formal")
+5. timeRef: The exact time reference ("November 8th", "week 4", "every Wednesday at 8:00 PM", "January 16–19", "Jan 16-19")
 6. dateStr: Parse to date format. IMPORTANT: For date RANGES, store only the START date:
    - For date ranges (e.g., "January 16 to January 19", "jan 16-19", "16-19"): Store ONLY the start date (e.g., "2026-01-16")
      The full range information should be in timeRef so it can be parsed later
@@ -46,11 +49,19 @@ CRITICAL RULE FOR DATES WITHOUT YEAR:
 - Use whichever date is CLOSER to today
 - This ensures "November 8" in December refers to the recent past November, not next year's November
 
-IMPORTANT RULES:
-- Group related sentences about the same topic into ONE fact
-- sourceText should be the COMPLETE original text for that section
-- Extract ALL entities mentioned (names, places, times, concepts)
-- Entities should include things that could be clickable/searchable
+EVENT PRIORITY RULES:
+- Treat each distinct event as its own fact, even if several events appear in one line or sentence.
+  Example: "week 4: ski trip ; week 5: pse x tbg x sep kegger ; week 10: formal"
+  MUST become THREE separate facts: one for Ski Trip, one for the PSE × TBG × SEP Kegger, one for the Formal.
+- Use "events" as the category for calendar-style listings; use "social" or other categories when appropriate.
+- If dates are vague ("week 3 weekend", "January formal"), still create an event fact and put the vague wording in timeRef.
+
+GENERAL RULES:
+- Group multiple sentences about the SAME event or topic into one fact.
+- Do NOT group unrelated events into one fact.
+- sourceText should be the COMPLETE original text span for that event or fact.
+- Extract ALL entities mentioned (names, places, groups, locations, times, week numbers, etc.).
+- Entities should include anything that could be clickable/searchable.
 
 Example for "Study Hall Pledges do Study Hall at Rieber Terrace...":
 {

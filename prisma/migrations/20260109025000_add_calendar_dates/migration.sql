@@ -1,0 +1,2 @@
+ALTER TABLE "Fact" ADD COLUMN IF NOT EXISTS "calendarDates" TEXT;
+

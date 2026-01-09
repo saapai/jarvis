@@ -251,51 +251,20 @@ function SemanticBlock({
     }
   };
 
-  // Color and styling based on type
-  const styles = {
-    time: {
-      textColor: 'text-[var(--highlight-red)]/85',
-      hoverBg: 'hover:bg-[var(--highlight-red)]/4',
-      hoverBorder: 'hover:border-[var(--highlight-red)]/15',
-      accentBar: 'before:bg-[var(--highlight-red)]/40',
-    },
-    location: {
-      textColor: 'text-[var(--highlight-blue)]/85',
-      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
-      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
-      accentBar: 'before:bg-[var(--highlight-blue)]/40',
-    },
-    people: {
-      textColor: 'text-[var(--highlight-blue)]/85',
-      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
-      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
-      accentBar: 'before:bg-[var(--highlight-blue)]/40',
-    },
-  };
-
-  const style = styles[type];
-
   return (
     <button
       onClick={handleClick}
       className={`
-        group relative inline-flex items-center gap-1.5 mx-0.5 px-2 py-0.5 rounded-md
-        ${style.textColor} font-mono text-sm leading-relaxed
-        ${style.hoverBg} ${style.hoverBorder}
-        border border-transparent
+        group inline-flex items-center gap-1.5 mx-0.5 px-1 py-0.5
+        text-xs font-mono text-[var(--highlight-blue)] leading-relaxed
+        hover:bg-[rgba(59,124,150,0.16)] hover:rounded
         transition-all duration-[120ms] ease-out
-        cursor-default
-        before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:rounded-l-md
-        before:opacity-0 group-hover:before:opacity-100
-        before:transition-opacity before:duration-[120ms]
-        ${style.accentBar}
-        hover:font-medium hover:scale-[1.005] hover:shadow-sm
-        hover:cursor-pointer
+        cursor-default hover:cursor-pointer
       `}
     >
-      <span className="relative z-10">{text}</span>
+      {text}
       <span className={`
-        relative z-10 text-[10px] opacity-0 group-hover:opacity-60
+        text-[10px] opacity-0 group-hover:opacity-60
         transition-opacity duration-[120ms] ease-out
         leading-none
       `}>

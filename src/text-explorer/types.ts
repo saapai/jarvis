@@ -8,7 +8,6 @@ export interface ExtractedFact {
   timeRef: string | null;
   dateStr: string | null;
   entities: string[];
-  embedding?: number[];
 }
 
 export interface ProcessResult {
@@ -16,7 +15,7 @@ export interface ProcessResult {
 }
 
 export interface LLMClient {
-  extractFacts(text: string, referenceDate?: Date): Promise<ExtractedFact[]>;
+  extractFacts(text: string): Promise<ExtractedFact[]>;
 }
 
 export interface TextExplorerRepository {

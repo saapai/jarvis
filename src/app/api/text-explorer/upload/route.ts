@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processUpload, llmClient, textExplorerRepository } from '@/text-explorer';
-import { enforceRateLimit } from '../rateLimit';
 
 export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req);
-  if (rateLimited) return rateLimited;
-
   try {
     const body = await req.json();
     const { name, rawText } = body;
@@ -16,15 +12,13 @@ export async function POST(req: NextRequest) {
     }
 
     const uploadName = name ?? `Upload ${new Date().toISOString()}`;
-    const uploadDate = new Date();
 
     const { id: uploadId } = await textExplorerRepository.createUpload({
       name: uploadName,
       rawText,
     });
 
-    // Pass upload date as reference date for relative dates like "tomorrow"
-    const processResult = await processUpload(rawText, llmClient, uploadDate);
+    const processResult = await processUpload(rawText, llmClient);
 
     await textExplorerRepository.createFacts({
       uploadId,

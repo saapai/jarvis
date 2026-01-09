@@ -229,17 +229,19 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
   return parts.length > 0 ? parts : [{ text, type: 'text' }];
 }
 
-// Semantic block component - inline with text, no gaps
+// Semantic block component with hover physics
 function SemanticBlock({ 
   text, 
   type,
   onEntityClick,
-  onTimeClick
+  onTimeClick,
+  icon
 }: { 
   text: string;
   type: 'time' | 'location' | 'people';
   onEntityClick?: (entity: string) => void;
   onTimeClick?: (timeText: string) => void;
+  icon: string;
 }) {
   const handleClick = () => {
     if (type === 'time' && onTimeClick) {
@@ -249,17 +251,56 @@ function SemanticBlock({
     }
   };
 
+  // Color and styling based on type
+  const styles = {
+    time: {
+      textColor: 'text-[var(--highlight-red)]/85',
+      hoverBg: 'hover:bg-[var(--highlight-red)]/4',
+      hoverBorder: 'hover:border-[var(--highlight-red)]/15',
+      accentBar: 'before:bg-[var(--highlight-red)]/40',
+    },
+    location: {
+      textColor: 'text-[var(--highlight-blue)]/85',
+      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
+      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
+      accentBar: 'before:bg-[var(--highlight-blue)]/40',
+    },
+    people: {
+      textColor: 'text-[var(--highlight-blue)]/85',
+      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
+      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
+      accentBar: 'before:bg-[var(--highlight-blue)]/40',
+    },
+  };
+
+  const style = styles[type];
+
   return (
     <button
       onClick={handleClick}
       className={`
-        inline text-sm font-mono text-[var(--highlight-blue)]
-        hover:bg-[rgba(59,124,150,0.16)] hover:rounded
+        group relative inline-flex items-center gap-1.5 mx-0.5 px-2 py-0.5 rounded-md
+        ${style.textColor} font-mono text-sm leading-relaxed
+        ${style.hoverBg} ${style.hoverBorder}
+        border border-transparent
         transition-all duration-[120ms] ease-out
-        cursor-default hover:cursor-pointer
+        cursor-default
+        before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:rounded-l-md
+        before:opacity-0 group-hover:before:opacity-100
+        before:transition-opacity before:duration-[120ms]
+        ${style.accentBar}
+        hover:font-medium hover:scale-[1.005] hover:shadow-sm
+        hover:cursor-pointer
       `}
     >
-      {text}
+      <span className="relative z-10">{text}</span>
+      <span className={`
+        relative z-10 text-[10px] opacity-0 group-hover:opacity-60
+        transition-opacity duration-[120ms] ease-out
+        leading-none
+      `}>
+        {icon}
+      </span>
     </button>
   );
 }
@@ -284,7 +325,7 @@ function HighlightedText({
   const semanticParts = parseSemanticText(text, entities);
   
   return (
-    <>
+    <span className="inline">
       {semanticParts.map((part, i) => {
         if (part.type === 'time') {
           return (
@@ -293,6 +334,7 @@ function HighlightedText({
               text={part.text}
               type="time"
               onTimeClick={onTimeClick}
+              icon="↗"
             />
           );
         }
@@ -303,6 +345,7 @@ function HighlightedText({
               text={part.text}
               type="location"
               onEntityClick={onEntityClick}
+              icon="⧉"
             />
           );
         }
@@ -313,12 +356,13 @@ function HighlightedText({
               text={part.text}
               type="people"
               onEntityClick={onEntityClick}
+              icon="⤴"
             />
           );
         }
         return <Fragment key={i}>{part.text}</Fragment>;
       })}
-    </>
+    </span>
   );
 }
 
@@ -413,6 +457,11 @@ function DumpTab({
   const [showUpload, setShowUpload] = useState(false);
   const [uploadText, setUploadText] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [editingFactId, setEditingFactId] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<'subcategory' | 'content' | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [updatingFactId, setUpdatingFactId] = useState<string | null>(null);
   
   // Use parent viewMode if provided, otherwise use local state
   const activeViewMode = parentViewMode !== undefined ? parentViewMode : viewMode;
@@ -636,6 +685,65 @@ function DumpTab({
     }
   };
 
+  const handleFactEdit = async (factId: string, field: 'subcategory' | 'content', newValue: string) => {
+    setUpdatingFactId(factId);
+    try {
+      const res = await fetch(`/api/text-explorer/facts/${factId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: newValue }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        const updatedFact = data.fact;
+        
+        // Update facts in state
+        const updateFactInArray = (arr: Fact[]) => 
+          arr.map(f => f.id === factId ? {
+            ...f,
+            subcategory: updatedFact.subcategory,
+            content: updatedFact.content,
+            sourceText: updatedFact.sourceText,
+            category: updatedFact.category,
+            timeRef: updatedFact.timeRef,
+            dateStr: updatedFact.dateStr,
+            entities: updatedFact.entities,
+          } : f);
+        
+        setFacts(updateFactInArray(facts));
+        setAllFacts(updateFactInArray(allFacts));
+        
+        // Refresh tree and facts to get updated metadata
+        await fetchTree();
+        await fetchFacts();
+        await fetchAllFacts();
+      } else {
+        console.error('Failed to update fact');
+      }
+    } catch (error) {
+      console.error('Error updating fact:', error);
+    } finally {
+      setUpdatingFactId(null);
+      setEditingFactId(null);
+      setEditingField(null);
+      setEditValue('');
+    }
+  };
+
+  const startEditing = (factId: string, field: 'subcategory' | 'content', currentValue: string) => {
+    if (!isAdminMode) return;
+    setEditingFactId(factId);
+    setEditingField(field);
+    setEditValue(currentValue);
+  };
+
+  const cancelEditing = () => {
+    setEditingFactId(null);
+    setEditingField(null);
+    setEditValue('');
+  };
+
   useEffect(() => { fetchTree(); }, [fetchTree]);
   useEffect(() => { fetchFacts(); }, [fetchFacts]);
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
@@ -854,6 +962,8 @@ function DumpTab({
     const subcategory = fact.subcategory.toLowerCase();
     const isExpanded = expandedCards[subcategory];
     const mainFact = groupFacts?.[0] || fact;
+    const isEditing = editingFactId === mainFact.id;
+    const isUpdating = updatingFactId === mainFact.id;
     
     // Show only ONE canonical date chip - the primary date (fix UTC offset issue)
     let dateChip = null;
@@ -893,39 +1003,118 @@ function DumpTab({
             hover:-translate-y-[1px] 
             hover:shadow-[inset_0_1px_0_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.04)]
             transition-all duration-[120ms] ease-out
+            ${isAdminMode ? 'cursor-default' : ''}
           `}
           style={getColumnCardStyle(columnType)}
         >
           {/* Two-Column Header */}
-          <button
-            onClick={() => toggleCard(fact.subcategory!.toLowerCase())}
-            className="w-full p-4 text-left transition-colors"
-          >
-            {/* Header Row: Title and date on same baseline */}
-            <div className="flex items-baseline justify-between gap-4 mb-2">
-              {/* Left: Title */}
-              <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1">
-                {fact.subcategory}
-              </h3>
-              
-              {/* Right: Single pale date chip + expand arrow */}
-              <div className="flex items-baseline gap-2">
-                {dateChip && (
-                  <span className={dateChipClasses}>
-                    {dateChip}
-                  </span>
+          <div className="w-full p-4">
+            <button
+              onClick={() => !isEditing && toggleCard(fact.subcategory!.toLowerCase())}
+              className="w-full text-left transition-colors"
+              disabled={isEditing}
+            >
+              {/* Header Row: Title and date on same baseline */}
+              <div className="flex items-baseline justify-between gap-4 mb-2">
+                {/* Left: Title */}
+                {isEditing && editingField === 'subcategory' ? (
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => {
+                      if (editValue.trim() && editValue !== mainFact.subcategory) {
+                        handleFactEdit(mainFact.id, 'subcategory', editValue.trim());
+                      } else {
+                        cancelEditing();
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (editValue.trim() && editValue !== mainFact.subcategory) {
+                          handleFactEdit(mainFact.id, 'subcategory', editValue.trim());
+                        } else {
+                          cancelEditing();
+                        }
+                      } else if (e.key === 'Escape') {
+                        cancelEditing();
+                      }
+                    }}
+                    autoFocus
+                    className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1 bg-transparent border-b-2 border-[var(--highlight-red)] outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <h3 
+                    className={`text-base font-semibold text-[var(--bg-main)] leading-tight flex-1 ${isAdminMode ? 'cursor-text hover:bg-[rgba(206,96,135,0.1)] rounded px-1 -mx-1' : ''}`}
+                    onDoubleClick={(e) => {
+                      if (isAdminMode) {
+                        e.stopPropagation();
+                        startEditing(mainFact.id, 'subcategory', mainFact.subcategory || '');
+                      }
+                    }}
+                  >
+                    {mainFact.subcategory}
+                    {isUpdating && <span className="ml-2 text-xs opacity-50">updating...</span>}
+                  </h3>
                 )}
-                <span className="text-[var(--text-meta)] text-sm">
-                  {isExpanded ? '▾' : '▸'}
-                </span>
+                
+                {/* Right: Single pale date chip + expand arrow */}
+                <div className="flex items-baseline gap-2">
+                  {dateChip && (
+                    <span className={dateChipClasses}>
+                      {dateChip}
+                    </span>
+                  )}
+                  <span className="text-[var(--text-meta)] text-sm">
+                    {isExpanded ? '▾' : '▸'}
+                  </span>
+                </div>
               </div>
-            </div>
-            
-            {/* True summary: the actual event description */}
-            <p className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed">
-              {mainFact.content}
-            </p>
-          </button>
+              
+              {/* True summary: the actual event description */}
+              {isEditing && editingField === 'content' ? (
+                <textarea
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => {
+                    if (editValue.trim() && editValue !== mainFact.content) {
+                      handleFactEdit(mainFact.id, 'content', editValue.trim());
+                    } else {
+                      cancelEditing();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' && (e.metaKey || e.ctrlKey)) || e.key === 'Escape') {
+                      e.preventDefault();
+                      if (e.key === 'Escape') {
+                        cancelEditing();
+                      } else if (editValue.trim() && editValue !== mainFact.content) {
+                        handleFactEdit(mainFact.id, 'content', editValue.trim());
+                      }
+                    }
+                  }}
+                  autoFocus
+                  rows={3}
+                  className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed w-full bg-transparent border-b-2 border-[var(--highlight-red)] outline-none resize-none"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <p 
+                  className={`text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed ${isAdminMode ? 'cursor-text hover:bg-[rgba(206,96,135,0.1)] rounded px-1 -mx-1 py-0.5' : ''}`}
+                  onDoubleClick={(e) => {
+                    if (isAdminMode) {
+                      e.stopPropagation();
+                      startEditing(mainFact.id, 'content', mainFact.content);
+                    }
+                  }}
+                >
+                  {mainFact.content}
+                </p>
+              )}
+            </button>
+          </div>
           
           {/* Expanded body content - Wikipedia style */}
           {isExpanded && (
@@ -1152,37 +1341,70 @@ function DumpTab({
     return days;
   }, [calendarDate]);
 
-  // Use LLM to parse date ranges from fact content and timeRef via API route
+  // Use LLM to parse date ranges from fact content and timeRef
   const parseDatesWithLLM = async (fact: Fact): Promise<string[]> => {
     if (!fact.timeRef && !fact.content && !fact.dateStr) return [];
     
     try {
-      const response = await fetch('/api/text-explorer/parse-dates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fact })
+      // Import OpenAI client from lib
+      const { openai } = await import('@/lib/openai');
+      
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth() + 1;
+      const currentDay = today.getDate();
+      
+      const prompt = `Extract ALL dates for this event and return them as an array of YYYY-MM-DD dates.
+
+CRITICAL: If the event spans multiple days, return ALL dates in the range, not just the start and end dates.
+
+Examples of date ranges:
+- "January 16 to January 19" -> ["2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19"]
+- "jan 16-19" -> ["2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19"]
+- "jan 24-25" -> ["2026-01-24", "2026-01-25"]
+- "January 16 to January 29" -> ["2026-01-16", "2026-01-17", ..., "2026-01-29"] (all dates)
+- "jan 16 to jan 29" -> ["2026-01-16", "2026-01-17", ..., "2026-01-29"] (all dates)
+
+Single dates:
+- "January 10" -> ["2026-01-10"]
+- "jan 24" -> ["2026-01-24"]
+
+Recurring events (return empty array):
+- "every Wednesday" -> []
+- "recurring:wednesday" -> []
+
+Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
+
+Fact information:
+- subcategory: "${fact.subcategory || 'none'}"
+- timeRef: "${fact.timeRef || 'none'}"
+- content: "${fact.content?.substring(0, 300) || 'none'}"
+- dateStr: "${fact.dateStr || 'none'}"
+
+Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a precise date parser. Extract ALL dates from date ranges, including every day between start and end dates. Return dates in YYYY-MM-DD format.' },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+        max_tokens: 500
       });
-      
-      if (!response.ok) {
-        console.error('[Calendar] Date parsing API failed:', response.status);
-        return [];
-      }
-      
-      const data = await response.json();
-      const dates = data.dates || [];
-      
-      if (dates.length > 0) {
-        console.log('[Calendar] LLM parsed dates:', fact.subcategory, fact.timeRef, '->', dates);
-        return dates;
-      } else {
-        console.log('[Calendar] LLM returned empty dates array for:', fact.subcategory, fact.timeRef);
+
+      const content = response.choices[0]?.message?.content;
+      if (content) {
+        const parsed = JSON.parse(content);
+        const dates = parsed.dates || [];
+        if (dates.length > 0) {
+          console.log('[Calendar] LLM parsed dates:', fact.subcategory, fact.timeRef, '->', dates);
+          return dates;
+        }
       }
     } catch (error) {
-      console.error('[Calendar] LLM date parsing failed:', error, 'Fact:', {
-        subcategory: fact.subcategory,
-        timeRef: fact.timeRef,
-        content: fact.content?.substring(0, 100)
-      });
+      console.error('[Calendar] LLM date parsing failed:', error);
     }
     
     return [];
@@ -1206,7 +1428,7 @@ function DumpTab({
           let dateStr: string | null = null;
           let dateRange: string[] = [];
           
-          // Use LLM to parse all dates/date ranges - this is the primary parsing method
+          // Use LLM to parse all dates/date ranges - this is the only parsing method
           dateRange = await parseDatesWithLLM(fact);
           if (dateRange.length > 0) {
             // Add fact to all dates in the range
@@ -1216,31 +1438,6 @@ function DumpTab({
             }
             factsWithDates++;
             return;
-          }
-          
-          // Fallback: if LLM parsing failed but we have a valid dateStr, use it
-          if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
-            try {
-              const parsed = fact.dateStr.split('T')[0];
-              // Validate it's a proper date format (YYYY-MM-DD)
-              if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
-                const parsedDate = new Date(parsed);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                
-                // If the date is in the past, increment the year
-                if (parsedDate < today) {
-                  const [year, month, day] = parsed.split('-');
-                  const nextYear = parseInt(year, 10) + 1;
-                  dateStr = `${nextYear}-${month}-${day}`;
-                  console.log('[Calendar] Date in past, adjusted:', parsed, '->', dateStr);
-                } else {
-                  dateStr = parsed;
-                }
-              }
-            } catch (e) {
-              // Invalid dateStr, will log as fact without date
-            }
           }
           
           if (dateStr) {
@@ -1295,7 +1492,27 @@ function DumpTab({
     <div className="min-h-screen bg-[var(--bg-main)] flex animate-fade-in">
       {/* Main Content - Full Width */}
       <main className="flex-1 flex flex-col overflow-hidden max-w-6xl mx-auto w-full">
+        {/* Admin Mode Toggle */}
+        <div className="px-4 pt-6 pb-2 flex justify-end">
+          <button
+            onClick={() => setIsAdminMode(!isAdminMode)}
+            className={`px-4 py-2 text-sm font-mono rounded-lg transition-colors ${
+              isAdminMode
+                ? 'bg-[var(--highlight-red)] text-white'
+                : 'bg-[var(--card-bg)] text-[var(--text-on-card)] border border-[var(--card-border)] hover:border-[var(--highlight-red)]'
+            }`}
+          >
+            {isAdminMode ? 'admin mode' : 'viewer mode'}
+          </button>
+        </div>
         <div className="flex-1 overflow-auto py-6 px-4">
+          {isAdminMode && activeViewMode === 'explore' && !loading && (
+            <div className="mb-4 p-3 bg-[rgba(206,96,135,0.1)] border border-[var(--highlight-red)]/30 rounded-lg">
+              <p className="text-sm text-[var(--text-on-card)]">
+                <span className="font-semibold">Admin mode:</span> Double-click on card titles or content to edit. Changes will update tags, calendar, and searchability.
+              </p>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <span className="text-[var(--text-meta)] animate-pulse">loading...</span>

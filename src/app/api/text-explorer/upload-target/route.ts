@@ -22,12 +22,17 @@ export async function POST(req: NextRequest) {
     const blobPath = `text-explorer/${Date.now()}-${safeName}`;
 
     // Create an empty blob with upload authorization; client will overwrite via returned URL
-    const blob = await put(blobPath, Buffer.alloc(0), {
-      contentType: contentType || 'application/octet-stream',
-      access: 'private',
-      addRandomSuffix: true,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+    const blob = await put(
+      blobPath,
+      Buffer.alloc(0),
+      {
+        contentType: contentType || 'application/octet-stream',
+        // Vercel Blob currently only supports "public" here; URLs are still hard to guess due to random suffix
+        access: 'public',
+        addRandomSuffix: true,
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      }
+    );
 
     return NextResponse.json({
       url: blob.url,

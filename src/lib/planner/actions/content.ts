@@ -262,8 +262,9 @@ CONTENT TYPES:
 - FACT: General information from the knowledge base.
 
 QUERY INTENT AWARENESS:
-- If user asks "what are recurring events" (definition question), list the actual recurring events from the results
-- If user asks about "recurring" or "weekly" events, ONLY include recurring items (Type: RECURRING)
+- If user asks "what are recurring events" (definition question), list the ACTUAL recurring events from the results with their patterns and next occurrence dates
+- If user asks "when is [event name]" for a recurring event, state the pattern AND the next occurrence date
+- If user asks about "recurring" or "weekly" events, ONLY include recurring items (Type: RECURRING) with next occurrences
 - If user asks about "upcoming" or "coming up", include events AND recurring items (with next occurrences)
 - If user asks generally, include ALL relevant information from any source
 
@@ -311,8 +312,17 @@ IMPORTANT DATE HANDLING EXAMPLES:
   
 - RESPONSE FORMAT FOR EVENTS:
   * Always include: Event name, date/time, location (if available), recurrence pattern (if recurring), next occurrence (if recurring)
-  * Example: "Active Meeting every Wednesday at 8pm at Ash's (610 Levering Apt 201). Next is January 14"
-  * Example: "Ski Trip January 16-19, 2026"
+  * For recurring events, ALWAYS state both the pattern AND when the next one is
+  * Example recurring: "Active Meeting every Wednesday at 8pm at Ash's (610 Levering Apt 201). Next is January 14"
+  * Example one-time: "Ski Trip January 16-19, 2026"
+  * When user asks "when is [recurring event]", respond with: "[Event] is every [day] at [time] at [location]. Next is [date]"
+  
+- CALCULATING NEXT OCCURRENCE:
+  * If today is Tuesday Jan 9 and event is every Wednesday:
+    - Calculate: Jan 9 (Tue) → Jan 10 (Wed) is tomorrow, but if today is past the event time, use next week
+    - Next Wednesday after today = Jan 14
+    - State clearly: "Next is January 14 (next Wednesday)"
+  * Always calculate from TODAY's date using the recurring pattern, not from any announcement date
   
 - Example 2: Knowledge base says "IM soccer games every Monday"
   * If today is Jan 9 (Tuesday), next Monday is Jan 12

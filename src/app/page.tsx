@@ -120,30 +120,42 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // COMPONENTS
 // ============================================
 
-// Semantic text parser - colors times, locations, people, and makes all significant words clickable
-function parseSemanticText(text: string, entities: string[], timeRef?: string): Array<{ text: string; type: 'time' | 'location' | 'people' | 'phrase' | 'text' }> {
-  const parts: Array<{ text: string; type: 'time' | 'location' | 'people' | 'phrase' | 'text' }> = [];
+// Semantic text parser - only semantic blocks, not individual words
+// Focus: date ranges, time blocks, locations, and entity clusters
+function parseSemanticText(text: string, entities: string[], timeRef?: string): Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> {
+  const parts: Array<{ text: string; type: 'time' | 'location' | 'people' | 'text' }> = [];
   
   if (!text) return [{ text, type: 'text' }];
   
-  // Common stop words that shouldn't be clickable
-  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them']);
-  
-  // Time patterns - match dates, times, and timeRef
+  // Time patterns - semantic blocks like "Jan 16 – Jan 19", "Wednesday at 8:00 PM"
   const timePatterns: RegExp[] = [
     /@\w+/gi, // @timeRef
-    /\b\w+day\b/gi, // Monday, Wednesday, etc.
-    /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:st|nd|rd|th)?\b/gi, // Full month names
-    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+(?:st|nd|rd|th)?\b/gi, // Short month names
-    /\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/gi, // 6:30 PM
-    /\b(?:from|to)\s+\d{1,2}:\d{2}\s*(?:AM|PM)\b/gi, // from 6:30 PM
-    /\bevery\s+\w+day\b/gi, // every Wednesday
+    // Date ranges: "Jan 16 – Jan 19", "January 16 to January 19", "Jan 16-19"
+    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:st|nd|rd|th)?\s*(?:–|-|to)\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)?\s*\d+(?:st|nd|rd|th)?/gi,
+    // Day + time: "Wednesday at 8:00 PM", "Monday 6:30 PM"
+    /\b\w+day\s+(?:at\s+)?\d{1,2}:\d{2}\s*(?:AM|PM|–|-)\s*\d{1,2}:\d{2}\s*(?:AM|PM)?/gi,
+    // Time ranges: "6:30 PM – 12:30 AM", "8:00 PM - 10:00 PM"
+    /\b\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:–|-|to)\s*\d{1,2}:\d{2}\s*(?:AM|PM)/gi,
+    // Single times: "6:30 PM", "8:00 PM"
+    /\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/gi,
+    // Single days: "Wednesday", "Monday"
+    /\b\w+day\b/gi,
+    // Single dates: "Jan 16", "January 19"
+    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:st|nd|rd|th)?\b/gi,
+    // "every Wednesday"
+    /\bevery\s+\w+day\b/gi,
   ];
   
-  // Location patterns - prioritize multi-word locations
+  // Location patterns - full addresses and location names
   const locationPatterns = [
-    /\b(?:Rieber Terrace|9th Floor Lounge|Study Hall)\b/gi, // Multi-word locations
-    /\b(?:Kelton|Levering|apartment|lounge|floor|room|building|terrace)\b/gi, // Single-word locations
+    // Full locations with numbers: "461B Kelton", "610 Levering", "9th Floor Lounge"
+    /\b\d+[A-Z]?\s+(?:Kelton|Levering|Floor|Lounge|Terrace|Hall|Room|Building)\b/gi,
+    // Multi-word locations: "Rieber Terrace", "Study Hall"
+    /\b(?:Rieber Terrace|Study Hall|9th Floor Lounge)\b/gi,
+    // Location names: "Kelton", "Levering", "Rieber"
+    /\b(?:Kelton|Levering|Rieber)\b/gi,
+    // Apartment references: "Mahi's apartment", "Ash's apartment"
+    /\b\w+'s\s+(?:apartment|room)\b/gi,
   ];
   
   // People/entities - sort by length descending to match longest phrases first
@@ -151,13 +163,13 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
     .filter(e => e && e.length > 0)
     .sort((a, b) => b.length - a.length);
   
-  const matches: Array<{ index: number; endIndex: number; type: 'time' | 'location' | 'people' | 'phrase'; text: string }> = [];
+  const matches: Array<{ index: number; endIndex: number; type: 'time' | 'location' | 'people'; text: string }> = [];
   
   // Find all matches with their positions
   let match;
   
   // Helper to check if range overlaps with existing matches
-  const addMatch = (index: number, length: number, type: 'time' | 'location' | 'people' | 'phrase', matchedText: string) => {
+  const addMatch = (index: number, length: number, type: 'time' | 'location' | 'people', matchedText: string) => {
     const endIndex = index + length;
     
     // Check for overlaps - if this range overlaps with any existing match, skip it
@@ -172,7 +184,7 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
     }
   };
   
-  // Find time matches
+  // Find time matches (semantic blocks)
   for (const timePattern of timePatterns) {
     timePattern.lastIndex = 0;
     while ((match = timePattern.exec(text)) !== null) {
@@ -180,7 +192,7 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
     }
   }
   
-  // Find location matches (multi-word first)
+  // Find location matches (semantic blocks, multi-word first)
   for (const locationPattern of locationPatterns) {
     locationPattern.lastIndex = 0;
     while ((match = locationPattern.exec(text)) !== null) {
@@ -188,25 +200,12 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
     }
   }
   
-  // Find people/entity matches (longest first to avoid partial matches like "Hall" instead of "Study Hall")
+  // Find people/entity matches (longest first to avoid partial matches)
   for (const entity of sortedEntities) {
     const entityPattern = new RegExp(`\\b${entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
     entityPattern.lastIndex = 0;
     while ((match = entityPattern.exec(text)) !== null) {
       addMatch(match.index, match[0].length, 'people', match[0]);
-    }
-  }
-  
-  // Find all significant words/phrases to make clickable (2+ chars, not stop words, not already matched)
-  // Match words and word sequences (2-3 words)
-  const wordPattern = /\b\w{2,}(?:\s+\w{2,}){0,2}\b/gi;
-  wordPattern.lastIndex = 0;
-  while ((match = wordPattern.exec(text)) !== null) {
-    const matchedText = match[0].toLowerCase();
-    const words = matchedText.split(/\s+/);
-    // Skip if all words are stop words or if it's a single character after filtering
-    if (words.some(w => !stopWords.has(w) && w.length >= 2)) {
-      addMatch(match.index, match[0].length, 'phrase', match[0]);
     }
   }
   
@@ -230,6 +229,82 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
   return parts.length > 0 ? parts : [{ text, type: 'text' }];
 }
 
+// Semantic block component with hover physics
+function SemanticBlock({ 
+  text, 
+  type,
+  onEntityClick,
+  onTimeClick,
+  icon
+}: { 
+  text: string;
+  type: 'time' | 'location' | 'people';
+  onEntityClick?: (entity: string) => void;
+  onTimeClick?: (timeText: string) => void;
+  icon: string;
+}) {
+  const handleClick = () => {
+    if (type === 'time' && onTimeClick) {
+      onTimeClick(text);
+    } else if (onEntityClick) {
+      onEntityClick(text.toLowerCase());
+    }
+  };
+
+  // Color and styling based on type
+  const styles = {
+    time: {
+      textColor: 'text-[var(--highlight-red)]/85',
+      hoverBg: 'hover:bg-[var(--highlight-red)]/4',
+      hoverBorder: 'hover:border-[var(--highlight-red)]/15',
+      accentBar: 'before:bg-[var(--highlight-red)]/40',
+    },
+    location: {
+      textColor: 'text-[var(--highlight-blue)]/85',
+      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
+      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
+      accentBar: 'before:bg-[var(--highlight-blue)]/40',
+    },
+    people: {
+      textColor: 'text-[var(--highlight-blue)]/85',
+      hoverBg: 'hover:bg-[var(--highlight-blue)]/4',
+      hoverBorder: 'hover:border-[var(--highlight-blue)]/15',
+      accentBar: 'before:bg-[var(--highlight-blue)]/40',
+    },
+  };
+
+  const style = styles[type];
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`
+        group relative inline-flex items-center gap-1.5 mx-0.5 px-2 py-0.5 rounded-md
+        ${style.textColor} font-mono text-sm leading-relaxed
+        ${style.hoverBg} ${style.hoverBorder}
+        border border-transparent
+        transition-all duration-[120ms] ease-out
+        cursor-default
+        before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:rounded-l-md
+        before:opacity-0 group-hover:before:opacity-100
+        before:transition-opacity before:duration-[120ms]
+        ${style.accentBar}
+        hover:font-medium hover:scale-[1.005] hover:shadow-sm
+        hover:cursor-pointer
+      `}
+    >
+      <span className="relative z-10">{text}</span>
+      <span className={`
+        relative z-10 text-[10px] opacity-0 group-hover:opacity-60
+        transition-opacity duration-[120ms] ease-out
+        leading-none
+      `}>
+        {icon}
+      </span>
+    </button>
+  );
+}
+
 function HighlightedText({ 
   text, 
   entities, 
@@ -250,59 +325,44 @@ function HighlightedText({
   const semanticParts = parseSemanticText(text, entities);
   
   return (
-    <>
+    <span className="inline">
       {semanticParts.map((part, i) => {
         if (part.type === 'time') {
           return (
-            <button
+            <SemanticBlock
               key={i}
-              onClick={() => onTimeClick?.(part.text)}
-              className="text-[var(--highlight-red)] font-mono hover:bg-[rgba(206,96,135,0.16)] hover:rounded px-1 transition-colors cursor-pointer"
-              title="View in calendar"
-            >
-              {part.text}
-            </button>
+              text={part.text}
+              type="time"
+              onTimeClick={onTimeClick}
+              icon="↗"
+            />
           );
         }
         if (part.type === 'location') {
           return (
-            <button
+            <SemanticBlock
               key={i}
-              onClick={() => onEntityClick?.(part.text.toLowerCase())}
-              className="text-[var(--highlight-blue)] hover:bg-[rgba(59,124,150,0.16)] hover:rounded px-1 transition-colors cursor-pointer font-mono"
-              title="Filter by location"
-            >
-              {part.text}
-            </button>
+              text={part.text}
+              type="location"
+              onEntityClick={onEntityClick}
+              icon="⧉"
+            />
           );
         }
         if (part.type === 'people') {
           return (
-            <button
+            <SemanticBlock
               key={i}
-              onClick={() => onEntityClick?.(part.text.toLowerCase())}
-              className="text-[var(--highlight-blue)] hover:bg-[rgba(59,124,150,0.16)] hover:rounded px-1 cursor-pointer font-mono transition-colors"
-              title="Filter by entity"
-            >
-              {part.text}
-            </button>
-          );
-        }
-        if (part.type === 'phrase') {
-          return (
-            <button
-              key={i}
-              onClick={() => onEntityClick?.(part.text.toLowerCase())}
-              className="text-[var(--text-on-card)] hover:bg-[rgba(206,96,135,0.08)] hover:rounded px-0.5 transition-colors cursor-pointer underline decoration-dotted decoration-[var(--highlight-red)]/30 hover:decoration-[var(--highlight-red)]/60"
-              title="Filter by phrase"
-            >
-              {part.text}
-            </button>
+              text={part.text}
+              type="people"
+              onEntityClick={onEntityClick}
+              icon="⤴"
+            />
           );
         }
         return <Fragment key={i}>{part.text}</Fragment>;
       })}
-    </>
+    </span>
   );
 }
 
@@ -870,7 +930,14 @@ function DumpTab({
     return (
       <div key={fact.id} className="animate-slide-in">
         <div 
-          className={`w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] hover:border-[var(--highlight-red)]/40 transition-colors`}
+          className={`
+            group/card w-full ${CARD_BG} border border-[var(--card-border)] ${CARD_CLASS} overflow-hidden 
+            shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] 
+            hover:border-[var(--highlight-red)]/40 
+            hover:-translate-y-[1px] 
+            hover:shadow-[inset_0_1px_0_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.04)]
+            transition-all duration-[120ms] ease-out
+          `}
           style={getColumnCardStyle(columnType)}
         >
           {/* Two-Column Header */}

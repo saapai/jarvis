@@ -1290,6 +1290,9 @@ function DumpTab({
           if (fact.dateStr) {
             if (fact.dateStr.startsWith('recurring:')) {
               recurringFacts.push(fact);
+            } else if (fact.dateStr.startsWith('week:')) {
+              // Week-based events (e.g., "week:3") – treat as upcoming and sort by week number
+              upcomingFacts.push(fact);
             } else {
               // Use the stored dateStr as-is (no dynamic year inference)
               // The upload logic should have already set the correct year
@@ -1309,9 +1312,6 @@ function DumpTab({
                 oldFacts.push(fact);
               }
             }
-          } else if (fact.dateStr && fact.dateStr.startsWith('week:')) {
-            // Week-based events (e.g., "week:3") – treat as upcoming and sort by week number
-            upcomingFacts.push(fact);
           } else {
             staticFacts.push(fact);
           }

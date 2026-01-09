@@ -211,7 +211,11 @@ async function filterAndFormatResultsWithLLM(
       // Add context about sent date for relative date parsing and correlate with recurring patterns
       if (r.sentDate && (r.source === 'announcement' || r.source === 'poll')) {
         const sentDate = r.sentDate instanceof Date ? r.sentDate : new Date(r.sentDate)
-        const dateStr = sentDate.toISOString().split('T')[0]
+        // Use local date, not UTC, to avoid timezone issues
+        const year = sentDate.getFullYear()
+        const month = String(sentDate.getMonth() + 1).padStart(2, '0')
+        const day = String(sentDate.getDate()).padStart(2, '0')
+        const dateStr = `${year}-${month}-${day}`
         const sentDayName = dayNames[sentDate.getDay()]
         resultText += `\nNote: This was sent on ${dateStr} (${sentDayName}). When this mentions relative dates like "tomorrow", "tmr", "next week", calculate them relative to ${dateStr}, not today's date.`
         
@@ -265,30 +269,50 @@ QUERY INTENT AWARENESS:
 
 YOUR TASK:
 1. Use ONLY the dates and information explicitly provided in the search results
-2. If asking "what are recurring events", list the actual recurring events from the knowledge base with their patterns
-3. For recurring items, use the "Next occurrence" information provided - calculate it if not shown
-4. When you see both a recurring pattern AND an announcement about a specific occurrence:
+2. If asking "what are recurring events", list the actual recurring events from the knowledge base with their patterns and next occurrence dates
+3. For ALL events (recurring or one-time), ALWAYS include:
+   - Date (specific date or recurrence pattern)
+   - Time (if mentioned in results)
+   - Location (if mentioned in results)
+   - For recurring: state the pattern (e.g., "every Wednesday") AND the next occurrence (e.g., "next is January 14")
+4. For recurring items, ALWAYS mention when the next occurrence will be. Use the "Next occurrence" information provided, or calculate it:
+   * If today is Tuesday Jan 9 and the event is every Wednesday, next is Wednesday Jan 14
+   * State it clearly: "every Wednesday, next is January 14"
+5. When you see both a recurring pattern AND an announcement about a specific occurrence:
    * The announcement tells you when one specific instance happened (relative to its sent date)
    * Use that to determine the last occurrence date
    * Then calculate the next occurrence from today's date using the recurring pattern
-5. Combine relevant information from multiple results, but always fact-check dates
-6. If a date is not in the results, calculate it from recurring patterns and today's date
-7. DO NOT make up dates that aren't in the results or can't be calculated from them
+   * Example: Announcement sent Jan 6 says "active meeting is tmr" → that's Jan 7. Pattern is every Wednesday. Today is Jan 9 (Tuesday). Last was Jan 7 (Wednesday). Next is Jan 14 (next Wednesday).
+6. Combine relevant information from multiple results, but always fact-check dates
+7. If a date is not in the results, calculate it from recurring patterns and today's date
+8. DO NOT make up dates that aren't in the results or can't be calculated from them
 
 IMPORTANT DATE HANDLING EXAMPLES:
 - Example 1: Knowledge base says "Active Meeting every Wednesday" (recurring:wednesday), announcement sent Jan 6 says "active meeting is tmr"
-  * Announcement sent Jan 6, "tmr" relative to Jan 6 = Jan 7
+  * Announcement sent Jan 6 (local date), "tmr" relative to Jan 6 = Jan 7
   * Check if Jan 7 is a Wednesday (it should be, based on recurring pattern)
   * If today is Jan 9 (Tuesday), calculate: last Wednesday was Jan 7, next Wednesday is Jan 14
-  * Response: "Active Meeting every Wednesday. Based on announcement from Jan 6, the last one was Jan 7. Next one is Jan 14 (next Wednesday)"
+  * Response MUST include: "Active Meeting every Wednesday at 8pm at Ash's (610 Levering Apt 201). Based on announcement from Jan 6, the last one was Jan 7. Next one is January 14 (next Wednesday)"
+  
+- Example 2: User asks "When is active meeting"
+  * Find recurring pattern: "every Wednesday"
+  * Find location/time from knowledge base or announcements: "8pm at Ash's (610 Levering Apt 201)"
+  * Calculate next occurrence: If today is Jan 9 (Tuesday), next Wednesday is Jan 14
+  * Response: "Active Meeting is every Wednesday at 8pm at Ash's (610 Levering Apt 201). Next one is January 14"
   
 - CRITICAL: When you see BOTH a recurring pattern AND an announcement:
   * The recurring pattern tells you the frequency (every Wednesday)
   * The announcement tells you a specific occurrence date (calculated from its sent date + relative date)
+  * Use LOCAL DATE from sent date (not UTC) - if sent on Jan 6 local time, use Jan 6, not Jan 7
   * You MUST cross-reference: if announcement says "tmr" and was sent Jan 6, that's Jan 7
   * Verify Jan 7 matches the recurring pattern (should be a Wednesday)
   * Then calculate next occurrence from TODAY's date using the recurring pattern
   * DO NOT just use the announcement date - use it to confirm the recurring pattern is correct
+  
+- RESPONSE FORMAT FOR EVENTS:
+  * Always include: Event name, date/time, location (if available), recurrence pattern (if recurring), next occurrence (if recurring)
+  * Example: "Active Meeting every Wednesday at 8pm at Ash's (610 Levering Apt 201). Next is January 14"
+  * Example: "Ski Trip January 16-19, 2026"
   
 - Example 2: Knowledge base says "IM soccer games every Monday"
   * If today is Jan 9 (Tuesday), next Monday is Jan 12
@@ -381,16 +405,20 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
           return queryWords.some(word => contentLower.includes(word))
         })
         .map(action => {
-          // Include sent date in the body for relative date parsing
-          const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
-          const dateStr = sentDate.toISOString().split('T')[0] // YYYY-MM-DD format
-          return {
-            title: action.type === 'poll' ? 'Poll' : 'Announcement',
-            body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
-            score: 0.5, // Medium relevance for past actions
-            source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
-            sentDate // Store for LLM context
-          }
+      // Include sent date in the body for relative date parsing
+      // Convert to local date to avoid timezone issues
+      const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
+      const year = sentDate.getFullYear()
+      const month = String(sentDate.getMonth() + 1).padStart(2, '0')
+      const day = String(sentDate.getDate()).padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}` // Local date, not UTC
+      return {
+        title: action.type === 'poll' ? 'Poll' : 'Announcement',
+        body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
+        score: 0.5, // Medium relevance for past actions
+        source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
+        sentDate: new Date(year, sentDate.getMonth(), sentDate.getDate()) // Store local date for LLM context
+      }
         })
       
       allResults.push(...relevantActions)

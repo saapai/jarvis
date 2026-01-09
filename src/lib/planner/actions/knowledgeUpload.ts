@@ -118,6 +118,7 @@ export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promis
   try {
     // Create upload record
     const uploadName = analysis.title || `SMS from ${userName || 'Admin'} - ${new Date().toISOString()}`
+    const uploadDate = new Date()
     const { id: uploadId } = await textExplorerRepository.createUpload({
       name: uploadName,
       rawText: message
@@ -125,8 +126,8 @@ export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promis
 
     console.log(`[KnowledgeUpload] Created upload ${uploadId}`)
 
-    // Process and extract facts using LLM
-    const processResult = await processUpload(message, llmClient)
+    // Process and extract facts using LLM with upload date as reference for relative dates
+    const processResult = await processUpload(message, llmClient, uploadDate)
 
     console.log(`[KnowledgeUpload] Extracted ${processResult.facts.length} facts`)
 

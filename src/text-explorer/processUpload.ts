@@ -3,9 +3,10 @@ import { embedText } from './embeddings';
 
 export async function processUpload(
   rawText: string,
-  llm: LLMClient
+  llm: LLMClient,
+  referenceDate?: Date
 ): Promise<ProcessResult> {
-  const facts = await llm.extractFacts(rawText);
+  const facts = await llm.extractFacts(rawText, referenceDate);
 
   const factsWithEmbeddings = await Promise.all(
     facts.map(async (fact) => {

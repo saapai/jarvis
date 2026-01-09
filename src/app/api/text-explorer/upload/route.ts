@@ -16,13 +16,15 @@ export async function POST(req: NextRequest) {
     }
 
     const uploadName = name ?? `Upload ${new Date().toISOString()}`;
+    const uploadDate = new Date();
 
     const { id: uploadId } = await textExplorerRepository.createUpload({
       name: uploadName,
       rawText,
     });
 
-    const processResult = await processUpload(rawText, llmClient);
+    // Pass upload date as reference date for relative dates like "tomorrow"
+    const processResult = await processUpload(rawText, llmClient, uploadDate);
 
     await textExplorerRepository.createFacts({
       uploadId,

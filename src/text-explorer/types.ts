@@ -16,7 +16,7 @@ export interface ProcessResult {
 }
 
 export interface LLMClient {
-  extractFacts(text: string): Promise<ExtractedFact[]>;
+  extractFacts(text: string, referenceDate?: Date): Promise<ExtractedFact[]>;
 }
 
 export interface TextExplorerRepository {

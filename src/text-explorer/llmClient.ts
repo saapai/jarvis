@@ -4,11 +4,12 @@ import { ExtractedFact, LLMClient, RootCategory } from './types';
 const ROOT_CATEGORIES: RootCategory[] = ['social', 'professional', 'pledging', 'events', 'meetings', 'other'];
 
 export const llmClient: LLMClient = {
-  async extractFacts(text: string): Promise<ExtractedFact[]> {
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth() + 1; // 1-12
-    const currentDay = today.getDate();
+  async extractFacts(text: string, referenceDate?: Date): Promise<ExtractedFact[]> {
+    // Use referenceDate (upload/announcement date) if provided, otherwise use today
+    const refDate = referenceDate || new Date();
+    const currentYear = refDate.getFullYear();
+    const currentMonth = refDate.getMonth() + 1; // 1-12
+    const currentDay = refDate.getDate();
     
     try {
       const completion = await openai.chat.completions.create({
@@ -19,7 +20,9 @@ export const llmClient: LLMClient = {
             role: 'system',
             content: `You are an information extractor. Split the text into logical sections/topics and extract facts.
 
-Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
+Reference date (use this as "today" for relative dates like "tomorrow", "tmr", "next week"): ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
+
+IMPORTANT: When processing relative dates like "tomorrow", "tmr", "next week", "in 3 days", etc., use the reference date as the base date, NOT the actual current date. For example, if the reference date is January 6 and the text says "tomorrow", that means January 7.
 
 For each distinct topic/section in the text, create ONE fact entry with:
 1. content: A brief 1-2 sentence summary of the key points
@@ -30,12 +33,21 @@ For each distinct topic/section in the text, create ONE fact entry with:
 6. dateStr: Parse to date format. IMPORTANT: For date RANGES, store only the START date:
    - For date ranges (e.g., "January 16 to January 19", "jan 16-19", "16-19"): Store ONLY the start date (e.g., "2026-01-16")
      The full range information should be in timeRef so it can be parsed later
-   - For dates WITHOUT a year specified: Determine which occurrence is closer (past or future):
-     * Calculate days to past occurrence (this year) 
-     * Calculate days to future occurrence (next year)
-     * Use whichever is closer
-     * Example: If today is Dec 26, "November 8" -> past is 48 days ago, future is 317 days away, so use ${currentYear}-11-08
-     * Example: If today is Dec 26, "February 5" -> past is 325 days ago, future is 41 days away, so use ${currentYear + 1}-02-05
+   - For RELATIVE dates (e.g., "tomorrow", "tmr", "next week", "in 3 days"): Calculate based on the reference date above
+     * "tomorrow" or "tmr" -> reference date + 1 day
+     * "next week" -> reference date + 7 days
+     * "in 3 days" -> reference date + 3 days
+     * Example: If reference date is ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}, "tomorrow" -> ${(() => {
+       const nextDay = new Date(refDate);
+       nextDay.setDate(nextDay.getDate() + 1);
+       return `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
+     })()}
+   - For dates WITHOUT a year specified: Determine which occurrence is closer (past or future) relative to the reference date:
+     * Calculate days to past occurrence (same year as reference date) 
+     * Calculate days to future occurrence (next year after reference date)
+     * Use whichever is closer to the reference date
+     * Example: If reference date is Dec 26, "November 8" -> past is 48 days ago, future is 317 days away, so use ${currentYear}-11-08
+     * Example: If reference date is Dec 26, "February 5" -> past is 325 days ago, future is 41 days away, so use ${currentYear + 1}-02-05
    - Specific dates WITH year: Use the year specified (e.g., "November 8th, 2025" -> "2025-11-08")
    - Recurring: "recurring:dayname" (e.g., "recurring:wednesday")
    - TBD/unknown: null

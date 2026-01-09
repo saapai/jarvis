@@ -32,15 +32,16 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
   // Ensure limit is a safe integer
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)))
 
-  // Use Prisma.sql with Prisma.raw for the vector literal to properly escape it
+  // Use Prisma.sql with Prisma.raw for the vector literal
+  // The vector literal format [1,2,3] needs to be passed as raw SQL
   const rows = await prisma.$queryRaw<
     Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; score: number }>
   >(Prisma.sql`
     SELECT content, subcategory, category, "timeRef", "dateStr",
-      1 - (embedding <=> ${Prisma.raw(`'${vectorLiteral}'`)}::vector) AS score
+      1 - (embedding <=> ${Prisma.raw(vectorLiteral)}::vector) AS score
     FROM "Fact"
     WHERE embedding IS NOT NULL
-    ORDER BY embedding <=> ${Prisma.raw(`'${vectorLiteral}'`)}::vector
+    ORDER BY embedding <=> ${Prisma.raw(vectorLiteral)}::vector
     LIMIT ${safeLimit}
   `)
 

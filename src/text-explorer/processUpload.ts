@@ -1,20 +1,23 @@
 import { ProcessResult, LLMClient, ExtractedFact } from './types';
 
-function normalizeWeekRef(dateStr?: string | null, timeRef?: string | null): string {
-  const combined = (dateStr || timeRef || '').toLowerCase().trim();
-  
-  // Extract week number from formats like "week:3", "week 3", "week3", "Week 3"
+// Keep this normalization logic in sync with `normalizeTimeKey` in `repository.ts`
+function normalizeTimeKey(dateStr?: string | null, timeRef?: string | null): string {
+  const dateLower = (dateStr || '').toLowerCase().trim();
+  const timeLower = (timeRef || '').toLowerCase().trim();
+  const combined = [dateLower, timeLower].filter(Boolean).join(' ');
+
+  // Extract week number from formats like "week:3", "week 3", "week 3 weekend"
   const weekMatch = combined.match(/\bweek\s*:?\s*(\d+)\b/);
   if (weekMatch) {
     return `week:${weekMatch[1]}`;
   }
-  
+
   // For regular dates, normalize ISO format dates
-  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
+  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+    return dateStr.trim();
   }
-  
-  // For other timeRefs, normalize
+
+  // Fallback: normalized combined string (can be empty)
   return combined;
 }
 
@@ -22,8 +25,8 @@ function dedupeFacts(facts: ExtractedFact[]): ExtractedFact[] {
   const map = new Map<string, ExtractedFact>();
 
   for (const fact of facts) {
-    // Normalize week references for deduplication key
-    const normalizedTime = normalizeWeekRef(fact.dateStr, fact.timeRef);
+    // Normalize time key for card-oriented deduplication
+    const normalizedTime = normalizeTimeKey(fact.dateStr, fact.timeRef);
     
     const key = [
       fact.category,

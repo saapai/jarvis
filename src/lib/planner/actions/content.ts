@@ -899,7 +899,10 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       console.log(`[ContentQuery] Is category/meta query: ${isMetaQuery}`)
       
       const queryLower = message.toLowerCase()
+      // Extract meaningful keywords (longer words, not common stop words)
       const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !FALLBACK_KEYWORDS.includes(w))
+      // Also keep shorter meaningful words if they're the main content
+      const allQueryWords = queryLower.split(/\s+/).filter(w => w.length > 1)
       
       const mappedActions = pastActions
         .filter(action => {
@@ -907,32 +910,75 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
           if (isMetaQuery) {
             return true
           }
-          // For specific object queries, filter by relevance - but be more lenient
+          
+          const contentLower = action.content.toLowerCase()
+          
+          // First, try matching with extracted keywords
           if (queryWords.length > 0) {
-            const contentLower = action.content.toLowerCase()
             // Match if any keyword appears in content
-            return queryWords.some(word => contentLower.includes(word))
+            if (queryWords.some(word => contentLower.includes(word))) {
+              return true
+            }
           }
-          // If no keywords, still include if query matches category intent
+          
+          // If no keyword matches, try matching the full query or parts of it
+          // This catches cases like "when is soccer" where "soccer" might be the only meaningful word
+          if (allQueryWords.length > 0) {
+            // Check if any word from the query appears in content (more lenient)
+            const meaningfulWords = allQueryWords.filter(w => w.length > 2)
+            if (meaningfulWords.length > 0 && meaningfulWords.some(word => contentLower.includes(word))) {
+              return true
+            }
+            // Also check if the query itself appears as a substring (for exact matches)
+            if (contentLower.includes(queryLower)) {
+              return true
+            }
+          }
+          
+          // If still no match, include if query matches category intent
           return targetCategories.includes('announcements') || targetCategories.includes('polls') || targetCategories.length === 0
         })
         .map(action => {
-      const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
-      const year = sentDate.getFullYear()
-      const month = String(sentDate.getMonth() + 1).padStart(2, '0')
-      const day = String(sentDate.getDate()).padStart(2, '0')
+          const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
+          const year = sentDate.getFullYear()
+          const month = String(sentDate.getMonth() + 1).padStart(2, '0')
+          const day = String(sentDate.getDate()).padStart(2, '0')
           const dateStr = `${year}-${month}-${day}`
           
           const category: ContentCategory = action.type === 'poll' ? 'polls' : 'announcements'
           
-      return {
-        title: action.type === 'poll' ? 'Poll' : 'Announcement',
-        body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
-            score: 0.5,
-        source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
+          // Calculate relevance score based on query match
+          let score = 0.5
+          const contentLower = action.content.toLowerCase()
+          
+          // Boost score if query words appear in content
+          if (queryWords.length > 0) {
+            const matches = queryWords.filter(word => contentLower.includes(word)).length
+            score = 0.5 + (matches / queryWords.length) * 0.4 // Boost up to 0.9
+          }
+          
+          // Boost score if full query appears in content
+          if (contentLower.includes(queryLower)) {
+            score = Math.max(score, 0.8)
+          }
+          
+          // Also check meaningful words from all query words
+          const meaningfulWords = allQueryWords.filter(w => w.length > 2)
+          if (meaningfulWords.length > 0) {
+            const matches = meaningfulWords.filter(word => contentLower.includes(word)).length
+            if (matches > 0) {
+              score = Math.max(score, 0.6 + (matches / meaningfulWords.length) * 0.3)
+            }
+          }
+          
+          return {
+            title: action.type === 'poll' ? 'Poll' : 'Announcement',
+            body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
+            score,
+            source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
             category,
             sentDate: new Date(year, sentDate.getMonth(), sentDate.getDate())
-      }
+          }
         })
       
       allResults.push(...mappedActions)

@@ -234,7 +234,15 @@ async function filterAndFormatResultsWithLLM(
       return resultText
     }).join('\n\n')
 
-    const systemPrompt = `You are a helpful assistant that answers questions using ONLY the provided search results. You must fact-check all dates and information against the actual data provided.
+    const systemPrompt = `You are a helpful assistant that answers questions using the provided search results. 
+
+CRITICAL: If search results are provided, they ARE relevant to the query. DO NOT say "no information" or "I don't have that information" if results are provided. Use the information in the results to answer the question, even if it's incomplete.
+
+RESULT PRIORITY:
+- Results are already prioritized: Upcoming events > Recurring events > Facts/content > Past announcements
+- Use information from higher priority results first, but you can combine information from multiple results
+
+You must fact-check all dates and information against the actual data provided.
 
 TODAY'S CONTEXT:
 - Today is ${todayDayName}, ${todayStr}
@@ -269,24 +277,29 @@ QUERY INTENT AWARENESS:
 - If user asks generally, include ALL relevant information from any source
 
 YOUR TASK:
-1. Use ONLY the dates and information explicitly provided in the search results
-2. If asking "what are recurring events", list the actual recurring events from the knowledge base with their patterns and next occurrence dates
-3. For ALL events (recurring or one-time), ALWAYS include:
-   - Date (specific date or recurrence pattern)
+1. If search results are provided, you MUST use them to answer the question. DO NOT say "no information available" if results exist.
+2. Extract and present information from the results, even if incomplete:
+   - If a fact says "Study Hall every Wednesday at 6:30 PM", present that information
+   - If a fact says "AE Summons date is TBD", say "AE Summons date is TBD (to be determined)"
+   - If time/location isn't mentioned, don't make it up, but do provide what IS available
+3. For ALL events (recurring or one-time), ALWAYS include what information is available:
+   - Date (specific date, recurrence pattern, or "TBD" if mentioned)
    - Time (if mentioned in results)
    - Location (if mentioned in results)
-   - For recurring: state the pattern (e.g., "every Wednesday") AND the next occurrence (e.g., "next is January 14")
-4. For recurring items, ALWAYS mention when the next occurrence will be. Use the "Next occurrence" information provided, or calculate it:
+   - For recurring: state the pattern (e.g., "every Wednesday") AND calculate the next occurrence if possible
+4. For recurring items, ALWAYS mention when the next occurrence will be if you can calculate it:
    * If today is Tuesday Jan 9 and the event is every Wednesday, next is Wednesday Jan 14
    * State it clearly: "every Wednesday, next is January 14"
+   * If date is TBD, say "date is TBD (to be determined)"
 5. When you see both a recurring pattern AND an announcement about a specific occurrence:
    * The announcement tells you when one specific instance happened (relative to its sent date)
    * Use that to determine the last occurrence date
    * Then calculate the next occurrence from today's date using the recurring pattern
    * Example: Announcement sent Jan 6 says "active meeting is tmr" → that's Jan 7. Pattern is every Wednesday. Today is Jan 9 (Tuesday). Last was Jan 7 (Wednesday). Next is Jan 14 (next Wednesday).
-6. Combine relevant information from multiple results, but always fact-check dates
-7. If a date is not in the results, calculate it from recurring patterns and today's date
-8. DO NOT make up dates that aren't in the results or can't be calculated from them
+6. Combine relevant information from multiple results to provide complete answers
+7. If a date is not in the results, calculate it from recurring patterns and today's date if possible
+8. DO NOT make up dates that aren't in the results or can't be calculated
+9. If information is incomplete (e.g., "TBD", no date mentioned), state what you know and note what's missing
 
 IMPORTANT DATE HANDLING EXAMPLES:
 - Example 1: Knowledge base says "Active Meeting every Wednesday" (recurring:wednesday), announcement sent Jan 6 says "active meeting is tmr"
@@ -340,10 +353,10 @@ FORMATTING RULES:
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Question: "${query}"\n\nSearch Results:\n${formattedResults}\n\nProvide a clear, concise answer based only on the relevant results above.` }
+        { role: 'user', content: `Question: "${query}"\n\nSearch Results (${filteredResults.length} results found):\n${formattedResults}\n\nIMPORTANT: These search results were found for your query. Use the information in these results to answer the question. If results mention the topic (even partially), provide that information. Do not say "no information available" when results are provided.` }
       ],
       temperature: 0.3,
-      max_tokens: 300
+      max_tokens: 400
     })
 
     const content = response.choices[0]?.message?.content
@@ -438,8 +451,36 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // Sort all results by score (highest first)
-  allResults.sort((a, b) => b.score - a.score)
+  // Sort all results by priority: upcoming events -> recurring -> facts -> past announcements
+  // Within each group, sort by score
+  allResults.sort((a, b) => {
+    // Priority order: upcoming events (has dateStr but not recurring) > recurring > facts/content > announcements/polls
+    const getPriority = (r: typeof allResults[0]): number => {
+      if (r.dateStr && !r.dateStr.startsWith('recurring:') && r.source === 'content') {
+        // Upcoming event - check if date is in the future
+        try {
+          const eventDate = new Date(r.dateStr)
+          if (eventDate >= new Date()) return 4 // Highest priority for future events
+        } catch (e) {
+          // Invalid date, treat as fact
+        }
+      }
+      if (r.dateStr?.startsWith('recurring:') && r.source === 'content') return 3 // Recurring events
+      if (r.source === 'content') return 2 // Facts/general content
+      if (r.source === 'announcement' || r.source === 'poll') return 1 // Past announcements (lowest priority)
+      return 0
+    }
+    
+    const priorityA = getPriority(a)
+    const priorityB = getPriority(b)
+    
+    if (priorityA !== priorityB) {
+      return priorityB - priorityA // Higher priority first
+    }
+    
+    // Same priority, sort by score
+    return b.score - a.score
+  })
   
   // If no results, return no results message
   if (allResults.length === 0) {

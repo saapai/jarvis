@@ -1196,70 +1196,37 @@ function DumpTab({
     return days;
   }, [calendarDate]);
 
-  // Use LLM to parse date ranges from fact content and timeRef
+  // Use LLM to parse date ranges from fact content and timeRef via API route
   const parseDatesWithLLM = async (fact: Fact): Promise<string[]> => {
     if (!fact.timeRef && !fact.content && !fact.dateStr) return [];
     
     try {
-      // Import OpenAI client from lib
-      const { openai } = await import('@/lib/openai');
-      
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth() + 1;
-      const currentDay = today.getDate();
-      
-      const prompt = `Extract ALL dates for this event and return them as an array of YYYY-MM-DD dates.
-
-CRITICAL: If the event spans multiple days, return ALL dates in the range, not just the start and end dates.
-
-Examples of date ranges:
-- "January 16 to January 19" -> ["2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19"]
-- "jan 16-19" -> ["2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19"]
-- "jan 24-25" -> ["2026-01-24", "2026-01-25"]
-- "January 16 to January 29" -> ["2026-01-16", "2026-01-17", ..., "2026-01-29"] (all dates)
-- "jan 16 to jan 29" -> ["2026-01-16", "2026-01-17", ..., "2026-01-29"] (all dates)
-
-Single dates:
-- "January 10" -> ["2026-01-10"]
-- "jan 24" -> ["2026-01-24"]
-
-Recurring events (return empty array):
-- "every Wednesday" -> []
-- "recurring:wednesday" -> []
-
-Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
-
-Fact information:
-- subcategory: "${fact.subcategory || 'none'}"
-- timeRef: "${fact.timeRef || 'none'}"
-- content: "${fact.content?.substring(0, 300) || 'none'}"
-- dateStr: "${fact.dateStr || 'none'}"
-
-Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are a precise date parser. Extract ALL dates from date ranges, including every day between start and end dates. Return dates in YYYY-MM-DD format.' },
-          { role: 'user', content: prompt }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 500
+      const response = await fetch('/api/text-explorer/parse-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fact })
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        const parsed = JSON.parse(content);
-        const dates = parsed.dates || [];
-        if (dates.length > 0) {
-          console.log('[Calendar] LLM parsed dates:', fact.subcategory, fact.timeRef, '->', dates);
-          return dates;
-        }
+      
+      if (!response.ok) {
+        console.error('[Calendar] Date parsing API failed:', response.status);
+        return [];
+      }
+      
+      const data = await response.json();
+      const dates = data.dates || [];
+      
+      if (dates.length > 0) {
+        console.log('[Calendar] LLM parsed dates:', fact.subcategory, fact.timeRef, '->', dates);
+        return dates;
+      } else {
+        console.log('[Calendar] LLM returned empty dates array for:', fact.subcategory, fact.timeRef);
       }
     } catch (error) {
-      console.error('[Calendar] LLM date parsing failed:', error);
+      console.error('[Calendar] LLM date parsing failed:', error, 'Fact:', {
+        subcategory: fact.subcategory,
+        timeRef: fact.timeRef,
+        content: fact.content?.substring(0, 100)
+      });
     }
     
     return [];
@@ -1283,7 +1250,7 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
           let dateStr: string | null = null;
           let dateRange: string[] = [];
           
-          // Use LLM to parse all dates/date ranges - this is the only parsing method
+          // Use LLM to parse all dates/date ranges - this is the primary parsing method
           dateRange = await parseDatesWithLLM(fact);
           if (dateRange.length > 0) {
             // Add fact to all dates in the range
@@ -1293,6 +1260,31 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
             }
             factsWithDates++;
             return;
+          }
+          
+          // Fallback: if LLM parsing failed but we have a valid dateStr, use it
+          if (fact.dateStr && !fact.dateStr.startsWith('recurring:')) {
+            try {
+              const parsed = fact.dateStr.split('T')[0];
+              // Validate it's a proper date format (YYYY-MM-DD)
+              if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+                const parsedDate = new Date(parsed);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                // If the date is in the past, increment the year
+                if (parsedDate < today) {
+                  const [year, month, day] = parsed.split('-');
+                  const nextYear = parseInt(year, 10) + 1;
+                  dateStr = `${nextYear}-${month}-${day}`;
+                  console.log('[Calendar] Date in past, adjusted:', parsed, '->', dateStr);
+                } else {
+                  dateStr = parsed;
+                }
+              }
+            } catch (e) {
+              // Invalid dateStr, will log as fact without date
+            }
           }
           
           if (dateStr) {

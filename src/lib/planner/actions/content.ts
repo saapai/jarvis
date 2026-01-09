@@ -726,6 +726,11 @@ TIME DIRECTIONALITY:
 - Use the Category and timeDirection metadata to understand temporal context
 - Relative dates in announcements/polls are calculated from their "Sent on" date, NOT today
 
+WEEK-OF-TERM EVENTS:
+- Some events or facts may be labeled by week, like "Week 1", "Week 2", "Week 3", etc.
+- Treat these as an ordered sequence of weeks in a term or quarter.
+- When summarizing or listing them (e.g., multiple week cards), present them in ascending week order: Week 1, Week 2, Week 3, Week 4, Week 5, and so on.
+
 ASSOCIATIONS:
 - Announcements/polls may be associated with events (check if they provide context)
 - When presenting an event, supplement with any associated announcements/polls that provide additional context
@@ -949,14 +954,14 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
             return true
           }
           
-          const contentLower = action.content.toLowerCase()
+            const contentLower = action.content.toLowerCase()
           
           // First, try matching with extracted keywords
           if (queryWords.length > 0) {
             // Match if any keyword appears in content
             if (queryWords.some(word => contentLower.includes(word))) {
               return true
-            }
+          }
           }
           
           // If no keyword matches, try matching the full query or parts of it
@@ -965,7 +970,7 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
             // Check if any word from the query appears in content (more lenient)
             const meaningfulWords = allQueryWords.filter(w => w.length > 2)
             if (meaningfulWords.length > 0 && meaningfulWords.some(word => contentLower.includes(word))) {
-              return true
+          return true
             }
             // Also check if the query itself appears as a substring (for exact matches)
             if (contentLower.includes(queryLower)) {
@@ -977,10 +982,10 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
           return targetCategories.includes('announcements') || targetCategories.includes('polls') || targetCategories.length === 0
         })
         .map(action => {
-          const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
-          const year = sentDate.getFullYear()
-          const month = String(sentDate.getMonth() + 1).padStart(2, '0')
-          const day = String(sentDate.getDate()).padStart(2, '0')
+      const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
+      const year = sentDate.getFullYear()
+      const month = String(sentDate.getMonth() + 1).padStart(2, '0')
+      const day = String(sentDate.getDate()).padStart(2, '0')
           const dateStr = `${year}-${month}-${day}`
           
           const category: ContentCategory = action.type === 'poll' ? 'polls' : 'announcements'
@@ -1009,14 +1014,14 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
             }
           }
           
-          return {
-            title: action.type === 'poll' ? 'Poll' : 'Announcement',
-            body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
+      return {
+        title: action.type === 'poll' ? 'Poll' : 'Announcement',
+        body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
             score,
-            source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
+        source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
             category,
             sentDate: new Date(year, sentDate.getMonth(), sentDate.getDate())
-          }
+      }
         })
       
       allResults.push(...mappedActions)

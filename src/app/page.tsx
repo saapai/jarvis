@@ -458,6 +458,8 @@ function DumpTab({
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadText, setUploadText] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
   const isAdminMode = parentIsAdminMode ?? false;
   const [editingFactId, setEditingFactId] = useState<string | null>(null);
@@ -792,18 +794,39 @@ function DumpTab({
   }, [activeViewMode, fetchAnnouncements]);
 
   const handleUpload = async () => {
-    if (!uploadText.trim()) return;
+    if (!uploadText.trim() && !uploadFile) return;
     setUploading(true);
     try {
       console.log('[Upload] Starting upload...');
-      const res = await fetch('/api/text-explorer/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: uploadText }),
-      });
+
+      let res: Response;
+
+      if (uploadFile) {
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+        if (uploadFileName) {
+          formData.append('name', uploadFileName);
+        }
+        if (uploadText.trim()) {
+          formData.append('rawText', uploadText);
+        }
+
+        res = await fetch('/api/text-explorer/upload', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        res = await fetch('/api/text-explorer/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawText: uploadText }),
+        });
+      }
       if (res.ok) {
         console.log('[Upload] Upload successful, refreshing data...');
         setUploadText('');
+        setUploadFile(null);
+        setUploadFileName(null);
         setShowUpload(false);
         // Wait a bit for database transaction to commit
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1046,7 +1069,7 @@ function DumpTab({
           {/* Two-Column Header */}
           <div className="w-full p-4 relative">
             {isAdminMode && (
-              <button
+          <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleFactDelete(mainFact.id);
@@ -1062,10 +1085,10 @@ function DumpTab({
               onClick={() => !isEditing && toggleCard(fact.subcategory!.toLowerCase())}
               className="w-full text-left transition-colors"
               disabled={isEditing}
-            >
-              {/* Header Row: Title and date on same baseline */}
-              <div className="flex items-baseline justify-between gap-4 mb-2">
-                {/* Left: Title */}
+          >
+            {/* Header Row: Title and date on same baseline */}
+            <div className="flex items-baseline justify-between gap-4 mb-2">
+              {/* Left: Title */}
                 {isEditing && editingField === 'subcategory' ? (
                   <input
                     type="text"
@@ -1106,23 +1129,23 @@ function DumpTab({
                   >
                     {mainFact.subcategory}
                     {isUpdating && <span className="ml-2 text-xs opacity-50">updating...</span>}
-                  </h3>
+              </h3>
                 )}
-                
-                {/* Right: Single pale date chip + expand arrow */}
-                <div className="flex items-baseline gap-2">
-                  {dateChip && (
-                    <span className={dateChipClasses}>
-                      {dateChip}
-                    </span>
-                  )}
-                  <span className="text-[var(--text-meta)] text-sm">
-                    {isExpanded ? '▾' : '▸'}
-                  </span>
-                </div>
-              </div>
               
-              {/* True summary: the actual event description */}
+              {/* Right: Single pale date chip + expand arrow */}
+              <div className="flex items-baseline gap-2">
+                {dateChip && (
+                  <span className={dateChipClasses}>
+                    {dateChip}
+                  </span>
+                )}
+                <span className="text-[var(--text-meta)] text-sm">
+                  {isExpanded ? '▾' : '▸'}
+                </span>
+              </div>
+            </div>
+            
+            {/* True summary: the actual event description */}
               {isEditing && editingField === 'content' ? (
                 <textarea
                   value={editValue}
@@ -1159,10 +1182,10 @@ function DumpTab({
                     }
                   }}
                 >
-                  {mainFact.content}
-                </p>
+              {mainFact.content}
+            </p>
               )}
-            </button>
+          </button>
           </div>
           
           {/* Expanded body content - Wikipedia style */}
@@ -1364,7 +1387,31 @@ function DumpTab({
       }
       return aOrder - bOrder;
     });
-    
+
+    // Sort static facts – special handling for "Week N" style subcategories
+    const getWeekNumber = (subcategory?: string | null): number | null => {
+      if (!subcategory) return null;
+      const match = subcategory.toLowerCase().match(/\bweek\s*(\d+)\b/);
+      if (!match) return null;
+      const num = parseInt(match[1], 10);
+      return Number.isNaN(num) ? null : num;
+    };
+
+    staticFacts.sort((a, b) => {
+      const aWeek = getWeekNumber(a.subcategory);
+      const bWeek = getWeekNumber(b.subcategory);
+
+      if (aWeek !== null && bWeek !== null) {
+        return aWeek - bWeek;
+      }
+      if (aWeek !== null) return -1;
+      if (bWeek !== null) return 1;
+
+      const aSub = (a.subcategory || '').toLowerCase();
+      const bSub = (b.subcategory || '').toLowerCase();
+      return aSub.localeCompare(bSub);
+    });
+
     return { 
       groups, 
       ungrouped,
@@ -1952,7 +1999,23 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
             </div>
           ) : activeViewMode === 'uploads' ? (
             /* Uploads Management View */
-            <div className="animate-fade-in space-y-4">
+            <div
+              className="animate-fade-in space-y-4"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const file = e.dataTransfer.files?.[0];
+                if (file) {
+                  setUploadFile(file);
+                  setUploadFileName(file.name);
+                  setShowUpload(true);
+                }
+              }}
+            >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <h2 className="text-lg font-medium text-[var(--text-on-dark)]">
@@ -2088,30 +2151,74 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
             className={`w-full max-w-2xl bg-[var(--bg-main)] rounded-lg shadow-2xl p-8 animate-expand-in`} 
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-semibold text-[var(--text-on-dark)] mb-6 tracking-tight">
-              dump text<span className="text-[var(--highlight-red)]">_</span>
+            <h2 className="text-xl font-semibold text-[var(--text-on-dark)] mb-2 tracking-tight">
+              dump text or files<span className="text-[var(--highlight-red)]">_</span>
             </h2>
-            <textarea
-              autoFocus
-              placeholder="paste or type text here..."
-              value={uploadText}
-              onChange={(e) => setUploadText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setShowUpload(false);
-                }
-                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                  e.preventDefault();
-                  if (!uploading && uploadText.trim()) {
-                    handleUpload();
-                    setShowUpload(false); // Close modal immediately
-                  }
+            <p className="text-xs text-[var(--text-meta)] mb-4">
+              paste text, or drop a PDF/DOCX here. you can also choose a file below.
+            </p>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const file = e.dataTransfer.files?.[0];
+                if (file) {
+                  setUploadFile(file);
+                  setUploadFileName(file.name);
                 }
               }}
-              rows={14}
-              className="w-full px-5 py-4 bg-[var(--card-bg)] text-base text-[var(--text-on-card)] placeholder-[var(--bg-main)] resize-none outline-none border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 font-mono leading-relaxed"
-              style={{ border: 'none', outline: 'none' }}
-            />
+              className="w-full mb-3 border-2 border-dashed border-[var(--card-border)] rounded-lg bg-[var(--card-bg)]/60 hover:border-[var(--highlight-red)]/60 transition-colors"
+            >
+              <textarea
+                autoFocus
+                placeholder="paste or type text here..."
+                value={uploadText}
+                onChange={(e) => setUploadText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setShowUpload(false);
+                  }
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!uploading && (uploadText.trim() || uploadFile)) {
+                      handleUpload();
+                      setShowUpload(false); // Close modal immediately
+                    }
+                  }
+                }}
+                rows={10}
+                className="w-full px-5 py-4 bg-transparent text-base text-[var(--text-on-card)] placeholder-[var(--bg-main)] resize-none outline-none border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 font-mono leading-relaxed"
+                style={{ border: 'none', outline: 'none' }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-2 mb-4">
+              <div className="flex items-center gap-3">
+                <label className="px-3 py-1.5 text-xs font-mono bg-[var(--card-bg)] text-[var(--text-on-card)] border border-[var(--card-border)] hover:border-[var(--highlight-red)] rounded-lg cursor-pointer transition-colors">
+                  choose file
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt,.md"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setUploadFile(file);
+                        setUploadFileName(file.name);
+                      }
+                    }}
+                  />
+                </label>
+                {uploadFile && (
+                  <span className="text-xs text-[var(--text-meta)] truncate max-w-xs">
+                    {uploadFileName || uploadFile.name}
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="mt-6 flex justify-end gap-4">
               <button 
                 onClick={() => setShowUpload(false)} 
@@ -2124,7 +2231,7 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
                   handleUpload();
                   setShowUpload(false); // Close modal immediately
                 }} 
-                disabled={uploading || !uploadText.trim()} 
+                disabled={uploading || (!uploadText.trim() && !uploadFile)} 
                 className="px-6 py-2.5 text-sm font-mono bg-[var(--card-bg)] text-[var(--text-on-card)] border-2 border-[var(--card-border)] hover:border-[var(--highlight-red)] hover:bg-[var(--card-hover)] rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-3"
               >
                 extract facts<span className="text-xs opacity-50">⌘↵</span>

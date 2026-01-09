@@ -1,20 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processUpload, llmClient, textExplorerRepository } from '@/text-explorer';
+import { extractTextFromUploadedFile } from '@/text-explorer/fileExtract';
 
 export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { name, rawText } = body;
+    const contentType = req.headers.get('content-type') || '';
 
-    if (!rawText || typeof rawText !== 'string') {
-      return NextResponse.json({ error: 'rawText is required' }, { status: 400 });
+    let uploadName: string | undefined;
+    let rawText: string | null = null;
+
+    // Multipart form-data (file upload)
+    if (contentType.includes('multipart/form-data')) {
+      const form = await req.formData();
+      const nameField = form.get('name');
+      const fileField = form.get('file');
+      const rawTextField = form.get('rawText');
+
+      if (typeof nameField === 'string') {
+        uploadName = nameField;
+      }
+
+      if (typeof rawTextField === 'string' && rawTextField.trim().length > 0) {
+        rawText = rawTextField;
+      }
+
+      if (!rawText && fileField instanceof File) {
+        rawText = await extractTextFromUploadedFile(fileField);
+        if (!uploadName) {
+          uploadName = fileField.name;
+        }
+      }
+    } else {
+      // JSON body (existing behaviour)
+      const body = await req.json();
+      const { name, rawText: bodyRawText } = body;
+      uploadName = name;
+      rawText = typeof bodyRawText === 'string' ? bodyRawText : null;
     }
 
-    const uploadName = name ?? `Upload ${new Date().toISOString()}`;
+    if (!rawText || typeof rawText !== 'string' || rawText.trim().length === 0) {
+      return NextResponse.json({ error: 'Either rawText or a supported file is required' }, { status: 400 });
+    }
+
+    const finalName = uploadName ?? `Upload ${new Date().toISOString()}`;
 
     const { id: uploadId } = await textExplorerRepository.createUpload({
-      name: uploadName,
+      name: finalName,
       rawText,
     });
 

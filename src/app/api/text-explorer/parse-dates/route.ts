@@ -67,3 +67,4 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
     return NextResponse.json({ error: 'Failed to parse dates', dates: [] }, { status: 500 });
   }
 }
+

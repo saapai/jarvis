@@ -861,28 +861,25 @@ function DumpTab({
         }
       }
 
-        console.log('[Upload] Upload successful, refreshing data...');
-        setUploadText('');
-        setUploadFile(null);
-        setUploadFileName(null);
-        setShowUpload(false);
-        // Wait a bit for database transaction to commit
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log('[Upload] Fetching tree...');
-        await fetchTree();
-        console.log('[Upload] Fetching all facts...');
-        await fetchAllFacts();
-        console.log('[Upload] Fetching filtered facts...');
-        await fetchFacts();
-        console.log('[Upload] Fetching uploads...');
-        await fetchUploads();
-        console.log('[Upload] All fetches complete. Current allFacts count:', allFacts.length);
-        // Force a small delay to ensure state updates propagate
-        await new Promise(resolve => setTimeout(resolve, 100));
-        console.log('[Upload] Upload process complete');
-      } else {
-        console.error('[Upload] Upload failed with status:', res.status);
-      }
+      console.log('[Upload] Upload successful, refreshing data...');
+      setUploadText('');
+      setUploadFile(null);
+      setUploadFileName(null);
+      setShowUpload(false);
+      // Wait a bit for database transaction to commit
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('[Upload] Fetching tree...');
+      await fetchTree();
+      console.log('[Upload] Fetching all facts...');
+      await fetchAllFacts();
+      console.log('[Upload] Fetching filtered facts...');
+      await fetchFacts();
+      console.log('[Upload] Fetching uploads...');
+      await fetchUploads();
+      console.log('[Upload] All fetches complete. Current allFacts count:', allFacts.length);
+      // Force a small delay to ensure state updates propagate
+      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('[Upload] Upload process complete');
     } catch (error) {
       console.error('[Upload] Upload error:', error);
     } finally {

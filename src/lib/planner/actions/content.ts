@@ -829,11 +829,17 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       // Use LLM to generate a better search query if this is a category query
       // This helps find relevant events/meetings even when query doesn't explicitly mention them
       let searchQuery = message
-      if (targetCategories.length === 1 && targetCategories.includes('recurring')) {
-        // For recurring queries, use LLM to generate search terms that would find recurring events
+      if (targetCategories.includes('recurring') && targetCategories.length === 1) {
+        // For recurring-only queries, use LLM to generate search terms that would find recurring events
         searchQuery = await generateSearchQueryForCategory(message, 'recurring')
+      } else if (targetCategories.includes('recurring') && targetCategories.length > 1) {
+        // For queries that include recurring, expand the search to include recurring event terms
+        // This ensures recurring events are found even when query mentions multiple categories
+        const recurringTerms = await generateSearchQueryForCategory(message, 'recurring')
+        // Combine original query with recurring-specific terms
+        searchQuery = `${message} ${recurringTerms}`
       } else if (targetCategories.length === 1 && targetCategories.includes('upcoming')) {
-        // For upcoming queries, use LLM to generate search terms for future events
+        // For upcoming-only queries, use LLM to generate search terms for future events
         searchQuery = await generateSearchQueryForCategory(message, 'upcoming')
       }
       

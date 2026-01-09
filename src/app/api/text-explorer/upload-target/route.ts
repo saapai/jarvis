@@ -11,6 +11,16 @@ export async function POST(req: NextRequest) {
       contentType?: string;
     };
 
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error(
+        '[TextExplorer UploadTarget] Missing BLOB_READ_WRITE_TOKEN env var – configure a Vercel Blob read-write token for this project'
+      );
+      return NextResponse.json(
+        { error: 'Server misconfigured: BLOB_READ_WRITE_TOKEN is not set' },
+        { status: 500 }
+      );
+    }
+
     if (!filename || typeof filename !== 'string') {
       return NextResponse.json(
         { error: 'filename is required' },

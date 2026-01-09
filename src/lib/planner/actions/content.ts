@@ -594,6 +594,19 @@ async function filterAndFormatResultsWithLLM(
     // Filter results by target categories
     const filteredResults = filterResultsByCategories(allResults, targetCategories)
 
+    // Extract main topic words from the query (excluding common stop words)
+    const queryWordsAll = query.toLowerCase().split(/\s+/).filter(w => w.length > 1)
+    const topicWords = queryWordsAll.filter(w => w.length > 2 && !FALLBACK_KEYWORDS.includes(w))
+
+    // Determine which results directly mention the main topic words
+    const isPrimaryMatch = (r: ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; eventDate?: Date }) => {
+      if (topicWords.length === 0) return false
+      const text = `${r.title || ''} ${r.body || ''}`.toLowerCase()
+      return topicWords.some(word => text.includes(word))
+    }
+
+    const primaryResultsCount = filteredResults.filter(isPrimaryMatch).length
+
     // Format results for LLM, including category metadata
     // Note: categories should already be assigned in handleContentQuery before this function is called
     const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
@@ -610,6 +623,11 @@ async function filterAndFormatResultsWithLLM(
       )
       if (matchesQuery) {
         relevanceNote = ' [RELEVANT TO QUERY]'
+      }
+
+      // Mark primary matches that directly mention the topic words
+      if (isPrimaryMatch(r)) {
+        relevanceNote += relevanceNote ? ' [PRIMARY_MATCH]' : ' [PRIMARY_MATCH]'
       }
       
       let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}${relevanceNote}\n${r.body}`
@@ -665,6 +683,11 @@ async function filterAndFormatResultsWithLLM(
     }).join('\n\n')
 
     const systemPrompt = `You are a helpful assistant that answers questions using the provided search results organized by category.
+
+PRIMARY MATCHES:
+- There are ${primaryResultsCount} results that directly mention the main topic words from the user's question (${topicWords.join(', ') || 'none'}).
+- Any result marked with [PRIMARY_MATCH] is directly about what the user asked (e.g., an announcement that literally mentions "soccer").
+- You MUST base your answer on PRIMARY_MATCH results first if any exist, before considering other results.
 
 CRITICAL: If search results are provided, they ARE relevant to the query. DO NOT say "no information" or "I don't have that information" if results are provided. Use the information in the results to answer the question, even if it's incomplete.
 

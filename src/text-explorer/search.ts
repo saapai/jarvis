@@ -48,8 +48,10 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
 
   return rows.map((row) => ({
     title: row.subcategory || row.category,
-    body: buildBody(row.content, row.timeRef, row.subcategory),
-    score: row.score ?? 0
+    body: buildBody(row.content, row.timeRef, row.subcategory, row.dateStr),
+    score: row.score ?? 0,
+    dateStr: row.dateStr || null,
+    timeRef: row.timeRef || null
   }))
 }
 
@@ -77,14 +79,17 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
 
   return facts.map((fact) => ({
     title: fact.subcategory || fact.category,
-    body: buildBody(fact.content, fact.timeRef, fact.subcategory || undefined),
-    score: 0
+    body: buildBody(fact.content, fact.timeRef, fact.subcategory || undefined, fact.dateStr || undefined),
+    score: 0,
+    dateStr: fact.dateStr || null,
+    timeRef: fact.timeRef || null
   }))
 }
 
-function buildBody(content: string, timeRef: string | null, subcategory?: string | null): string {
+function buildBody(content: string, timeRef: string | null, subcategory?: string | null, dateStr?: string | null): string {
   let body = `📋 ${content}`
   if (timeRef) body += `\n⏰ ${timeRef}`
+  if (dateStr) body += `\n📅 ${dateStr}`
   if (subcategory) body += `\n📁 ${subcategory}`
   return body
 }

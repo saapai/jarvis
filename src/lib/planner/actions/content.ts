@@ -32,6 +32,8 @@ export interface ContentResult {
   title: string
   body: string
   score: number
+  dateStr?: string | null
+  timeRef?: string | null
 }
 
 /**
@@ -92,11 +94,50 @@ Respond with JSON: { "isPastActionQuery": boolean, "reasoning": string }`
 }
 
 /**
+ * Calculate next occurrence date for recurring events
+ */
+function getNextOccurrence(recurringPattern: string, today: Date): string | null {
+  if (!recurringPattern || !recurringPattern.startsWith('recurring:')) return null
+  
+  const dayName = recurringPattern.replace('recurring:', '').toLowerCase()
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const targetDay = dayNames.indexOf(dayName)
+  if (targetDay === -1) return null
+  
+  const todayDay = today.getDay()
+  let daysUntil = targetDay - todayDay
+  if (daysUntil <= 0) daysUntil += 7 // Next week if today or past
+  
+  const nextDate = new Date(today)
+  nextDate.setDate(today.getDate() + daysUntil)
+  return nextDate.toISOString().split('T')[0] // YYYY-MM-DD
+}
+
+/**
+ * Detect query intent to filter results appropriately
+ */
+function detectQueryIntent(query: string): {
+  wantsRecurring: boolean
+  wantsEvents: boolean
+  wantsGeneral: boolean
+} {
+  const lower = query.toLowerCase()
+  const recurringKeywords = ['recurring', 'weekly', 'every', 'regular', 'routine', 'repeated']
+  const eventKeywords = ['event', 'upcoming', 'coming up', 'next', 'future', 'calendar', 'schedule']
+  
+  const wantsRecurring = recurringKeywords.some(kw => lower.includes(kw))
+  const wantsEvents = eventKeywords.some(kw => lower.includes(kw))
+  const wantsGeneral = !wantsRecurring && !wantsEvents
+  
+  return { wantsRecurring, wantsEvents, wantsGeneral }
+}
+
+/**
  * Use LLM to filter and format relevant results
  */
 async function filterAndFormatResultsWithLLM(
   query: string,
-  allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }>
+  allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; dateStr?: string | null; timeRef?: string | null }>
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY || allResults.length === 0) {
     return allResults[0]?.body || TEMPLATES.noResults()
@@ -106,9 +147,56 @@ async function filterAndFormatResultsWithLLM(
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    // Format results for LLM, including sent dates for relative date parsing
-    const formattedResults = allResults.map((r, idx) => {
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const todayDayName = dayNames[today.getDay()]
+    
+    // Detect query intent to filter results
+    const intent = detectQueryIntent(query)
+    
+    // Filter results based on intent
+    let filteredResults = allResults
+    if (intent.wantsRecurring) {
+      // Only show recurring items (dateStr starts with "recurring:") or announcements mentioning recurring
+      filteredResults = allResults.filter(r => 
+        r.dateStr?.startsWith('recurring:') || 
+        (r.source === 'announcement' && r.body.toLowerCase().match(/\b(every|weekly|recurring|regular)\b/))
+      )
+    } else if (intent.wantsEvents && !intent.wantsRecurring) {
+      // Show events but exclude recurring (unless they're upcoming this week)
+      filteredResults = allResults.filter(r => 
+        !r.dateStr?.startsWith('recurring:')
+      )
+    }
+    // If general query, show all results (already filteredResults = allResults)
+
+    // Format results for LLM, including contextual information
+    const formattedResults = filteredResults.map((r, idx) => {
       let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}\n${r.body}`
+      
+      // Add content type information
+      const contentType = r.dateStr?.startsWith('recurring:') ? 'RECURRING' : 
+                         r.dateStr && !r.dateStr.startsWith('recurring:') ? 'EVENT' : 
+                         r.source === 'announcement' ? 'ANNOUNCEMENT' :
+                         r.source === 'poll' ? 'POLL' : 'FACT'
+      resultText += `\nType: ${contentType}`
+      
+      // Add next occurrence for recurring items
+      if (r.dateStr?.startsWith('recurring:')) {
+        const nextOccurrence = getNextOccurrence(r.dateStr, today)
+        if (nextOccurrence) {
+          const nextDate = new Date(nextOccurrence)
+          const dayName = dayNames[nextDate.getDay()]
+          const daysUntil = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          let whenText = ''
+          if (daysUntil === 0) whenText = ' (today)'
+          else if (daysUntil === 1) whenText = ' (tomorrow)'
+          else if (daysUntil === 2) whenText = ' (day after tomorrow)'
+          else whenText = ` (in ${daysUntil} days, ${nextOccurrence})`
+          resultText += `\nNext occurrence: ${dayName}${whenText}`
+        }
+      }
       
       // Add context about sent date for relative date parsing
       if (r.sentDate && (r.source === 'announcement' || r.source === 'poll')) {
@@ -122,21 +210,36 @@ async function filterAndFormatResultsWithLLM(
 
     const systemPrompt = `You are a helpful assistant that answers questions using the provided search results.
 
-IMPORTANT: For announcements and polls that include relative dates (e.g., "tomorrow", "tmr", "next week"), calculate these dates relative to the "sent on" date mentioned in the result, NOT today's date. For example, if an announcement was sent on January 6 and says "tomorrow", that means January 7.
+TODAY'S CONTEXT:
+- Today is ${todayDayName}, ${todayStr}
+- Use this to calculate relative dates and determine when recurring events occur next
 
-TREAT ALL SOURCES EQUALLY: Content database results (📋), announcements (📢), and polls (📊) are all part of the knowledge base. Extract relevant information from any source that answers the user's question.
+CONTENT TYPES:
+- RECURRING: Events that repeat weekly (e.g., "every Wednesday"). Calculate when the NEXT occurrence is based on today's date.
+- EVENT: One-time events with specific dates. Show the date clearly.
+- ANNOUNCEMENT: Messages that were sent. May contain relative dates - calculate these from the "sent on" date.
+- POLL: Questions that were sent. May contain relative dates - calculate these from the "sent on" date.
+- FACT: General information from the knowledge base.
 
-Your task:
-1. Filter out irrelevant results that don't answer the user's question
-2. Combine relevant information from multiple results into a clear, concise answer
-3. Focus on the most relevant details, ignoring extraneous information
-4. If multiple results are relevant, synthesize them into one coherent answer
-5. Extract relevant information from ANY source type (content, announcements, polls) - don't favor one over another
+QUERY INTENT AWARENESS:
+- If user asks about "recurring" or "weekly" events, ONLY include recurring items (Type: RECURRING)
+- If user asks about "upcoming" or "coming up", include events AND recurring items (calculate when recurring items occur next)
+- If user asks generally, include ALL relevant information from any source
+
+YOUR TASK:
+1. Filter results based on query intent (e.g., if asking for recurring, only show recurring items)
+2. For recurring items, mention when they occur NEXT based on today's date (e.g., "Active Meeting every Wednesday - next is tomorrow")
+3. Combine relevant information from multiple results into a clear, concise answer
+4. Extract relevant information from ANY source type - don't favor one over another
+5. Use contextual information (today's date, day of week) to make responses more natural (e.g., "tomorrow" instead of "Wednesday")
 6. If no results are relevant, say you don't have that information
 
-Format your response naturally and conversationally, as if texting. Keep it concise but complete.
+IMPORTANT DATE HANDLING:
+- For recurring events, calculate the NEXT occurrence: if today is Tuesday and the event is Wednesday, say "tomorrow"
+- For announcements/polls with relative dates, calculate from the "sent on" date, NOT today
+- For general queries, use today's date as context for calculating "tomorrow", "next week", etc.
 
-IMPORTANT FORMATTING RULES:
+FORMATTING RULES:
 - DO NOT use markdown formatting (no asterisks ** for bold, no markdown lists)
 - Write plain text as if sending a text message
 - Use simple dashes or numbers for lists if needed (e.g., "1. item" or "- item")
@@ -185,7 +288,7 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   }
   
   // Collect all results from both sources
-  const allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }> = []
+  const allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; dateStr?: string | null; timeRef?: string | null }> = []
   
   // 1. Search content database (always try, even if it fails)
   if (searchContent) {
@@ -193,7 +296,12 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     try {
       const contentResults = await searchContent(message)
       console.log(`[ContentQuery] Found ${contentResults.length} content results`)
-      allResults.push(...contentResults.map(r => ({ ...r, source: 'content' as const })))
+      allResults.push(...contentResults.map(r => ({ 
+        ...r, 
+        source: 'content' as const,
+        dateStr: r.dateStr || null,
+        timeRef: r.timeRef || null
+      })))
     } catch (error) {
       console.error('[ContentQuery] Content search failed:', error)
       // Continue even if content search fails - we still have announcements

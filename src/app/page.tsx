@@ -2154,7 +2154,7 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
             <h2 className="text-xl font-semibold text-[var(--text-on-dark)] mb-2 tracking-tight">
               dump text or files<span className="text-[var(--highlight-red)]">_</span>
             </h2>
-            <p className="text-xs text-[var(--text-meta)] mb-4">
+            <p className="text-xs text-[var(--text-on-dark)] mb-4">
               paste text, or drop a PDF/DOCX here. you can also choose a file below.
             </p>
             <div
@@ -2191,7 +2191,7 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
                   }
                 }}
                 rows={10}
-                className="w-full px-5 py-4 bg-transparent text-base text-[var(--text-on-card)] placeholder-[var(--bg-main)] resize-none outline-none border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 font-mono leading-relaxed"
+                className="w-full px-5 py-4 bg-transparent text-base text-[var(--text-on-dark)] placeholder-[var(--text-meta)] resize-none outline-none border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 font-mono leading-relaxed"
                 style={{ border: 'none', outline: 'none' }}
               />
             </div>

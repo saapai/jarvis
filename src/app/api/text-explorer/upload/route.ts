@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
         rawText = rawTextField;
       }
 
-      if (!rawText && fileField instanceof File) {
-        rawText = await extractTextFromUploadedFile(fileField);
-        if (!uploadName) {
-          uploadName = fileField.name;
+      if (!rawText && fileField && typeof fileField === 'object' && 'arrayBuffer' in (fileField as any)) {
+        const uploaded: any = fileField;
+        rawText = await extractTextFromUploadedFile(uploaded, typeof uploaded.name === 'string' ? uploaded.name : undefined);
+        if (!uploadName && typeof uploaded.name === 'string') {
+          uploadName = uploaded.name;
         }
       }
     } else {

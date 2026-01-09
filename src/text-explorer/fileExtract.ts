@@ -1,5 +1,3 @@
-import type { NextRequest } from 'next/server';
-
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 
@@ -9,17 +7,20 @@ import mammoth from 'mammoth';
  * This is a lightweight TypeScript port of the ppt_dump extraction idea:
  * get all the text out, then let the existing LLM pipeline turn it into facts/cards.
  */
-export async function extractTextFromUploadedFile(file: File, fallbackName?: string): Promise<string> {
-  const name = file.name || fallbackName || 'upload';
+export async function extractTextFromUploadedFile(
+  file: { name?: string; arrayBuffer: () => Promise<ArrayBuffer> },
+  fallbackName?: string
+): Promise<string> {
+  const name = (file.name as string | undefined) || fallbackName || 'upload';
   const lower = name.toLowerCase();
-
-  // Simple text files – just read as text
-  if (lower.endsWith('.txt') || lower.endsWith('.md')) {
-    return await file.text();
-  }
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  // Simple text files – just read as text
+  if (lower.endsWith('.txt') || lower.endsWith('.md')) {
+    return buffer.toString('utf8');
+  }
 
   // PDF extraction
   if (lower.endsWith('.pdf')) {

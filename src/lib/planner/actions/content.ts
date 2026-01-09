@@ -6,6 +6,8 @@
 import { ActionResult } from '../types'
 import { applyPersonality, TEMPLATES } from '../personality'
 
+const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
+
 export interface ContentQueryInput {
   phone: string
   message: string
@@ -419,15 +421,23 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       const pastActions = await searchPastActions()
       console.log(`[ContentQuery] Found ${pastActions.length} past actions`)
       
-      // Convert past actions to content results format and filter by relevance
+      // Convert past actions to content results format
+      // For general queries, include all past actions; for specific queries, filter by relevance
       const queryLower = message.toLowerCase()
-      const relevantActions = pastActions
-        .filter(action => {
+      const isSpecificQuery = /\b(what|when|where|who|how)\b/.test(queryLower)
+      
+      let relevantActions = pastActions
+      if (isSpecificQuery) {
+        // For specific questions, filter by relevance
+        relevantActions = pastActions.filter(action => {
           const contentLower = action.content.toLowerCase()
-          const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2)
-          return queryWords.some(word => contentLower.includes(word))
+          const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !FALLBACK_KEYWORDS.includes(w))
+          return queryWords.length === 0 || queryWords.some(word => contentLower.includes(word))
         })
-        .map(action => {
+      }
+      // For general queries, include all past actions (they're already sorted by recency)
+      
+      const mappedActions = relevantActions.map(action => {
       // Include sent date in the body for relative date parsing
       // Convert to local date to avoid timezone issues
       const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
@@ -444,8 +454,8 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       }
         })
       
-      allResults.push(...relevantActions)
-      console.log(`[ContentQuery] Found ${relevantActions.length} relevant past actions`)
+      allResults.push(...mappedActions)
+      console.log(`[ContentQuery] Found ${mappedActions.length} relevant past actions`)
     } catch (error) {
       console.error('[ContentQuery] Past actions search failed:', error)
     }

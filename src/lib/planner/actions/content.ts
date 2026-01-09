@@ -571,6 +571,86 @@ function filterResultsByCategories(
 }
 
 /**
+ * Build a direct, deterministic answer from primary matches instead of
+ * asking the LLM to reinterpret them. This guarantees that if we have
+ * clear matches like "Kegger" or "Formal", we surface them instead of
+ * getting a "no information" style hallucination.
+ */
+function buildAnswerFromPrimaryMatches(
+  query: string,
+  topicWords: string[],
+  primaryResults: Array<ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; eventDate?: Date }>
+): string {
+  // Sort primary results by score (desc)
+  const sorted = [...primaryResults].sort((a, b) => (b.score || 0) - (a.score || 0));
+  const top = sorted.slice(0, 3);
+
+  const lines: string[] = [];
+  const topic = topicWords[0] || query.toLowerCase();
+
+  const formatDateStr = (dateStr?: string | null): string | null => {
+    if (!dateStr) return null;
+    if (dateStr.startsWith('week:')) {
+      const num = parseInt(dateStr.split(':')[1] || '0', 10);
+      if (!Number.isNaN(num) && num > 0) {
+        return `week ${num}`;
+      }
+      return dateStr;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const d = new Date(dateStr);
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+      }
+    }
+    return dateStr;
+  };
+
+  for (const r of top) {
+    const title = r.title || 'this event';
+    const category: ContentCategory = r.category || 'facts';
+    const humanDate = formatDateStr(r.dateStr || null);
+    const timeRef = r.timeRef || null;
+
+    let timing: string;
+    if (humanDate && timeRef) {
+      // Avoid repeating the same phrase twice
+      const lowerTime = timeRef.toLowerCase();
+      if (lowerTime.includes((humanDate || '').toLowerCase())) {
+        timing = humanDate;
+      } else {
+        timing = `${humanDate} (${timeRef})`;
+      }
+    } else if (humanDate) {
+      timing = humanDate;
+    } else if (timeRef) {
+      timing = timeRef;
+    } else {
+      timing = 'a time that is not specified in the notes yet';
+    }
+
+    const isPast = category === 'past';
+    const verb = isPast ? 'was' : 'is';
+
+    lines.push(`${title} ${verb} scheduled for ${timing}.`);
+  }
+
+  if (lines.length === 0) {
+    return TEMPLATES.noResults();
+  }
+
+  if (lines.length === 1) {
+    return lines[0];
+  }
+
+  return `${lines.join(' ')}`
+}
+
+/**
  * Use LLM to filter and format relevant results
  */
 async function filterAndFormatResultsWithLLM(
@@ -593,19 +673,27 @@ async function filterAndFormatResultsWithLLM(
     
     // Filter results by target categories
     const filteredResults = filterResultsByCategories(allResults, targetCategories)
-
+    
     // Extract main topic words from the query (excluding common stop words)
     const queryWordsAll = query.toLowerCase().split(/\s+/).filter(w => w.length > 1)
     const topicWords = queryWordsAll.filter(w => w.length > 2 && !FALLBACK_KEYWORDS.includes(w))
-
+    
     // Determine which results directly mention the main topic words
     const isPrimaryMatch = (r: ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; eventDate?: Date }) => {
       if (topicWords.length === 0) return false
       const text = `${r.title || ''} ${r.body || ''}`.toLowerCase()
       return topicWords.some(word => text.includes(word))
     }
+    
+    const primaryResults = filteredResults.filter(isPrimaryMatch)
+    const primaryResultsCount = primaryResults.length
 
-    const primaryResultsCount = filteredResults.filter(isPrimaryMatch).length
+    // If we have clear primary matches (e.g., "Kegger", "Formal"), answer
+    // directly from them instead of sending everything back through the LLM,
+    // which has previously returned "no information" even when matches exist.
+    if (primaryResultsCount > 0) {
+      return buildAnswerFromPrimaryMatches(query, topicWords, primaryResults)
+    }
 
     // Format results for LLM, including category metadata
     // Note: categories should already be assigned in handleContentQuery before this function is called

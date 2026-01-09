@@ -799,30 +799,68 @@ function DumpTab({
     try {
       console.log('[Upload] Starting upload...');
 
-      let res: Response;
-
       if (uploadFile) {
-        const formData = new FormData();
-        formData.append('file', uploadFile);
-        if (uploadFileName) {
-          formData.append('name', uploadFileName);
-        }
-        if (uploadText.trim()) {
-          formData.append('rawText', uploadText);
+        // 1) Ask server for a storage target (Vercel Blob)
+        const targetRes = await fetch('/api/text-explorer/upload-target', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: uploadFileName || uploadFile.name,
+            contentType: uploadFile.type || 'application/octet-stream',
+          }),
+        });
+
+        if (!targetRes.ok) {
+          console.error('[Upload] Failed to get upload target', targetRes.status);
+          return;
         }
 
-        res = await fetch('/api/text-explorer/upload', {
-          method: 'POST',
-          body: formData,
+        const { url: fileUrl } = await targetRes.json();
+        console.log('[Upload] Got storage URL', { fileUrl });
+
+        // 2) Upload file directly to storage
+        const blobUploadRes = await fetch(fileUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': uploadFile.type || 'application/octet-stream',
+          },
+          body: uploadFile,
         });
+
+        if (!blobUploadRes.ok) {
+          console.error('[Upload] Direct storage upload failed', blobUploadRes.status);
+          return;
+        }
+
+        console.log('[Upload] Direct storage upload successful');
+
+        // 3) Tell server to process from storage URL
+        const res = await fetch('/api/text-explorer/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: uploadFileName || uploadFile.name,
+            fileUrl,
+            rawText: uploadText.trim() || undefined,
+          }),
+        });
+
+        if (!res.ok) {
+          console.error('[Upload] Processing from storage failed', res.status);
+          return;
+        }
       } else {
-        res = await fetch('/api/text-explorer/upload', {
+        const res = await fetch('/api/text-explorer/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rawText: uploadText }),
         });
+        if (!res.ok) {
+          console.error('[Upload] Upload failed with status:', res.status);
+          return;
+        }
       }
-      if (res.ok) {
+
         console.log('[Upload] Upload successful, refreshing data...');
         setUploadText('');
         setUploadFile(null);

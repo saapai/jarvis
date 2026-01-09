@@ -229,19 +229,17 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
   return parts.length > 0 ? parts : [{ text, type: 'text' }];
 }
 
-// Semantic block component with hover physics
+// Semantic block component - inline with text, no gaps
 function SemanticBlock({ 
   text, 
   type,
   onEntityClick,
-  onTimeClick,
-  icon
+  onTimeClick
 }: { 
   text: string;
   type: 'time' | 'location' | 'people';
   onEntityClick?: (entity: string) => void;
   onTimeClick?: (timeText: string) => void;
-  icon: string;
 }) {
   const handleClick = () => {
     if (type === 'time' && onTimeClick) {
@@ -255,21 +253,13 @@ function SemanticBlock({
     <button
       onClick={handleClick}
       className={`
-        group inline-flex items-center gap-1.5 mx-0.5 px-1 py-0.5
-        text-xs font-mono text-[var(--highlight-blue)] leading-relaxed
+        inline text-sm font-mono text-[var(--highlight-blue)]
         hover:bg-[rgba(59,124,150,0.16)] hover:rounded
         transition-all duration-[120ms] ease-out
         cursor-default hover:cursor-pointer
       `}
     >
       {text}
-      <span className={`
-        text-[10px] opacity-0 group-hover:opacity-60
-        transition-opacity duration-[120ms] ease-out
-        leading-none
-      `}>
-        {icon}
-      </span>
     </button>
   );
 }
@@ -294,7 +284,7 @@ function HighlightedText({
   const semanticParts = parseSemanticText(text, entities);
   
   return (
-    <span className="inline">
+    <>
       {semanticParts.map((part, i) => {
         if (part.type === 'time') {
           return (
@@ -303,7 +293,6 @@ function HighlightedText({
               text={part.text}
               type="time"
               onTimeClick={onTimeClick}
-              icon="↗"
             />
           );
         }
@@ -314,7 +303,6 @@ function HighlightedText({
               text={part.text}
               type="location"
               onEntityClick={onEntityClick}
-              icon="⧉"
             />
           );
         }
@@ -325,13 +313,12 @@ function HighlightedText({
               text={part.text}
               type="people"
               onEntityClick={onEntityClick}
-              icon="⤴"
             />
           );
         }
         return <Fragment key={i}>{part.text}</Fragment>;
       })}
-    </span>
+    </>
   );
 }
 

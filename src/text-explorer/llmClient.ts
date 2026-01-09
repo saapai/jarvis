@@ -28,7 +28,9 @@ For each extracted fact, create ONE entry with:
 1. content: A brief 1–2 sentence summary of the key point **focused on a single event or fact**
 2. sourceText: The FULL original text span for that fact (preserve exact wording)
 3. category: One of: social, professional, pledging, events, meetings, other
-4. subcategory: The specific event/topic name (e.g., "Study Hall", "Creatathon", "Big Little", "Kegger", "Formal")
+4. subcategory: A SHORT, human-readable title for this specific event or fact (e.g., "Active Meeting", "Retreat", "Ski Trip", "Kegger", "Tentative Media Day", "Formal", "Dues", "Membership Criteria"). 
+   - NEVER use generic section headers like "Social Calendar", "Announcements", "Updates", or "Agenda" as the subcategory.
+   - If the slide has a header and then bullet-point events, the header is context, but each bullet-point event gets its OWN subcategory based on the event name in the bullet text.
 5. timeRef: The exact time reference ("November 8th", "week 4", "every Wednesday at 8:00 PM", "January 16–19", "Jan 16-19")
 6. dateStr: Parse to date format. IMPORTANT: For date RANGES, store only the START date:
    - For date ranges (e.g., "January 16 to January 19", "jan 16-19", "16-19"): Store ONLY the start date (e.g., "2026-01-16")

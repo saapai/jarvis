@@ -143,6 +143,27 @@ export async function getUpcomingEvents(limit: number = 10): Promise<Event[]> {
 }
 
 /**
+ * Get all past events
+ */
+export async function getPastEvents(limit: number = 10): Promise<Event[]> {
+  const prisma = await getPrisma()
+
+  const now = new Date()
+
+  const events = await prisma.event.findMany({
+    where: {
+      eventDate: {
+        lt: now
+      }
+    },
+    orderBy: { eventDate: 'desc' },
+    take: limit
+  })
+
+  return events
+}
+
+/**
  * Update event details
  */
 export async function updateEvent(

@@ -10,6 +10,7 @@ import * as draftRepo from '@/lib/repositories/draftRepository'
 import * as convRepo from '@/lib/repositories/conversationRepository'
 import * as pollRepo from '@/lib/repositories/pollRepository'
 import * as memberRepo from '@/lib/repositories/memberRepository'
+import * as eventRepo from '@/lib/repositories/eventRepository'
 import type { ActionResult } from '@/lib/planner/types'
 import { routeContentSearch } from '@/text-explorer/router'
 
@@ -153,6 +154,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         message,
         userName: user.name,
         searchContent: searchFactsDatabase,
+        searchEvents: searchEventsDatabase,
         recentMessages,
         searchPastActions: searchPastAnnouncements
       })
@@ -478,15 +480,28 @@ async function sendPollToAll(question: string, senderPhone: string, requiresExcu
 // ============================================
 // KNOWLEDGE SEARCH
 // ============================================
+// CONTENT SEARCH HELPERS
+// ============================================
 
-interface ContentResult {
-  title: string
-  body: string
-  score: number
-}
+import type { ContentResult, EventResult } from '@/lib/planner/actions/content'
 
 async function searchFactsDatabase(query: string): Promise<ContentResult[]> {
   return routeContentSearch(query)
+}
+
+async function searchEventsDatabase(): Promise<EventResult[]> {
+  const events = await eventRepo.getUpcomingEvents(50) // Get more events for comprehensive search
+  const pastEvents = await eventRepo.getPastEvents(50) // Also get past events
+  
+  return [...events, ...pastEvents].map(e => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    eventDate: e.eventDate,
+    location: e.location,
+    category: e.category,
+    linkedFactId: e.linkedFactId
+  }))
 }
 
 async function searchPastAnnouncements(): Promise<Array<{

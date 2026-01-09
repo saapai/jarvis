@@ -1,6 +1,7 @@
 /**
  * Content Query Handler
  * Handles questions about organization content (events, meetings, etc.)
+ * Uses a generalizable category-based system for organizing and querying content
  */
 
 import { ActionResult } from '../types'
@@ -8,12 +9,16 @@ import { applyPersonality, TEMPLATES } from '../personality'
 
 const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
 
+export type ContentCategory = 'upcoming' | 'recurring' | 'past' | 'facts' | 'announcements' | 'polls'
+
 export interface ContentQueryInput {
   phone: string
   message: string
   userName: string | null
   // Function to search content (will be provided by main app)
   searchContent?: (query: string) => Promise<ContentResult[]>
+  // Function to search events (from Event table)
+  searchEvents?: () => Promise<EventResult[]>
   // Recent messages for context about what was just sent
   recentMessages?: Array<{
     direction: 'inbound' | 'outbound'
@@ -36,63 +41,182 @@ export interface ContentResult {
   score: number
   dateStr?: string | null
   timeRef?: string | null
+  category?: ContentCategory
+  eventDate?: Date
+}
+
+export interface EventResult {
+  id: string
+  title: string
+  description: string | null
+  eventDate: Date
+  location: string | null
+  category: string | null
+  linkedFactId: string | null
 }
 
 /**
- * Use LLM to detect if user is asking about past actions (announcements/polls)
+ * Category metadata configuration
  */
-async function isAskingAboutPastActions(message: string): Promise<{
-  isPastActionQuery: boolean
+const CATEGORY_CONFIG: Record<ContentCategory, {
+  keywords: string[]
+  timeDirection: 'future' | 'past' | 'none'
+  priority: number
+}> = {
+  upcoming: {
+    keywords: ['upcoming', 'coming up', 'next', 'future', 'soon', 'this week', 'tonight', 'tomorrow', 'calendar', 'schedule'],
+    timeDirection: 'future',
+    priority: 4
+  },
+  recurring: {
+    keywords: ['recurring', 'weekly', 'every', 'regular', 'routine', 'repeated', 'repeats'],
+    timeDirection: 'future',
+    priority: 3
+  },
+  past: {
+    keywords: ['past', 'previous', 'last', 'ago', 'yesterday', 'last week', 'last month', 'was', 'were', 'happened'],
+    timeDirection: 'past',
+    priority: 2
+  },
+  facts: {
+    keywords: ['fact', 'info', 'information', 'about', 'tell me'],
+    timeDirection: 'none',
+    priority: 2
+  },
+  announcements: {
+    keywords: ['announcement', 'announce', 'sent out', 'sent', 'broadcast', 'message'],
+    timeDirection: 'past',
+    priority: 1
+  },
+  polls: {
+    keywords: ['poll', 'survey', 'vote', 'voting', 'response'],
+    timeDirection: 'past',
+    priority: 1
+  }
+}
+
+/**
+ * Detect which categories a query is asking about
+ * Returns categories that should be included in results
+ */
+async function detectQueryCategories(message: string): Promise<{
+  categories: ContentCategory[]
   reasoning: string
 }> {
   if (!process.env.OPENAI_API_KEY) {
-    return { isPastActionQuery: false, reasoning: 'No API key' }
+    // Fallback to keyword-based detection
+    return detectQueryCategoriesByKeywords(message)
   }
 
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    const systemPrompt = `Determine if the user is asking about PAST announcements, polls, or messages that were sent.
+    const categoryDescriptions = Object.entries(CATEGORY_CONFIG).map(([cat, config]) => 
+      `- ${cat}: ${config.keywords.slice(0, 3).join(', ')} (${config.timeDirection} dates)`
+    ).join('\n')
 
-Examples of past action queries:
-- "what announcements have been sent?"
-- "show me recent polls"
-- "what did you send out yesterday?"
-- "list past announcements"
-- "what polls are active?"
+    const systemPrompt = `Determine which content categories the user is asking about. Categories:
 
-NOT past action queries:
-- "when is the event?" (asking about event timing)
-- "who's coming?" (asking about attendance)
-- "what's happening tonight?" (asking about upcoming events)
+${categoryDescriptions}
 
-Respond with JSON: { "isPastActionQuery": boolean, "reasoning": string }`
+Examples:
+- "what are recurring events?" → categories: ["recurring"]
+- "what's on my calendar?" → categories: ["upcoming", "recurring", "announcements", "polls"]
+- "what are past announcements?" → categories: ["announcements"]
+- "when is active meeting?" → categories: ["upcoming", "recurring", "facts"] (the event might be recurring)
+- "tell me about study hall" → categories: ["upcoming", "recurring", "past", "facts"] (general query)
+
+Respond with JSON: { "categories": string[], "reasoning": string }
+Categories should be one of: upcoming, recurring, past, facts, announcements, polls`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Is this asking about past actions? "${message}"` }
+        { role: 'user', content: `What categories is this query asking about? "${message}"` }
       ],
       temperature: 0.1,
-      max_tokens: 100,
+      max_tokens: 150,
       response_format: { type: 'json_object' }
     })
 
     const content = response.choices[0].message.content
     if (content) {
       const parsed = JSON.parse(content)
+      const categories = (parsed.categories || []).filter((cat: string) => 
+        Object.keys(CATEGORY_CONFIG).includes(cat)
+      ) as ContentCategory[]
       return {
-        isPastActionQuery: parsed.isPastActionQuery || false,
+        categories: categories.length > 0 ? categories : ['upcoming', 'recurring', 'facts', 'announcements', 'polls'],
         reasoning: parsed.reasoning || 'LLM analysis'
       }
     }
   } catch (error) {
-    console.error('[ContentQuery] Past action detection failed:', error)
+    console.error('[ContentQuery] Category detection failed:', error)
   }
 
-  return { isPastActionQuery: false, reasoning: 'Fallback' }
+  return detectQueryCategoriesByKeywords(message)
+}
+
+/**
+ * Fallback keyword-based category detection
+ */
+function detectQueryCategoriesByKeywords(message: string): {
+  categories: ContentCategory[]
+  reasoning: string
+} {
+  const lower = message.toLowerCase()
+  const categories: ContentCategory[] = []
+
+  for (const [cat, config] of Object.entries(CATEGORY_CONFIG) as [ContentCategory, typeof CATEGORY_CONFIG[ContentCategory]][]) {
+    if (config.keywords.some(kw => lower.includes(kw))) {
+      categories.push(cat)
+    }
+  }
+
+  // If no specific categories detected, include all relevant ones
+  if (categories.length === 0) {
+    categories.push('upcoming', 'recurring', 'facts', 'announcements', 'polls')
+  }
+
+  return {
+    categories,
+    reasoning: 'Keyword-based detection'
+  }
+}
+
+/**
+ * Assign category to a content result based on its metadata
+ */
+function assignCategoryToResult(result: ContentResult & { source?: 'content' | 'announcement' | 'poll'; eventDate?: Date }): ContentCategory {
+  const now = new Date()
+
+  // Assign based on source type
+  if (result.source === 'announcement') return 'announcements'
+  if (result.source === 'poll') return 'polls'
+
+  // Assign based on dateStr pattern
+  if (result.dateStr?.startsWith('recurring:')) {
+    return 'recurring'
+  }
+
+  // Assign based on eventDate or dateStr
+  if (result.eventDate || result.dateStr) {
+    try {
+      const eventDate = result.eventDate || new Date(result.dateStr!)
+      if (eventDate >= now) {
+        return 'upcoming'
+      } else {
+        return 'past'
+      }
+    } catch (e) {
+      // Invalid date, treat as fact
+    }
+  }
+
+  // Default to facts
+  return 'facts'
 }
 
 /**
@@ -116,25 +240,133 @@ function getNextOccurrence(recurringPattern: string, today: Date): string | null
 }
 
 /**
- * Detect query intent to filter results appropriately
+ * Detect if query is asking for a definition (meta query about a category)
  */
-function detectQueryIntent(query: string): {
-  wantsRecurring: boolean
-  wantsEvents: boolean
-  wantsGeneral: boolean
-  wantsDefinition: boolean
-} {
+function isDefinitionQuery(query: string): boolean {
   const lower = query.toLowerCase()
-  const recurringKeywords = ['recurring', 'weekly', 'every', 'regular', 'routine', 'repeated']
-  const eventKeywords = ['event', 'upcoming', 'coming up', 'next', 'future', 'calendar', 'schedule']
-  const definitionKeywords = ['what are', 'what is', 'what\'s', 'define', 'explain', 'tell me about']
+  const definitionPatterns = [
+    /^what are\s+/i,
+    /^what is\s+/i,
+    /^what's\s+/i,
+    /^define\s+/i,
+    /^explain\s+/i,
+    /^tell me about\s+/i
+  ]
   
-  const wantsDefinition = definitionKeywords.some(kw => lower.includes(kw)) && !lower.includes('for') && !lower.includes('in')
-  const wantsRecurring = recurringKeywords.some(kw => lower.includes(kw)) && !wantsDefinition
-  const wantsEvents = eventKeywords.some(kw => lower.includes(kw))
-  const wantsGeneral = !wantsRecurring && !wantsEvents && !wantsDefinition
-  
-  return { wantsRecurring, wantsEvents, wantsGeneral, wantsDefinition }
+  return definitionPatterns.some(pattern => pattern.test(lower)) && 
+         !/\b(for|in|at|on|when|where|who)\b/.test(lower)
+}
+
+/**
+ * Find associations between events and announcements/polls
+ * Uses LLM to determine if announcements/polls are related to events
+ */
+async function findAssociations(
+  events: Array<ContentResult & { category?: ContentCategory }>,
+  announcements: Array<ContentResult & { category?: ContentCategory; sentDate?: Date }>
+): Promise<Map<string, Array<ContentResult & { category?: ContentCategory }>>> {
+  const associations = new Map<string, Array<ContentResult & { category?: ContentCategory }>>()
+
+  if (events.length === 0 || announcements.length === 0) {
+    return associations
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    // Fallback: simple keyword matching
+    for (const event of events) {
+      const eventKeywords = (event.title + ' ' + event.body).toLowerCase().split(/\s+/).filter(w => w.length > 3)
+      const related = announcements.filter(ann => {
+        const annText = ann.body.toLowerCase()
+        return eventKeywords.some(kw => annText.includes(kw))
+      })
+      if (related.length > 0) {
+        associations.set(event.title || 'unknown', related)
+      }
+    }
+    return associations
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Group events by potential associations
+    const eventSummaries = events.map(e => `${e.title || 'Event'}: ${e.body.substring(0, 100)}`).join('\n')
+    const announcementSummaries = announcements.map((a, i) => 
+      `[${i}] ${a.body.substring(0, 100)}`
+    ).join('\n')
+
+    const systemPrompt = `Determine which announcements/polls are related to which events.
+    
+Events:
+${eventSummaries}
+
+Announcements/Polls:
+${announcementSummaries}
+
+Respond with JSON mapping event titles to arrays of announcement indices: { "event_title": [0, 2], ... }
+Only include associations if the announcement/poll provides context or information about the event.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'Find associations between events and announcements/polls.' }
+      ],
+      temperature: 0.2,
+      max_tokens: 500,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      for (const [eventTitle, indices] of Object.entries(parsed)) {
+        if (Array.isArray(indices)) {
+          const related = (indices as number[])
+            .filter(idx => idx >= 0 && idx < announcements.length)
+            .map(idx => announcements[idx])
+          if (related.length > 0) {
+            associations.set(eventTitle, related)
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[ContentQuery] Association detection failed:', error)
+    // Fallback to keyword matching
+    for (const event of events) {
+      const eventKeywords = (event.title + ' ' + event.body).toLowerCase().split(/\s+/).filter(w => w.length > 3)
+      const related = announcements.filter(ann => {
+        const annText = ann.body.toLowerCase()
+        return eventKeywords.some(kw => annText.includes(kw))
+      })
+      if (related.length > 0) {
+        associations.set(event.title || 'unknown', related)
+      }
+    }
+  }
+
+  return associations
+}
+
+/**
+ * Filter results by category based on query intent
+ */
+function filterResultsByCategories(
+  results: Array<ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }>,
+  targetCategories: ContentCategory[]
+): Array<ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }> {
+  // If all categories are requested, return all results
+  const allCategories: ContentCategory[] = ['upcoming', 'recurring', 'past', 'facts', 'announcements', 'polls']
+  if (targetCategories.length === allCategories.length || targetCategories.length === 0) {
+    return results
+  }
+
+  return results.filter(r => {
+    const resultCategory = r.category || 'facts'
+    return targetCategories.includes(resultCategory)
+  })
 }
 
 /**
@@ -142,7 +374,8 @@ function detectQueryIntent(query: string): {
  */
 async function filterAndFormatResultsWithLLM(
   query: string,
-  allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; dateStr?: string | null; timeRef?: string | null }>
+  allResults: Array<ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; eventDate?: Date }>,
+  targetCategories: ContentCategory[]
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY || allResults.length === 0) {
     return allResults[0]?.body || TEMPLATES.noResults()
@@ -157,35 +390,17 @@ async function filterAndFormatResultsWithLLM(
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     const todayDayName = dayNames[today.getDay()]
     
-    // Detect query intent to filter results
-    const intent = detectQueryIntent(query)
+    // Filter results by target categories
+    const filteredResults = filterResultsByCategories(allResults, targetCategories)
     
-    // Filter results based on intent
-    let filteredResults = allResults
-    if (intent.wantsRecurring && !intent.wantsDefinition) {
-      // Only show recurring items (dateStr starts with "recurring:") or announcements mentioning recurring
-      filteredResults = allResults.filter(r => 
-        r.dateStr?.startsWith('recurring:') || 
-        (r.source === 'announcement' && r.body.toLowerCase().match(/\b(every|weekly|recurring|regular)\b/))
-      )
-      // If asking "what are recurring events" (definition), show actual recurring events, not just explanation
-      if (filteredResults.length === 0 && allResults.some(r => r.dateStr?.startsWith('recurring:'))) {
-        filteredResults = allResults.filter(r => r.dateStr?.startsWith('recurring:'))
-      }
-    } else if (intent.wantsEvents && !intent.wantsRecurring) {
-      // Show events but exclude recurring (unless they're upcoming this week)
-      filteredResults = allResults.filter(r => 
-        !r.dateStr?.startsWith('recurring:')
-      )
-    } else if (intent.wantsDefinition && intent.wantsRecurring) {
-      // "What are recurring events" - show actual recurring events from knowledge base
-      filteredResults = allResults.filter(r => r.dateStr?.startsWith('recurring:'))
-    }
-    // If general query, show all results (already filteredResults = allResults)
+    // If definition query, ensure we include examples from the category
+    const isDef = isDefinitionQuery(query)
 
-    // Format results for LLM, including contextual information
+    // Format results for LLM, including category metadata
     const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
     const formattedResults = filteredResults.map((r, idx) => {
+      const category = r.category || assignCategoryToResult(r)
+      
       // Highlight relevance by showing how the result relates to the query
       let relevanceNote = ''
       const titleLower = (r.title || '').toLowerCase()
@@ -199,15 +414,17 @@ async function filterAndFormatResultsWithLLM(
       
       let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}${relevanceNote}\n${r.body}`
       
-      // Add content type information
-      const contentType = r.dateStr?.startsWith('recurring:') ? 'RECURRING' : 
-                         r.dateStr && !r.dateStr.startsWith('recurring:') ? 'EVENT' : 
-                         r.source === 'announcement' ? 'ANNOUNCEMENT' :
-                         r.source === 'poll' ? 'POLL' : 'FACT'
-      resultText += `\nType: ${contentType}`
+      // Add category information (this helps LLM understand context)
+      resultText += `\nCategory: ${category.toUpperCase()}`
+      
+      // Add time direction metadata
+      const timeDirection = CATEGORY_CONFIG[category].timeDirection
+      if (timeDirection !== 'none') {
+        resultText += ` (${timeDirection} dates)`
+      }
       
       // Add next occurrence for recurring items
-      if (r.dateStr?.startsWith('recurring:')) {
+      if (category === 'recurring' && r.dateStr?.startsWith('recurring:')) {
         const nextOccurrence = getNextOccurrence(r.dateStr, today)
         if (nextOccurrence) {
           const nextDate = new Date(nextOccurrence)
@@ -222,8 +439,18 @@ async function filterAndFormatResultsWithLLM(
         }
       }
       
-      // Add context about sent date for relative date parsing and correlate with recurring patterns
-      if (r.sentDate && (r.source === 'announcement' || r.source === 'poll')) {
+      // Add event date for upcoming events
+      if ((category === 'upcoming' || category === 'past') && r.eventDate) {
+        const eventDate = r.eventDate instanceof Date ? r.eventDate : new Date(r.eventDate)
+        const year = eventDate.getFullYear()
+        const month = String(eventDate.getMonth() + 1).padStart(2, '0')
+        const day = String(eventDate.getDate()).padStart(2, '0')
+        const dateStr = `${year}-${month}-${day}`
+        resultText += `\nEvent date: ${dateStr}`
+      }
+      
+      // Add context about sent date for announcements/polls (relative date parsing)
+      if ((category === 'announcements' || category === 'polls') && r.sentDate) {
         const sentDate = r.sentDate instanceof Date ? r.sentDate : new Date(r.sentDate)
         // Use local date, not UTC, to avoid timezone issues
         const year = sentDate.getFullYear()
@@ -231,36 +458,34 @@ async function filterAndFormatResultsWithLLM(
         const day = String(sentDate.getDate()).padStart(2, '0')
         const dateStr = `${year}-${month}-${day}`
         const sentDayName = dayNames[sentDate.getDay()]
-        resultText += `\nNote: This was sent on ${dateStr} (${sentDayName}). When this mentions relative dates like "tomorrow", "tmr", "next week", calculate them relative to ${dateStr}, not today's date.`
-        
-        // Check if this announcement might be about a recurring event mentioned in other results
-        const titleLower = r.title.toLowerCase()
-        const bodyLower = r.body.toLowerCase()
-        const mentionsRecurring = filteredResults.some(other => 
-          other.dateStr?.startsWith('recurring:') && 
-          (other.title?.toLowerCase().includes(titleLower) || titleLower.includes(other.title?.toLowerCase() || ''))
-        )
-        if (mentionsRecurring) {
-          resultText += `\nWarning: This announcement may reference a recurring event. Cross-reference with recurring patterns in other results to determine the actual date.`
-        }
+        resultText += `\nSent on: ${dateStr} (${sentDayName}). When this mentions relative dates like "tomorrow", "tmr", "next week", calculate them relative to ${dateStr}, not today's date.`
       }
       
       return resultText
     }).join('\n\n')
 
-    const systemPrompt = `You are a helpful assistant that answers questions using the provided search results. 
+    const systemPrompt = `You are a helpful assistant that answers questions using the provided search results organized by category.
 
 CRITICAL: If search results are provided, they ARE relevant to the query. DO NOT say "no information" or "I don't have that information" if results are provided. Use the information in the results to answer the question, even if it's incomplete.
-
-RESULT PRIORITY:
-- Results are already prioritized: Upcoming events > Recurring events > Facts/content > Past announcements
-- Use information from higher priority results first, but you can combine information from multiple results
-
-You must fact-check all dates and information against the actual data provided.
 
 TODAY'S CONTEXT:
 - Today is ${todayDayName}, ${todayStr}
 - Use this to calculate relative dates and determine when recurring events occur next
+
+CATEGORY SYSTEM:
+Results are organized by categories with time directionality:
+- UPCOMING: Future one-time events (has future dates, timeDirection: future)
+- RECURRING: Events that repeat weekly (e.g., "every Wednesday", timeDirection: future)
+- PAST: Past events (has previous dates, timeDirection: past)
+- FACTS: General information from knowledge base (timeDirection: none)
+- ANNOUNCEMENTS: Past messages that were sent (timeDirection: past)
+- POLLS: Past questions that were sent (timeDirection: past)
+
+BIDIRECTIONAL QUERY UNDERSTANDING:
+- When user asks about a specific object (e.g., "when is active meeting"), understand that it exists in a category (likely RECURRING or UPCOMING) based on the results
+- When user asks about a category (e.g., "what are recurring events", "what's on my calendar", "what are past announcements"), filter and return only items from those categories
+- Meta queries like "what's on my calendar" should aggregate UPCOMING, RECURRING, ANNOUNCEMENTS, and POLLS categories
+- Category queries like "what are recurring events" should return only RECURRING items with their patterns and next occurrences
 
 CRITICAL: FACT-CHECKING RULES:
 - ONLY use dates that are explicitly stated in the search results
@@ -272,106 +497,68 @@ CRITICAL: FACT-CHECKING RULES:
   * Calculate the NEXT occurrence from today's date: if today is after Jan 7, find the next Wednesday
   * If today is Tuesday Jan 9, and the last active meeting was Wednesday Jan 7, the next one is Wednesday Jan 14 (next week)
 
-CONTENT TYPES:
-- RECURRING: Events that repeat weekly (e.g., "every Wednesday", dateStr starts with "recurring:"). 
-  * Use the "Next occurrence" calculation provided in the results
-  * If multiple sources mention the same recurring event, use the most specific information
-- EVENT: One-time events with specific dates (dateStr is a date like "2026-01-16"). Show the date from the results.
-- ANNOUNCEMENT: Messages that were sent. Contains a "Sent: YYYY-MM-DD" date.
-  * Relative dates in announcements (e.g., "tomorrow", "tmr") are calculated from the "Sent:" date, NOT today
-  * If an announcement mentions a recurring event, combine it with the recurring pattern from the knowledge base
-- POLL: Questions that were sent. Same date handling as announcements.
-- FACT: General information from the knowledge base.
+TIME DIRECTIONALITY:
+- UPCOMING and RECURRING categories contain future dates
+- PAST, ANNOUNCEMENTS, and POLLS categories contain past dates
+- Use the Category and timeDirection metadata to understand temporal context
+- Relative dates in announcements/polls are calculated from their "Sent on" date, NOT today
 
-QUERY INTENT AWARENESS:
-- If user asks "what are recurring events" (definition question), list the ACTUAL recurring events from the results with their patterns and next occurrence dates
-- If user asks "when is [event name]" for a recurring event, state the pattern AND the next occurrence date
-- If user asks about "recurring" or "weekly" events, ONLY include recurring items (Type: RECURRING) with next occurrences
-- If user asks about "upcoming" or "coming up", include events AND recurring items (with next occurrences)
-- If user asks generally, include ALL relevant information from any source
+ASSOCIATIONS:
+- Announcements/polls may be associated with events (check if they provide context)
+- When presenting an event, supplement with any associated announcements/polls that provide additional context
 
 YOUR TASK:
 1. If search results are provided, you MUST use them to answer the question. DO NOT say "no information available" if results exist.
-2. Extract and present information from the results, even if incomplete:
-   - If a fact says "Study Hall every Wednesday at 6:30 PM", present that information
-   - If a fact says "AE Summons date is TBD", say "AE Summons date is TBD (to be determined)"
+2. Use the Category metadata to understand which category each result belongs to and its time directionality
+3. For category queries (e.g., "what are recurring events"), return only results from that category with their details
+4. For object queries (e.g., "when is active meeting"), infer the category from results (likely RECURRING or UPCOMING) and provide details
+5. For meta queries (e.g., "what's on my calendar"), aggregate relevant categories (UPCOMING, RECURRING, ANNOUNCEMENTS, POLLS)
+6. Extract and present information from the results, even if incomplete:
+   - If a fact says "Study Hall every Wednesday at 6:30 PM", present that information (category: RECURRING)
+   - If a fact says "AE Summons date is TBD", say "AE Summons date is TBD (to be determined)" (category: FACTS)
    - If time/location isn't mentioned, don't make it up, but do provide what IS available
-3. For ALL events (recurring or one-time), ALWAYS include what information is available:
+7. For ALL events (recurring or one-time), ALWAYS include what information is available:
    - Date (specific date, recurrence pattern, or "TBD" if mentioned)
    - Time (if mentioned in results)
    - Location (if mentioned in results)
    - For recurring: state the pattern (e.g., "every Wednesday") AND calculate the next occurrence if possible
-4. For recurring items, ALWAYS mention when the next occurrence will be if you can calculate it:
+8. For recurring items, ALWAYS mention when the next occurrence will be if you can calculate it:
    * If today is Tuesday Jan 9 and the event is every Wednesday, next is Wednesday Jan 14
    * State it clearly: "every Wednesday, next is January 14"
    * If date is TBD, say "date is TBD (to be determined)"
-5. When you see both a recurring pattern AND an announcement about a specific occurrence:
+9. When you see both a recurring pattern AND an announcement about a specific occurrence:
    * The announcement tells you when one specific instance happened (relative to its sent date)
    * Use that to determine the last occurrence date
    * Then calculate the next occurrence from today's date using the recurring pattern
    * Example: Announcement sent Jan 6 says "active meeting is tmr" → that's Jan 7. Pattern is every Wednesday. Today is Jan 9 (Tuesday). Last was Jan 7 (Wednesday). Next is Jan 14 (next Wednesday).
-6. Combine relevant information from multiple results to provide complete answers
-7. If a date is not in the results, calculate it from recurring patterns and today's date if possible
-8. DO NOT make up dates that aren't in the results or can't be calculated
-9. If information is incomplete (e.g., "TBD", no date mentioned), state what you know and note what's missing
-
-IMPORTANT DATE HANDLING EXAMPLES:
-- Example 1: Knowledge base says "Active Meeting every Wednesday" (recurring:wednesday), announcement sent Jan 6 says "active meeting is tmr"
-  * Announcement sent Jan 6 (local date), "tmr" relative to Jan 6 = Jan 7
-  * Check if Jan 7 is a Wednesday (it should be, based on recurring pattern)
-  * If today is Jan 9 (Tuesday), calculate: last Wednesday was Jan 7, next Wednesday is Jan 14
-  * Response MUST include: "Active Meeting every Wednesday at 8pm at Ash's (610 Levering Apt 201). Based on announcement from Jan 6, the last one was Jan 7. Next one is January 14 (next Wednesday)"
-  
-- Example 2: User asks "When is active meeting"
-  * Find recurring pattern: "every Wednesday"
-  * Find location/time from knowledge base or announcements: "8pm at Ash's (610 Levering Apt 201)"
-  * Calculate next occurrence: If today is Jan 9 (Tuesday), next Wednesday is Jan 14
-  * Response: "Active Meeting is every Wednesday at 8pm at Ash's (610 Levering Apt 201). Next one is January 14"
-  
-- CRITICAL: When you see BOTH a recurring pattern AND an announcement:
-  * The recurring pattern tells you the frequency (every Wednesday)
-  * The announcement tells you a specific occurrence date (calculated from its sent date + relative date)
-  * Use LOCAL DATE from sent date (not UTC) - if sent on Jan 6 local time, use Jan 6, not Jan 7
-  * You MUST cross-reference: if announcement says "tmr" and was sent Jan 6, that's Jan 7
-  * Verify Jan 7 matches the recurring pattern (should be a Wednesday)
-  * Then calculate next occurrence from TODAY's date using the recurring pattern
-  * DO NOT just use the announcement date - use it to confirm the recurring pattern is correct
-  
-- RESPONSE FORMAT FOR EVENTS:
-  * Always include: Event name, date/time, location (if available), recurrence pattern (if recurring), next occurrence (if recurring)
-  * For recurring events, ALWAYS state both the pattern AND when the next one is
-  * Example recurring: "Active Meeting every Wednesday at 8pm at Ash's (610 Levering Apt 201). Next is January 14"
-  * Example one-time: "Ski Trip January 16-19, 2026"
-  * When user asks "when is [recurring event]", respond with: "[Event] is every [day] at [time] at [location]. Next is [date]"
-  
-- CALCULATING NEXT OCCURRENCE:
-  * If today is Tuesday Jan 9 and event is every Wednesday:
-    - Calculate: Jan 9 (Tue) → Jan 10 (Wed) is tomorrow, but if today is past the event time, use next week
-    - Next Wednesday after today = Jan 14
-    - State clearly: "Next is January 14 (next Wednesday)"
-  * Always calculate from TODAY's date using the recurring pattern, not from any announcement date
-  
-- Example 2: Knowledge base says "IM soccer games every Monday"
-  * If today is Jan 9 (Tuesday), next Monday is Jan 12
-  * Response: "IM soccer games every Monday. Next one is Jan 12"
-
-- For announcements with relative dates: "Sent: 2026-01-06" and content says "event is tomorrow" = Jan 7
+10. Supplement events with associated announcements/polls if they provide context
+11. Combine relevant information from multiple results to provide complete answers
+12. If a date is not in the results, calculate it from recurring patterns and today's date if possible
+13. DO NOT make up dates that aren't in the results or can't be calculated
+14. If information is incomplete (e.g., "TBD", no date mentioned), state what you know and note what's missing
 
 FORMATTING RULES:
 - DO NOT use markdown formatting (no asterisks ** for bold, no markdown lists)
 - Write plain text as if sending a text message
 - Use simple dashes or numbers for lists if needed (e.g., "1. item" or "- item")
-- Keep formatting minimal and natural`
+- Keep formatting minimal and natural
+- When responding to category queries, clearly state which category you're providing information about
+- When responding to object queries, infer and state the category if relevant (e.g., "this is a recurring event", "this announcement was sent a week ago")`
+
+    const categoryInfo = targetCategories.length > 0 && targetCategories.length < 6
+      ? `\n\nQuery is asking about categories: ${targetCategories.join(', ')}`
+      : ''
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Question: "${query}"\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
+        { role: 'user', content: `Question: "${query}"${categoryInfo}\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
 - These ${filteredResults.length} search results were found by searching the knowledge base for "${query}"
 - If a result mentions the topic from your question (e.g., "study hall", "ae summons"), it IS relevant and you MUST use it
 - Even if information is incomplete (e.g., "TBD", no date), still provide what IS available
 - DO NOT say "no information available" or "I don't have that information" when ${filteredResults.length} results are provided
+- Use the Category metadata to understand time directionality and filter appropriately
 - Extract and present the information from these results to answer the question\n\nProvide a clear, complete answer based on the results above:` }
       ],
       temperature: 0.3,
@@ -388,11 +575,33 @@ FORMATTING RULES:
 }
 
 /**
+ * Convert EventResult to ContentResult format
+ */
+function eventToContentResult(event: EventResult): ContentResult {
+  const now = new Date()
+  const category: ContentCategory = event.eventDate >= now ? 'upcoming' : 'past'
+  
+  let body = `📅 ${event.title}`
+  if (event.description) body += `\n${event.description}`
+  if (event.location) body += `\n📍 ${event.location}`
+  body += `\n📅 ${event.eventDate.toISOString().split('T')[0]}`
+  
+  return {
+    title: event.title,
+    body,
+    score: 0.8, // High relevance for events
+    dateStr: event.eventDate.toISOString().split('T')[0],
+    category,
+    eventDate: event.eventDate
+  }
+}
+
+/**
  * Handle content query action
- * Searches both content database and past announcements/polls, then uses LLM to filter and format results.
+ * Searches content database, events, and past announcements/polls, then uses LLM to filter and format results.
  */
 export async function handleContentQuery(input: ContentQueryInput): Promise<ActionResult> {
-  const { phone, message, userName, searchContent, recentMessages, searchPastActions } = input
+  const { phone, message, userName, searchContent, searchEvents, recentMessages, searchPastActions } = input
   
   console.log(`[ContentQuery] Processing query: "${message}"`)
   
@@ -410,64 +619,84 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // Collect all results from both sources
-  const allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; dateStr?: string | null; timeRef?: string | null }> = []
+  // Detect which categories the query is asking about
+  console.log(`[ContentQuery] Detecting query categories...`)
+  const { categories: targetCategories, reasoning } = await detectQueryCategories(message)
+  console.log(`[ContentQuery] Target categories: ${targetCategories.join(', ')} (${reasoning})`)
   
-  // 1. Search content database (always try, even if it fails)
-  if (searchContent) {
+  // Collect all results from all sources
+  const allResults: Array<ContentResult & { source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; eventDate?: Date }> = []
+  
+  // 1. Search content database (Facts)
+  if (searchContent && (targetCategories.includes('facts') || targetCategories.includes('upcoming') || targetCategories.includes('recurring') || targetCategories.includes('past'))) {
     console.log(`[ContentQuery] Searching content database...`)
     try {
       const contentResults = await searchContent(message)
       console.log(`[ContentQuery] Found ${contentResults.length} content results`)
-      allResults.push(...contentResults.map(r => ({ 
+      allResults.push(...contentResults.map(r => {
+        const category = assignCategoryToResult({ ...r, source: 'content' })
+        return { 
         ...r, 
         source: 'content' as const,
+          category,
         dateStr: r.dateStr || null,
         timeRef: r.timeRef || null
-      })))
+        }
+      }))
     } catch (error) {
       console.error('[ContentQuery] Content search failed:', error)
-      // Continue even if content search fails - we still have announcements
     }
   }
   
-  // 2. Search past announcements/polls (always search, not just for past action queries)
-  if (searchPastActions) {
+  // 2. Search Events from Event table
+  if (searchEvents && (targetCategories.includes('upcoming') || targetCategories.includes('past'))) {
+    console.log(`[ContentQuery] Searching events...`)
+    try {
+      const events = await searchEvents()
+      console.log(`[ContentQuery] Found ${events.length} events`)
+      const eventResults = events.map(eventToContentResult)
+      allResults.push(...eventResults)
+    } catch (error) {
+      console.error('[ContentQuery] Event search failed:', error)
+    }
+  }
+  
+  // 3. Search past announcements/polls
+  if (searchPastActions && (targetCategories.includes('announcements') || targetCategories.includes('polls'))) {
     console.log(`[ContentQuery] Searching past announcements/polls...`)
     try {
       const pastActions = await searchPastActions()
       console.log(`[ContentQuery] Found ${pastActions.length} past actions`)
       
       // Convert past actions to content results format
-      // For general queries, include all past actions; for specific queries, filter by relevance
       const queryLower = message.toLowerCase()
-      const isSpecificQuery = /\b(what|when|where|who|how)\b/.test(queryLower)
+      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !FALLBACK_KEYWORDS.includes(w))
       
-      let relevantActions = pastActions
-      if (isSpecificQuery) {
-        // For specific questions, filter by relevance
-        relevantActions = pastActions.filter(action => {
+      const mappedActions = pastActions
+        .filter(action => {
+          // Filter by relevance if specific query words exist
+          if (queryWords.length > 0) {
           const contentLower = action.content.toLowerCase()
-          const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !FALLBACK_KEYWORDS.includes(w))
-          return queryWords.length === 0 || queryWords.some(word => contentLower.includes(word))
+            return queryWords.some(word => contentLower.includes(word))
+          }
+          return true
         })
-      }
-      // For general queries, include all past actions (they're already sorted by recency)
-      
-      const mappedActions = relevantActions.map(action => {
-      // Include sent date in the body for relative date parsing
-      // Convert to local date to avoid timezone issues
+        .map(action => {
       const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
       const year = sentDate.getFullYear()
       const month = String(sentDate.getMonth() + 1).padStart(2, '0')
       const day = String(sentDate.getDate()).padStart(2, '0')
-      const dateStr = `${year}-${month}-${day}` // Local date, not UTC
+          const dateStr = `${year}-${month}-${day}`
+          
+          const category: ContentCategory = action.type === 'poll' ? 'polls' : 'announcements'
+          
       return {
         title: action.type === 'poll' ? 'Poll' : 'Announcement',
         body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
-        score: 0.5, // Medium relevance for past actions
+            score: 0.5,
         source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
-        sentDate: new Date(year, sentDate.getMonth(), sentDate.getDate()) // Store local date for LLM context
+            category,
+            sentDate: new Date(year, sentDate.getMonth(), sentDate.getDate())
       }
         })
       
@@ -478,35 +707,36 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // Sort all results by priority: upcoming events -> recurring -> facts -> past announcements
-  // Within each group, sort by score
-  allResults.sort((a, b) => {
-    // Priority order: upcoming events (has dateStr but not recurring) > recurring > facts/content > announcements/polls
-    const getPriority = (r: typeof allResults[0]): number => {
-      if (r.dateStr && !r.dateStr.startsWith('recurring:') && r.source === 'content') {
-        // Upcoming event - check if date is in the future
-        try {
-          const eventDate = new Date(r.dateStr)
-          if (eventDate >= new Date()) return 4 // Highest priority for future events
-        } catch (e) {
-          // Invalid date, treat as fact
-        }
+  // Find associations between events and announcements/polls
+  const events = allResults.filter(r => r.category === 'upcoming' || r.category === 'recurring' || r.category === 'past')
+  const announcements = allResults.filter(r => r.category === 'announcements' || r.category === 'polls')
+  const associations = await findAssociations(events, announcements)
+  
+  // Supplement events with associated announcements/polls
+  if (associations.size > 0) {
+    console.log(`[ContentQuery] Found ${associations.size} event-association pairs`)
+    for (const [eventTitle, relatedAnnouncements] of associations.entries()) {
+      const event = allResults.find(r => r.title === eventTitle)
+      if (event && relatedAnnouncements.length > 0) {
+        // Add association context to event body
+        event.body += `\n\nRelated context:\n${relatedAnnouncements.map(a => a.body).join('\n')}`
       }
-      if (r.dateStr?.startsWith('recurring:') && r.source === 'content') return 3 // Recurring events
-      if (r.source === 'content') return 2 // Facts/general content
-      if (r.source === 'announcement' || r.source === 'poll') return 1 // Past announcements (lowest priority)
-      return 0
     }
-    
-    const priorityA = getPriority(a)
-    const priorityB = getPriority(b)
+  }
+  
+  // Sort all results by category priority
+  allResults.sort((a, b) => {
+    const categoryA = a.category || 'facts'
+    const categoryB = b.category || 'facts'
+    const priorityA = CATEGORY_CONFIG[categoryA]?.priority || 0
+    const priorityB = CATEGORY_CONFIG[categoryB]?.priority || 0
     
     if (priorityA !== priorityB) {
       return priorityB - priorityA // Higher priority first
     }
     
     // Same priority, sort by score
-    return b.score - a.score
+    return (b.score || 0) - (a.score || 0)
   })
   
   // If no results, return no results message
@@ -522,8 +752,8 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       }
       
   // Use LLM to filter and format the most relevant results
-  console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM...`)
-  const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults)
+  console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM (target categories: ${targetCategories.join(', ')})...`)
+  const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults, targetCategories)
   console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
   
   return {

@@ -96,7 +96,7 @@ Respond with JSON: { "isPastActionQuery": boolean, "reasoning": string }`
  */
 async function filterAndFormatResultsWithLLM(
   query: string,
-  allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll' }>
+  allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }>
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY || allResults.length === 0) {
     return allResults[0]?.body || TEMPLATES.noResults()
@@ -106,12 +106,23 @@ async function filterAndFormatResultsWithLLM(
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    // Format results for LLM
-    const formattedResults = allResults.map((r, idx) => 
-      `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}\n${r.body}`
-    ).join('\n\n')
+    // Format results for LLM, including sent dates for relative date parsing
+    const formattedResults = allResults.map((r, idx) => {
+      let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}\n${r.body}`
+      
+      // Add context about sent date for relative date parsing
+      if (r.sentDate && (r.source === 'announcement' || r.source === 'poll')) {
+        const sentDate = r.sentDate instanceof Date ? r.sentDate : new Date(r.sentDate)
+        const dateStr = sentDate.toISOString().split('T')[0]
+        resultText += `\nNote: This was sent on ${dateStr}. When this mentions relative dates like "tomorrow", "tmr", "next week", calculate them relative to ${dateStr}, not today's date.`
+      }
+      
+      return resultText
+    }).join('\n\n')
 
     const systemPrompt = `You are a helpful assistant that answers questions using the provided search results.
+
+IMPORTANT: For announcements and polls that include relative dates (e.g., "tomorrow", "tmr", "next week"), calculate these dates relative to the "sent on" date mentioned in the result, NOT today's date. For example, if an announcement was sent on January 6 and says "tomorrow", that means January 7.
 
 Your task:
 1. Filter out irrelevant results that don't answer the user's question
@@ -165,7 +176,7 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   }
   
   // Collect all results from both sources
-  const allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll' }> = []
+  const allResults: Array<{ title: string; body: string; score: number; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }> = []
   
   // 1. Search content database
   if (searchContent) {
@@ -194,12 +205,18 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
           const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2)
           return queryWords.some(word => contentLower.includes(word))
         })
-        .map(action => ({
-          title: action.type === 'poll' ? 'Poll' : 'Announcement',
-          body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}`,
-          score: 0.5, // Medium relevance for past actions
-          source: action.type === 'poll' ? 'poll' as const : 'announcement' as const
-        }))
+        .map(action => {
+          // Include sent date in the body for relative date parsing
+          const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)
+          const dateStr = sentDate.toISOString().split('T')[0] // YYYY-MM-DD format
+          return {
+            title: action.type === 'poll' ? 'Poll' : 'Announcement',
+            body: `${action.type === 'poll' ? '📊' : '📢'} ${action.content}${action.type === 'poll' ? '\n(Reply yes/no/maybe)' : ''}\n(Sent: ${dateStr})`,
+            score: 0.5, // Medium relevance for past actions
+            source: action.type === 'poll' ? 'poll' as const : 'announcement' as const,
+            sentDate // Store for LLM context
+          }
+        })
       
       allResults.push(...relevantActions)
       console.log(`[ContentQuery] Found ${relevantActions.length} relevant past actions`)

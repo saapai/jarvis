@@ -45,15 +45,15 @@ export const textExplorerRepository: TextExplorerRepository = {
     
     const hasEmbeddingColumn = columnExists[0]?.exists ?? false;
     
-    // For each fact, check if a duplicate exists and merge if found
-    await prisma.$transaction(
-      facts.map(async (fact) => {
+    // Use interactive transaction to handle async operations
+    await prisma.$transaction(async (tx) => {
+      for (const fact of facts) {
         // Normalize the time reference for matching
         const normalizedTime = normalizeWeekRef(fact.dateStr, fact.timeRef);
         const subcategoryLower = (fact.subcategory || '').toLowerCase().trim();
         
         // Find existing facts with same category and subcategory
-        const candidates = await prisma.$queryRaw<Array<{
+        const candidates = await tx.$queryRaw<Array<{
           id: string;
           content: string;
           sourceText: string | null;
@@ -101,7 +101,7 @@ export const textExplorerRepository: TextExplorerRepository = {
           
           // Update existing fact
           if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
-            return prisma.$executeRawUnsafe(
+            await tx.$executeRawUnsafe(
               `
               UPDATE "Fact"
               SET content = $1,
@@ -117,7 +117,7 @@ export const textExplorerRepository: TextExplorerRepository = {
               existingFact.id
             );
           } else {
-            return prisma.$executeRawUnsafe(
+            await tx.$executeRawUnsafe(
               `
               UPDATE "Fact"
               SET content = $1,
@@ -136,7 +136,7 @@ export const textExplorerRepository: TextExplorerRepository = {
           const embedding = factEmbedding ?? Array.from({ length: VECTOR_DIMENSION }, () => 0);
           
           if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
-            return prisma.$executeRawUnsafe(
+            await tx.$executeRawUnsafe(
               `
               INSERT INTO "Fact" 
                 (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", entities, embedding)
@@ -154,7 +154,7 @@ export const textExplorerRepository: TextExplorerRepository = {
               `[${factEmbedding.join(',')}]`
             );
           } else {
-            return prisma.$executeRawUnsafe(
+            await tx.$executeRawUnsafe(
               `
               INSERT INTO "Fact" 
                 (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", entities)
@@ -172,8 +172,8 @@ export const textExplorerRepository: TextExplorerRepository = {
             );
           }
         }
-      })
-    );
+      }
+    });
   },
 };
 

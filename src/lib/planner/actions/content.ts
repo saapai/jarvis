@@ -887,8 +887,8 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // 3. Search past announcements/polls
-  if (searchPastActions && (targetCategories.includes('announcements') || targetCategories.includes('polls'))) {
+  // 3. Search past announcements/polls (always search, not just when categories are detected)
+  if (searchPastActions) {
     console.log(`[ContentQuery] Searching past announcements/polls...`)
     try {
       const pastActions = await searchPastActions()
@@ -907,12 +907,14 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
           if (isMetaQuery) {
             return true
           }
-          // For specific object queries, filter by relevance
+          // For specific object queries, filter by relevance - but be more lenient
           if (queryWords.length > 0) {
             const contentLower = action.content.toLowerCase()
+            // Match if any keyword appears in content
             return queryWords.some(word => contentLower.includes(word))
           }
-          return true
+          // If no keywords, still include if query matches category intent
+          return targetCategories.includes('announcements') || targetCategories.includes('polls') || targetCategories.length === 0
         })
         .map(action => {
       const sentDate = action.sentAt instanceof Date ? action.sentAt : new Date(action.sentAt)

@@ -437,7 +437,8 @@ function DumpTab({
   breadcrumbClickIndex,
   resetBreadcrumbClick,
   calendarDate: parentCalendarDate,
-  setCalendarDate: setParentCalendarDate
+  setCalendarDate: setParentCalendarDate,
+  isAdminMode: parentIsAdminMode
 }: { 
   viewMode?: ViewMode;
   setViewMode?: (mode: ViewMode) => void;
@@ -447,6 +448,7 @@ function DumpTab({
   resetBreadcrumbClick?: () => void;
   calendarDate?: { year: number; month: number };
   setCalendarDate?: (date: { year: number; month: number } | ((prev: { year: number; month: number }) => { year: number; month: number })) => void;
+  isAdminMode?: boolean;
 }) {
   const [tree, setTree] = useState<TreeData | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
@@ -457,11 +459,12 @@ function DumpTab({
   const [showUpload, setShowUpload] = useState(false);
   const [uploadText, setUploadText] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('explore');
-  const [isAdminMode, setIsAdminMode] = useState(false);
+  const isAdminMode = parentIsAdminMode ?? false;
   const [editingFactId, setEditingFactId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<'subcategory' | 'content' | null>(null);
   const [editValue, setEditValue] = useState('');
   const [updatingFactId, setUpdatingFactId] = useState<string | null>(null);
+  const [deletingFactId, setDeletingFactId] = useState<string | null>(null);
   
   // Use parent viewMode if provided, otherwise use local state
   const activeViewMode = parentViewMode !== undefined ? parentViewMode : viewMode;
@@ -744,6 +747,38 @@ function DumpTab({
     setEditValue('');
   };
 
+  const handleFactDelete = async (factId: string) => {
+    if (!confirm('Are you sure you want to delete this fact? This cannot be undone.')) {
+      return;
+    }
+    
+    setDeletingFactId(factId);
+    try {
+      const res = await fetch(`/api/text-explorer/facts/${factId}`, {
+        method: 'DELETE',
+      });
+      
+      if (res.ok) {
+        // Remove fact from state
+        setFacts(facts.filter(f => f.id !== factId));
+        setAllFacts(allFacts.filter(f => f.id !== factId));
+        
+        // Refresh tree and facts
+        await fetchTree();
+        await fetchFacts();
+        await fetchAllFacts();
+      } else {
+        console.error('Failed to delete fact');
+        alert('Failed to delete fact');
+      }
+    } catch (error) {
+      console.error('Error deleting fact:', error);
+      alert('Error deleting fact');
+    } finally {
+      setDeletingFactId(null);
+    }
+  };
+
   useEffect(() => { fetchTree(); }, [fetchTree]);
   useEffect(() => { fetchFacts(); }, [fetchFacts]);
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
@@ -964,6 +999,7 @@ function DumpTab({
     const mainFact = groupFacts?.[0] || fact;
     const isEditing = editingFactId === mainFact.id;
     const isUpdating = updatingFactId === mainFact.id;
+    const isDeleting = deletingFactId === mainFact.id;
     
     // Show only ONE canonical date chip - the primary date (fix UTC offset issue)
     let dateChip = null;
@@ -1008,7 +1044,20 @@ function DumpTab({
           style={getColumnCardStyle(columnType)}
         >
           {/* Two-Column Header */}
-          <div className="w-full p-4">
+          <div className="w-full p-4 relative">
+            {isAdminMode && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleFactDelete(mainFact.id);
+                }}
+                disabled={isDeleting || isEditing}
+                className="absolute top-2 right-2 p-1.5 text-xs text-[var(--highlight-red)] hover:bg-[rgba(206,96,135,0.16)] rounded transition-colors disabled:opacity-50 z-10"
+                title="Delete fact"
+              >
+                {isDeleting ? '...' : '×'}
+              </button>
+            )}
             <button
               onClick={() => !isEditing && toggleCard(fact.subcategory!.toLowerCase())}
               className="w-full text-left transition-colors"
@@ -1492,19 +1541,6 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
     <div className="min-h-screen bg-[var(--bg-main)] flex animate-fade-in">
       {/* Main Content - Full Width */}
       <main className="flex-1 flex flex-col overflow-hidden max-w-6xl mx-auto w-full">
-        {/* Admin Mode Toggle */}
-        <div className="px-4 pt-6 pb-2 flex justify-end">
-          <button
-            onClick={() => setIsAdminMode(!isAdminMode)}
-            className={`px-4 py-2 text-sm font-mono rounded-lg transition-colors ${
-              isAdminMode
-                ? 'bg-[var(--highlight-red)] text-white'
-                : 'bg-[var(--card-bg)] text-[var(--text-on-card)] border border-[var(--card-border)] hover:border-[var(--highlight-red)]'
-            }`}
-          >
-            {isAdminMode ? 'admin mode' : 'viewer mode'}
-          </button>
-        </div>
         <div className="flex-1 overflow-auto py-6 px-4">
           {isAdminMode && activeViewMode === 'explore' && !loading && (
             <div className="mb-4 p-3 bg-[rgba(206,96,135,0.1)] border border-[var(--highlight-red)]/30 rounded-lg">
@@ -2116,6 +2152,7 @@ export default function Home() {
   });
   const [scrollY, setScrollY] = useState(0);
   const [headerVisible, setHeaderVisible] = useState(true);
+  const [isAdminMode, setIsAdminMode] = useState(false);
   
   // Handle scroll behavior for header
   useEffect(() => {
@@ -2243,8 +2280,19 @@ export default function Home() {
             <span className="text-[var(--highlight-red)]">_</span>
           </div>
           
-          {/* Right: Upload and Announcements Icons */}
+          {/* Right: Admin Toggle, Upload and Announcements Icons */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAdminMode(!isAdminMode)}
+              className={`px-3 py-1.5 text-xs font-mono rounded-lg transition-colors ${
+                isAdminMode
+                  ? 'bg-[var(--highlight-red)] text-white'
+                  : 'bg-[var(--card-bg)] text-[var(--text-on-card)] border border-[var(--card-border)] hover:border-[var(--highlight-red)]'
+              }`}
+              title={isAdminMode ? 'Admin mode' : 'Viewer mode'}
+            >
+              {isAdminMode ? 'admin' : 'viewer'}
+            </button>
             <button
               onClick={() => setViewMode('uploads')}
               className={`p-2 rounded-lg transition-colors ${
@@ -2282,6 +2330,7 @@ export default function Home() {
           resetBreadcrumbClick={() => setBreadcrumbClickIndex(null)}
           calendarDate={calendarDate}
           setCalendarDate={setCalendarDate}
+          isAdminMode={isAdminMode}
         />
       </main>
     </div>

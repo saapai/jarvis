@@ -171,3 +171,37 @@ export async function PATCH(
   }
 }
 
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Fact ID is required' }, { status: 400 });
+    }
+
+    const prisma = await getPrisma();
+    
+    // Check if fact exists
+    const fact = await prisma.fact.findUnique({
+      where: { id },
+    });
+
+    if (!fact) {
+      return NextResponse.json({ error: 'Fact not found' }, { status: 404 });
+    }
+
+    // Delete the fact
+    await prisma.fact.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Fact delete error:', error);
+    return NextResponse.json({ error: 'Failed to delete fact' }, { status: 500 });
+  }
+}
+

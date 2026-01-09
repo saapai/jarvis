@@ -2,33 +2,67 @@ import { getPrisma } from '@/lib/prisma';
 import { TextExplorerRepository, ExtractedFact } from './types';
 import { VECTOR_DIMENSION } from './embeddings';
 
-/**
- * Compute a normalized time key for "card" identity:
- * - Any "week 3", "week:3", "week 3 weekend" → "week:3"
- * - Real ISO dates (YYYY-MM-DD) are kept as-is
- * - Everything else falls back to a lowercase/trimmed combined string
- *
- * This is intentionally shared logic with the in-memory deduper so that
- * cards are identified the same way within an upload and across uploads.
- */
-function normalizeTimeKey(dateStr?: string | null, timeRef?: string | null): string {
-  const dateLower = (dateStr || '').toLowerCase().trim();
-  const timeLower = (timeRef || '').toLowerCase().trim();
-  const combined = [dateLower, timeLower].filter(Boolean).join(' ');
+// ---- Time helpers for card-oriented identity ----
 
-  // Extract week number from anything like "week 3", "week:3", "week 3 weekend"
+function extractWeekNumber(
+  dateStr?: string | null,
+  timeRef?: string | null
+): number | null {
+  const combined = `${dateStr ?? ''} ${timeRef ?? ''}`.toLowerCase();
   const weekMatch = combined.match(/\bweek\s*:?\s*(\d+)\b/);
-  if (weekMatch) {
-    return `week:${weekMatch[1]}`;
+  if (!weekMatch) return null;
+  const parsed = parseInt(weekMatch[1], 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function normalizeIsoDate(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+function hasTemporalIdentity(
+  week: number | null,
+  isoDate: string | null
+): boolean {
+  return week !== null || isoDate !== null;
+}
+
+function isSameCardTime(
+  baseWeek: number | null,
+  baseDate: string | null,
+  otherWeek: number | null,
+  otherDate: string | null
+): boolean {
+  if (!hasTemporalIdentity(baseWeek, baseDate) || !hasTemporalIdentity(otherWeek, otherDate)) {
+    // If either side has no temporal identifier, don't treat as the same card
+    return false;
   }
 
-  // Keep real ISO dates as-is
-  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
-    return dateStr.trim();
+  const weeksEqual =
+    baseWeek !== null && otherWeek !== null && baseWeek === otherWeek;
+  const datesEqual =
+    baseDate !== null && otherDate !== null && baseDate === otherDate;
+
+  // Same title + same week:
+  // - If both have dates, they must match
+  // - If either is missing a date, still treat as the same card
+  if (weeksEqual) {
+    if (!baseDate || !otherDate || datesEqual) {
+      return true;
+    }
   }
 
-  // Fallback: normalized combined string (can be empty)
-  return combined;
+  // Same title + same date:
+  // - If both have weeks, they must match
+  // - If either is missing a week, still treat as the same card
+  if (datesEqual) {
+    if (baseWeek === null || otherWeek === null || weeksEqual) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export const textExplorerRepository: TextExplorerRepository = {
@@ -59,50 +93,65 @@ export const textExplorerRepository: TextExplorerRepository = {
     // Use interactive transaction so async upserts are valid
     await prisma.$transaction(async (tx) => {
       for (const fact of facts) {
-        // Compute normalized time key from dateStr / timeRef for card identity
-        const normalizedTime = normalizeTimeKey(fact.dateStr, fact.timeRef);
+        // Compute temporal identity from week + ISO date for card identity
+        const factWeek = extractWeekNumber(fact.dateStr, fact.timeRef);
+        const factDate = normalizeIsoDate(fact.dateStr);
         const subcategoryLower = (fact.subcategory || '').toLowerCase().trim();
 
-        // Look up candidate facts with same category + title (subcategory, case-insensitive)
-        const candidates = await tx.$queryRawUnsafe<Array<{
+        const factEmbedding =
+          fact.embedding && fact.embedding.length === VECTOR_DIMENSION
+            ? fact.embedding
+            : null;
+        const hasEmbedding = hasEmbeddingColumn && factEmbedding !== null;
+
+        type Candidate = {
           id: string;
           content: string;
           sourceText: string | null;
           entities: string;
           dateStr: string | null;
           timeRef: string | null;
-        }>>(
-          `
-          SELECT id,
-                 content,
-                 "sourceText",
-                 entities,
-                 "dateStr",
-                 "timeRef"
-          FROM "Fact"
-          WHERE category = $1
-            AND LOWER(TRIM(subcategory)) = $2
-          `,
-          fact.category,
-          subcategoryLower
-        );
+        };
 
-        // Among candidates, treat as the same card when the normalized time key matches:
-        // - Same title + same week (even if only one has a date in addition)
-        // - Or same title + same date
-        const existing = candidates.find((candidate) => {
-          const candidateNormalized = normalizeTimeKey(
-            candidate.dateStr,
-            candidate.timeRef
+        let existing: Candidate | undefined;
+
+        // Only try to deduplicate when the fact has a temporal identifier
+        if (hasTemporalIdentity(factWeek, factDate)) {
+          // Look up candidate facts with same category + title (subcategory, case-insensitive)
+          const candidates = await tx.$queryRawUnsafe<Array<Candidate>>(
+            `
+            SELECT id,
+                   content,
+                   "sourceText",
+                   entities,
+                   "dateStr",
+                   "timeRef"
+            FROM "Fact"
+            WHERE category = $1
+              AND LOWER(TRIM(subcategory)) = $2
+            `,
+            fact.category,
+            subcategoryLower
           );
-          return candidateNormalized === normalizedTime;
-        });
-        
-        const factEmbedding = fact.embedding && fact.embedding.length === VECTOR_DIMENSION
-          ? fact.embedding
-          : null;
-        const hasEmbedding = hasEmbeddingColumn && factEmbedding !== null;
-        
+
+          // Among candidates, treat as the same card using week/date rules:
+          // - Same title + same week (even if only one has a date)
+          // - Same title + same date (even if only one has a week)
+          existing = candidates.find((candidate) => {
+            const candidateWeek = extractWeekNumber(
+              candidate.dateStr,
+              candidate.timeRef
+            );
+            const candidateDate = normalizeIsoDate(candidate.dateStr);
+            return isSameCardTime(
+              factWeek,
+              factDate,
+              candidateWeek,
+              candidateDate
+            );
+          });
+        }
+
         if (existing) {
           // Merge with existing fact
           const existingFact = existing;

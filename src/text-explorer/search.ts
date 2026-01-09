@@ -28,17 +28,20 @@ export async function searchFacts(query: string, limit = 5): Promise<ContentResu
 async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, embedding: number[], limit: number): Promise<ContentResult[]> {
   // Format embedding array for PostgreSQL pgvector
   const vectorLiteral = `[${embedding.join(',')}]`
+  
+  // Ensure limit is a safe integer
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)))
 
-  // Use Prisma.sql with proper parameterization for limit, and raw for vector literal
-  const rows = await prisma.$queryRaw<
+  // Use $queryRawUnsafe with properly formatted SQL (same approach as repository.ts)
+  const rows = await prisma.$queryRawUnsafe<
     Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; score: number }>
-  >(Prisma.sql`
+  >(`
     SELECT content, subcategory, category, "timeRef", "dateStr",
-      1 - (embedding <=> ${Prisma.raw(vectorLiteral)}::vector) AS score
+      1 - (embedding <=> ${vectorLiteral}::vector) AS score
     FROM "Fact"
     WHERE embedding IS NOT NULL
-    ORDER BY embedding <=> ${Prisma.raw(vectorLiteral)}::vector
-    LIMIT ${limit}
+    ORDER BY embedding <=> ${vectorLiteral}::vector
+    LIMIT ${safeLimit}
   `)
 
   return rows.map((row) => ({

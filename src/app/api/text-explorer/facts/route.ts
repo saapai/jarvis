@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
       subcategory: fact.subcategory,
       timeRef: fact.timeRef,
       dateStr: fact.dateStr,
+      calendarDates: fact.calendarDates ? JSON.parse(fact.calendarDates) : null,
       entities: JSON.parse(fact.entities),
       uploadName: fact.upload.name,
       createdAt: fact.createdAt.toISOString(),

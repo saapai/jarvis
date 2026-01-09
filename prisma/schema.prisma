@@ -30,6 +30,7 @@ model Fact {
   subcategory String?  // Event name like "Study Hall", "Creatathon"
   timeRef     String?  // "tomorrow", "November 8th", "every Wednesday"
   dateStr     String?  // Parsed date: "2024-11-08", "recurring:wednesday"
+  calendarDates String? // JSON array of YYYY-MM-DD dates for calendar display
   entities    String   // JSON array of entities
   embedding   Unsupported("vector")?
   

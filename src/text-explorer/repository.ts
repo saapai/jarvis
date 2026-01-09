@@ -1,6 +1,7 @@
 import { getPrisma } from '@/lib/prisma';
 import { TextExplorerRepository, ExtractedFact } from './types';
 import { VECTOR_DIMENSION } from './embeddings';
+import { openai } from '@/lib/openai';
 
 // ---- Time helpers for card-oriented identity ----
 
@@ -63,6 +64,76 @@ function isSameCardTime(
   }
 
   return false;
+}
+
+/**
+ * Parse calendar dates from fact content/timeRef/dateStr using LLM.
+ * Returns array of YYYY-MM-DD dates for calendar display.
+ */
+async function parseCalendarDates(fact: {
+  subcategory?: string | null;
+  timeRef?: string | null;
+  content?: string;
+  dateStr?: string | null;
+}): Promise<string[]> {
+  if (!fact.timeRef && !fact.content && !fact.dateStr) return [];
+  
+  try {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    const currentDay = today.getDate();
+    
+    const prompt = `Extract ALL dates for this event and return them as an array of YYYY-MM-DD dates.
+
+CRITICAL: If the event spans multiple days, return ALL dates in the range, not just the start and end dates.
+
+Examples of date ranges:
+- "January 16 to January 19" -> ["2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19"]
+- "jan 16-19" -> ["2026-01-16", "2026-01-17", "2026-01-18", "2026-01-19"]
+- "jan 24-25" -> ["2026-01-24", "2026-01-25"]
+- "January 16 to January 29" -> ["2026-01-16", "2026-01-17", ..., "2026-01-29"] (all dates)
+- "jan 16 to jan 29" -> ["2026-01-16", "2026-01-17", ..., "2026-01-29"] (all dates)
+
+Single dates:
+- "January 10" -> ["2026-01-10"]
+- "jan 24" -> ["2026-01-24"]
+
+Recurring events (return empty array):
+- "every Wednesday" -> []
+- "recurring:wednesday" -> []
+
+Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
+
+Fact information:
+- subcategory: "${fact.subcategory || 'none'}"
+- timeRef: "${fact.timeRef || 'none'}"
+- content: "${fact.content?.substring(0, 300) || 'none'}"
+- dateStr: "${fact.dateStr || 'none'}"
+
+Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a precise date parser. Extract ALL dates from date ranges, including every day between start and end dates. Return dates in YYYY-MM-DD format.' },
+        { role: 'user', content: prompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+      max_tokens: 500
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (content) {
+      const parsed = JSON.parse(content);
+      return parsed.dates || [];
+    }
+  } catch (error) {
+    console.error('[TextExplorer] Calendar date parsing failed:', error);
+  }
+  
+  return [];
 }
 
 export const textExplorerRepository: TextExplorerRepository = {
@@ -193,6 +264,15 @@ export const textExplorerRepository: TextExplorerRepository = {
           });
         }
 
+        // Parse calendar dates for this fact (server-side, once)
+        const calendarDates = await parseCalendarDates({
+          subcategory: fact.subcategory,
+          timeRef: fact.timeRef,
+          content: fact.content,
+          dateStr: fact.dateStr,
+        });
+        const calendarDatesJson = calendarDates.length > 0 ? JSON.stringify(calendarDates) : null;
+
         if (existing) {
           // Merge with existing fact
           const existingFact = existing;
@@ -211,7 +291,7 @@ export const textExplorerRepository: TextExplorerRepository = {
             mergedSourceText = `${existingFact.sourceText || ''}\n\n${fact.sourceText}`.trim();
           }
           
-          // Update existing fact
+          // Update existing fact (include calendarDates)
           if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
             await tx.$executeRawUnsafe(
               `
@@ -219,12 +299,14 @@ export const textExplorerRepository: TextExplorerRepository = {
               SET content = $1,
                   "sourceText" = $2,
                   entities = $3,
-                  embedding = $4::vector
-              WHERE id = $5
+                  "calendarDates" = $4,
+                  embedding = $5::vector
+              WHERE id = $6
               `,
               mergedContent,
               mergedSourceText,
               JSON.stringify(Array.from(newEntities)),
+              calendarDatesJson,
               `[${factEmbedding.join(',')}]`,
               existingFact.id
             );
@@ -234,26 +316,28 @@ export const textExplorerRepository: TextExplorerRepository = {
               UPDATE "Fact"
               SET content = $1,
                   "sourceText" = $2,
-                  entities = $3
-              WHERE id = $4
+                  entities = $3,
+                  "calendarDates" = $4
+              WHERE id = $5
               `,
               mergedContent,
               mergedSourceText,
               JSON.stringify(Array.from(newEntities)),
+              calendarDatesJson,
               existingFact.id
             );
           }
         } else {
-          // Insert new fact
+          // Insert new fact (include calendarDates)
           const embedding = factEmbedding ?? Array.from({ length: VECTOR_DIMENSION }, () => 0);
           
           if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
             await tx.$executeRawUnsafe(
               `
               INSERT INTO "Fact" 
-                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", entities, embedding)
+                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, embedding)
               VALUES 
-                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9::vector)
+                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector)
               `,
               uploadId,
               fact.content,
@@ -262,6 +346,7 @@ export const textExplorerRepository: TextExplorerRepository = {
               fact.subcategory,
               fact.timeRef,
               fact.dateStr,
+              calendarDatesJson,
               JSON.stringify(fact.entities),
               `[${factEmbedding.join(',')}]`
             );
@@ -269,9 +354,9 @@ export const textExplorerRepository: TextExplorerRepository = {
             await tx.$executeRawUnsafe(
               `
               INSERT INTO "Fact" 
-                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", entities)
+                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities)
               VALUES 
-                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
               `,
               uploadId,
               fact.content,
@@ -280,6 +365,7 @@ export const textExplorerRepository: TextExplorerRepository = {
               fact.subcategory,
               fact.timeRef,
               fact.dateStr,
+              calendarDatesJson,
               JSON.stringify(fact.entities)
             );
           }

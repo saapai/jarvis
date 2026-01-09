@@ -53,19 +53,18 @@ export const textExplorerRepository: TextExplorerRepository = {
         const subcategoryLower = (fact.subcategory || '').toLowerCase().trim();
         
         // Find existing facts with same category and subcategory
-        const candidates = await tx.$queryRaw<Array<{
+        const candidates = await tx.$queryRawUnsafe<Array<{
           id: string;
           content: string;
           sourceText: string | null;
           entities: string;
           dateStr: string | null;
           timeRef: string | null;
-        }>>`
-          SELECT id, content, "sourceText", entities, "dateStr", "timeRef"
+        }>>(
+          `SELECT id, content, "sourceText", entities, "dateStr", "timeRef"
           FROM "Fact"
           WHERE category = $1
-            AND LOWER(TRIM(subcategory)) = $2
-        `,
+            AND LOWER(TRIM(subcategory)) = $2`,
           fact.category,
           subcategoryLower
         );

@@ -201,6 +201,55 @@ function detectQueryCategoriesByKeywords(message: string): {
 }
 
 /**
+ * Generate a better search query for category-based queries using LLM
+ */
+async function generateSearchQueryForCategory(originalQuery: string, category: ContentCategory): Promise<string> {
+  if (!process.env.OPENAI_API_KEY) {
+    // Fallback: return original query
+    return originalQuery
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `Generate search terms that would find content items in the "${category}" category.
+    
+Examples:
+- Query: "what are recurring events" → Search terms: "meetings weekly events study hall active meeting" (terms that match recurring events)
+- Query: "what are upcoming events" → Search terms: "events trips retreats schedule calendar upcoming" (terms that match upcoming events)
+- Query: "what are past events" → Search terms: "events activities past completed" (terms that match past events)
+
+Respond with JSON: { "searchTerms": string }
+The searchTerms should be a space-separated list of keywords that would help find relevant items in that category.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Original query: "${originalQuery}"\nCategory: ${category}\nGenerate search terms:` }
+      ],
+      temperature: 0.2,
+      max_tokens: 100,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      const searchTerms = parsed.searchTerms || originalQuery
+      console.log(`[ContentQuery] Generated search terms for ${category} category: "${searchTerms}"`)
+      return searchTerms
+    }
+  } catch (error) {
+    console.error('[ContentQuery] Search query generation failed:', error)
+  }
+
+  // Fallback: return original query
+  return originalQuery
+}
+
+/**
  * Check if content describes a recurring event by examining body text
  */
 async function isRecurringFromContent(body: string): Promise<boolean> {
@@ -773,16 +822,29 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   const allResults: Array<ContentResult & { source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; eventDate?: Date }> = []
   
   // 1. Search content database (Facts)
+  // Search broadly and let categorization + LLM processing handle filtering
   if (searchContent && (targetCategories.includes('facts') || targetCategories.includes('upcoming') || targetCategories.includes('recurring') || targetCategories.includes('past'))) {
     console.log(`[ContentQuery] Searching content database...`)
     try {
-      const contentResults = await searchContent(message)
-      console.log(`[ContentQuery] Found ${contentResults.length} content results`)
+      // Use LLM to generate a better search query if this is a category query
+      // This helps find relevant events/meetings even when query doesn't explicitly mention them
+      let searchQuery = message
+      if (targetCategories.length === 1 && targetCategories.includes('recurring')) {
+        // For recurring queries, use LLM to generate search terms that would find recurring events
+        searchQuery = await generateSearchQueryForCategory(message, 'recurring')
+      } else if (targetCategories.length === 1 && targetCategories.includes('upcoming')) {
+        // For upcoming queries, use LLM to generate search terms for future events
+        searchQuery = await generateSearchQueryForCategory(message, 'upcoming')
+      }
+      
+      const contentResults = await searchContent(searchQuery)
+      console.log(`[ContentQuery] Found ${contentResults.length} content results (search query: "${searchQuery}")`)
       
       // Assign categories to all results using existing metadata (await since it's async)
       const categorizedResults = await Promise.all(
         contentResults.map(async r => {
           const category = await assignCategoryToResult({ ...r, source: 'content' })
+          console.log(`[ContentQuery] Categorized result: "${r.title || 'untitled'}" as ${category} (dateStr: ${r.dateStr}, timeRef: ${r.timeRef})`)
           return { 
             ...r, 
             source: 'content' as const,
@@ -794,6 +856,13 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       )
       
       allResults.push(...categorizedResults)
+      console.log(`[ContentQuery] Category breakdown: ${Object.entries(
+        categorizedResults.reduce((acc, r) => {
+          const cat = r.category || 'facts'
+          acc[cat] = (acc[cat] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+      ).map(([cat, count]) => `${cat}: ${count}`).join(', ')}`)
     } catch (error) {
       console.error('[ContentQuery] Content search failed:', error)
     }

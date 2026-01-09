@@ -753,6 +753,32 @@ function DumpTab({
     }
   }, [activeViewMode, fetchAnnouncements]);
 
+  // Handle Command+Enter for upload modal
+  useEffect(() => {
+    if (!showUpload) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Handle Command+Enter or Ctrl+Enter to trigger upload
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        // Don't interfere if user is typing in the textarea (it has its own handler)
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'TEXTAREA') {
+          return;
+        }
+        e.preventDefault();
+        if (!uploading && (uploadText.trim() || uploadFile)) {
+          handleUpload();
+          setShowUpload(false);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showUpload, uploading, uploadText, uploadFile]);
+
   const handleUpload = async () => {
     if (!uploadText.trim() && !uploadFile) return;
     setUploading(true);

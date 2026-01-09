@@ -187,24 +187,48 @@ function detectQueryCategoriesByKeywords(message: string): {
 }
 
 /**
- * Assign category to a content result based on its metadata
+ * Assign category to a content result based on its existing metadata (dateStr, timeRef, eventDate)
+ * Uses the same categorization logic as the inbox: UPCOMING, RECURRING, PAST, FACTS
  */
 function assignCategoryToResult(result: ContentResult & { source?: 'content' | 'announcement' | 'poll'; eventDate?: Date }): ContentCategory {
   const now = new Date()
+  now.setHours(0, 0, 0, 0) // Compare dates only, not times
 
-  // Assign based on source type
+  // Assign based on source type (announcements/polls are always past)
   if (result.source === 'announcement') return 'announcements'
   if (result.source === 'poll') return 'polls'
 
-  // Assign based on dateStr pattern
+  // Check if dateStr indicates recurring pattern (matches inbox logic)
   if (result.dateStr?.startsWith('recurring:')) {
     return 'recurring'
   }
 
-  // Assign based on eventDate or dateStr
-  if (result.eventDate || result.dateStr) {
+  // Check if timeRef indicates recurring pattern (e.g., "every Wednesday")
+  if (result.timeRef) {
+    const timeRefLower = result.timeRef.toLowerCase()
+    if (timeRefLower.includes('every') || 
+        timeRefLower.includes('weekly') || 
+        timeRefLower.includes('recurring') ||
+        /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*(at|@)?/.test(timeRefLower)) {
+      return 'recurring'
+    }
+  }
+
+  // Assign based on eventDate or dateStr (parse date and compare)
+  if (result.eventDate) {
+    const eventDate = new Date(result.eventDate)
+    eventDate.setHours(0, 0, 0, 0)
+    if (eventDate >= now) {
+      return 'upcoming'
+    } else {
+      return 'past'
+    }
+  }
+
+  if (result.dateStr && !result.dateStr.startsWith('recurring:')) {
     try {
-      const eventDate = result.eventDate || new Date(result.dateStr!)
+      const eventDate = new Date(result.dateStr)
+      eventDate.setHours(0, 0, 0, 0)
       if (eventDate >= now) {
         return 'upcoming'
       } else {
@@ -215,7 +239,7 @@ function assignCategoryToResult(result: ContentResult & { source?: 'content' | '
     }
   }
 
-  // Default to facts
+  // Default to facts (no date or invalid date)
   return 'facts'
 }
 
@@ -240,21 +264,61 @@ function getNextOccurrence(recurringPattern: string, today: Date): string | null
 }
 
 /**
- * Detect if query is asking for a definition (meta query about a category)
+ * Detect if query is asking for a definition/meta query about a category (not a specific object)
+ * Uses LLM to understand intent
  */
-function isDefinitionQuery(query: string): boolean {
+async function isCategoryQuery(query: string): Promise<boolean> {
+  if (!process.env.OPENAI_API_KEY) {
+    // Fallback: simple heuristic
+    const lower = query.toLowerCase()
+    return /^(what|show|list|tell me about)\s+(are|is|the\s+)?(announcements?|polls?|recurring|events?)/i.test(lower) ||
+           /^(what|show|list)\s+(announcements?|polls?|events?)\s+(have|were)/i.test(lower)
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const systemPrompt = `Determine if the user is asking a META/CATEGORY query (asking about all items in a category) vs a SPECIFIC OBJECT query (asking about a particular item).
+
+CATEGORY QUERIES (return true):
+- "what are recurring events" (asking about all recurring events)
+- "what announcements have been made" (asking about all announcements)
+- "show me past announcements" (asking about all past announcements)
+- "what's on my calendar" (meta query aggregating categories)
+- "list recurring events" (asking about all recurring events)
+
+SPECIFIC OBJECT QUERIES (return false):
+- "when is active meeting" (asking about a specific event)
+- "tell me about the ski trip announcement" (asking about a specific announcement)
+- "what did you send about study hall" (asking about a specific announcement related to study hall)
+
+Respond with JSON: { "isCategoryQuery": boolean, "reasoning": string }`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Is this a category/meta query? "${query}"` }
+      ],
+      temperature: 0.1,
+      max_tokens: 100,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      return parsed.isCategoryQuery || false
+    }
+  } catch (error) {
+    console.error('[ContentQuery] Category query detection failed:', error)
+  }
+
+  // Fallback: simple heuristic
   const lower = query.toLowerCase()
-  const definitionPatterns = [
-    /^what are\s+/i,
-    /^what is\s+/i,
-    /^what's\s+/i,
-    /^define\s+/i,
-    /^explain\s+/i,
-    /^tell me about\s+/i
-  ]
-  
-  return definitionPatterns.some(pattern => pattern.test(lower)) && 
-         !/\b(for|in|at|on|when|where|who)\b/.test(lower)
+  return /^(what|show|list|tell me about)\s+(are|is|the\s+)?(announcements?|polls?|recurring|events?)/i.test(lower) ||
+         /^(what|show|list)\s+(announcements?|polls?|events?)\s+(have|were)/i.test(lower)
 }
 
 /**
@@ -392,14 +456,13 @@ async function filterAndFormatResultsWithLLM(
     
     // Filter results by target categories
     const filteredResults = filterResultsByCategories(allResults, targetCategories)
-    
-    // If definition query, ensure we include examples from the category
-    const isDef = isDefinitionQuery(query)
 
     // Format results for LLM, including category metadata
+    // Note: categories should already be assigned in handleContentQuery before this function is called
     const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
     const formattedResults = filteredResults.map((r, idx) => {
-      const category = r.category || assignCategoryToResult(r)
+      // Category should already be assigned, but fallback to 'facts' if missing
+      const category: ContentCategory = r.category || 'facts'
       
       // Highlight relevance by showing how the result relates to the query
       let relevanceNote = ''
@@ -633,16 +696,20 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     try {
       const contentResults = await searchContent(message)
       console.log(`[ContentQuery] Found ${contentResults.length} content results`)
-      allResults.push(...contentResults.map(r => {
+      
+      // Assign categories to all results using existing metadata
+      const categorizedResults = contentResults.map(r => {
         const category = assignCategoryToResult({ ...r, source: 'content' })
         return { 
-        ...r, 
-        source: 'content' as const,
+          ...r, 
+          source: 'content' as const,
           category,
-        dateStr: r.dateStr || null,
-        timeRef: r.timeRef || null
+          dateStr: r.dateStr || null,
+          timeRef: r.timeRef || null
         }
-      }))
+      })
+      
+      allResults.push(...categorizedResults)
     } catch (error) {
       console.error('[ContentQuery] Content search failed:', error)
     }
@@ -668,15 +735,22 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       const pastActions = await searchPastActions()
       console.log(`[ContentQuery] Found ${pastActions.length} past actions`)
       
-      // Convert past actions to content results format
+      // Use LLM to determine if this is a category query (meta query about all items) vs specific object query
+      const isMetaQuery = await isCategoryQuery(message)
+      console.log(`[ContentQuery] Is category/meta query: ${isMetaQuery}`)
+      
       const queryLower = message.toLowerCase()
       const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !FALLBACK_KEYWORDS.includes(w))
       
       const mappedActions = pastActions
         .filter(action => {
-          // Filter by relevance if specific query words exist
+          // For category/meta queries (e.g., "what announcements have been made"), include all items
+          if (isMetaQuery) {
+            return true
+          }
+          // For specific object queries, filter by relevance
           if (queryWords.length > 0) {
-          const contentLower = action.content.toLowerCase()
+            const contentLower = action.content.toLowerCase()
             return queryWords.some(word => contentLower.includes(word))
           }
           return true

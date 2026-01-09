@@ -1345,14 +1345,30 @@ function DumpTab({
       }
     }
     
-    // Sort upcoming by date (nearest first → farthest) or by week number for "week:X"
+    // Sort upcoming by week number (for week-based events) or by date (for date-based events)
+    // Week-based events are sorted numerically: week 1, week 2, week 3, etc.
     upcomingFacts.sort((a, b) => {
-      if (!a.dateStr || !b.dateStr) return 0;
+      if (!a.dateStr && !b.dateStr) return 0;
+      if (!a.dateStr) return 1; // Facts without dates go to end
+      if (!b.dateStr) return -1;
+      
       const aWeek = a.dateStr.startsWith('week:') ? parseInt(a.dateStr.split(':')[1] || '0', 10) : null;
       const bWeek = b.dateStr.startsWith('week:') ? parseInt(b.dateStr.split(':')[1] || '0', 10) : null;
+      
+      // Both are week-based: sort by week number
       if (aWeek !== null && bWeek !== null) {
         return aWeek - bWeek;
       }
+      
+      // One is week-based, one is date-based: week-based comes first (they're typically earlier in the term)
+      if (aWeek !== null && bWeek === null) {
+        return -1;
+      }
+      if (aWeek === null && bWeek !== null) {
+        return 1;
+      }
+      
+      // Both are date-based: sort by date
       return a.dateStr.localeCompare(b.dateStr);
     });
     

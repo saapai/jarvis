@@ -1,13 +1,34 @@
 import { ProcessResult, LLMClient, ExtractedFact } from './types';
 
+function normalizeWeekRef(dateStr?: string | null, timeRef?: string | null): string {
+  const combined = (dateStr || timeRef || '').toLowerCase().trim();
+  
+  // Extract week number from formats like "week:3", "week 3", "week3", "Week 3"
+  const weekMatch = combined.match(/\bweek\s*:?\s*(\d+)\b/);
+  if (weekMatch) {
+    return `week:${weekMatch[1]}`;
+  }
+  
+  // For regular dates, normalize ISO format dates
+  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  // For other timeRefs, normalize
+  return combined;
+}
+
 function dedupeFacts(facts: ExtractedFact[]): ExtractedFact[] {
   const map = new Map<string, ExtractedFact>();
 
   for (const fact of facts) {
+    // Normalize week references for deduplication key
+    const normalizedTime = normalizeWeekRef(fact.dateStr, fact.timeRef);
+    
     const key = [
       fact.category,
       (fact.subcategory || '').toLowerCase().trim(),
-      (fact.dateStr || fact.timeRef || '').toLowerCase().trim(),
+      normalizedTime,
     ].join('|');
 
     const existing = map.get(key);

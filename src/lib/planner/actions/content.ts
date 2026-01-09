@@ -184,8 +184,20 @@ async function filterAndFormatResultsWithLLM(
     // If general query, show all results (already filteredResults = allResults)
 
     // Format results for LLM, including contextual information
+    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
     const formattedResults = filteredResults.map((r, idx) => {
-      let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}\n${r.body}`
+      // Highlight relevance by showing how the result relates to the query
+      let relevanceNote = ''
+      const titleLower = (r.title || '').toLowerCase()
+      const bodyLower = (r.body || '').toLowerCase()
+      const matchesQuery = queryWords.some(word => 
+        titleLower.includes(word) || bodyLower.includes(word)
+      )
+      if (matchesQuery) {
+        relevanceNote = ' [RELEVANT TO QUERY]'
+      }
+      
+      let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}${relevanceNote}\n${r.body}`
       
       // Add content type information
       const contentType = r.dateStr?.startsWith('recurring:') ? 'RECURRING' : 
@@ -355,7 +367,12 @@ FORMATTING RULES:
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Question: "${query}"\n\nSearch Results (${filteredResults.length} results found):\n${formattedResults}\n\nIMPORTANT: These search results were found for your query. Use the information in these results to answer the question. If results mention the topic (even partially), provide that information. Do not say "no information available" when results are provided.` }
+        { role: 'user', content: `Question: "${query}"\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
+- These ${filteredResults.length} search results were found by searching the knowledge base for "${query}"
+- If a result mentions the topic from your question (e.g., "study hall", "ae summons"), it IS relevant and you MUST use it
+- Even if information is incomplete (e.g., "TBD", no date), still provide what IS available
+- DO NOT say "no information available" or "I don't have that information" when ${filteredResults.length} results are provided
+- Extract and present the information from these results to answer the question\n\nProvide a clear, complete answer based on the results above:` }
       ],
       temperature: 0.3,
       max_tokens: 400
@@ -494,16 +511,16 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   
   // If no results, return no results message
   if (allResults.length === 0) {
-    return {
-      action: 'content_query',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.noResults(),
-        userMessage: message,
-        userName
-      })
-    }
-  }
-  
+        return {
+          action: 'content_query',
+          response: applyPersonality({
+            baseResponse: TEMPLATES.noResults(),
+            userMessage: message,
+            userName
+          })
+        }
+      }
+      
   // Use LLM to filter and format the most relevant results
   console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM...`)
   const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults)

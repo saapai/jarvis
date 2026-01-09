@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { processUpload, llmClient, textExplorerRepository } from '@/text-explorer';
+import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { extractTextFromUploadedFile } from '@/text-explorer/fileExtract';
 
 export const dynamic = 'force-dynamic';
@@ -109,6 +109,12 @@ export async function POST(req: NextRequest) {
       uploadId,
       facts: processResult.facts,
     });
+
+    console.log('[TextExplorer Upload] Running LLM reconciliation', {
+      uploadId,
+    });
+
+    await reconcileFactsAfterUpload(uploadId);
 
     console.log('[TextExplorer Upload] Upload completed successfully', {
       uploadId,

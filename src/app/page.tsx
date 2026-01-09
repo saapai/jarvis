@@ -1371,31 +1371,46 @@ function DumpTab({
       }
     }
     
-    // Sort upcoming by week number (for week-based events) or by date (for date-based events)
-    // Week-based events are sorted numerically: week 1, week 2, week 3, etc.
+    // Sort upcoming by inferred week, then by concrete date when available.
+    // This keeps everything in a Week 1 → Week 9 style order and interleaves
+    // week-only and dated cards for the same week.
+    const getWeekForFact = (fact: Fact): number | null => {
+      if (fact.dateStr && fact.dateStr.startsWith('week:')) {
+        const num = parseInt(fact.dateStr.split(':')[1] || '0', 10);
+        return Number.isNaN(num) ? null : num;
+      }
+      const combined = `${fact.dateStr ?? ''} ${fact.timeRef ?? ''}`.toLowerCase();
+      const match = combined.match(/\bweek\s*:?\s*(\d+)\b/);
+      if (!match) return null;
+      const num = parseInt(match[1], 10);
+      return Number.isNaN(num) ? null : num;
+    };
+
+    const getIsoDateForFact = (fact: Fact): string | null => {
+      if (!fact.dateStr) return null;
+      const trimmed = fact.dateStr.trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+    };
+
     upcomingFacts.sort((a, b) => {
-      if (!a.dateStr && !b.dateStr) return 0;
-      if (!a.dateStr) return 1; // Facts without dates go to end
-      if (!b.dateStr) return -1;
-      
-      const aWeek = a.dateStr.startsWith('week:') ? parseInt(a.dateStr.split(':')[1] || '0', 10) : null;
-      const bWeek = b.dateStr.startsWith('week:') ? parseInt(b.dateStr.split(':')[1] || '0', 10) : null;
-      
-      // Both are week-based: sort by week number
-      if (aWeek !== null && bWeek !== null) {
-        return aWeek - bWeek;
+      const aWeek = getWeekForFact(a);
+      const bWeek = getWeekForFact(b);
+      const aDate = getIsoDateForFact(a);
+      const bDate = getIsoDateForFact(b);
+
+      // Primary sort: week number (nulls go last)
+      if (aWeek !== null || bWeek !== null) {
+        if (aWeek === null) return 1;
+        if (bWeek === null) return -1;
+        if (aWeek !== bWeek) return aWeek - bWeek;
       }
-      
-      // One is week-based, one is date-based: week-based comes first (they're typically earlier in the term)
-      if (aWeek !== null && bWeek === null) {
-        return -1;
-      }
-      if (aWeek === null && bWeek !== null) {
-        return 1;
-      }
-      
-      // Both are date-based: sort by date
-      return a.dateStr.localeCompare(b.dateStr);
+
+      // Secondary sort: concrete ISO date within the same week (date-less go last)
+      if (aDate && bDate) return aDate.localeCompare(bDate);
+      if (aDate && !bDate) return -1;
+      if (!aDate && bDate) return 1;
+
+      return 0;
     });
     
     // Sort past events by date (yesterday first → earliest/farthest in past)

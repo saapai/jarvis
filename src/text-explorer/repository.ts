@@ -115,8 +115,23 @@ export const textExplorerRepository: TextExplorerRepository = {
 
         let existing: Candidate | undefined;
 
+        const baseLog = {
+          uploadId,
+          category: fact.category,
+          subcategory: fact.subcategory,
+          timeRef: fact.timeRef,
+          dateStr: fact.dateStr,
+          week: factWeek,
+          isoDate: factDate,
+        };
+
         // Only try to deduplicate when the fact has a temporal identifier
         if (hasTemporalIdentity(factWeek, factDate)) {
+          console.log('[TextExplorer Facts] Considering fact for dedup', {
+            ...baseLog,
+            hasTemporalIdentity: true,
+          });
+
           // Look up candidate facts with same category + title (subcategory, case-insensitive)
           const candidates = await tx.$queryRawUnsafe<Array<Candidate>>(
             `
@@ -134,6 +149,18 @@ export const textExplorerRepository: TextExplorerRepository = {
             subcategoryLower
           );
 
+          console.log('[TextExplorer Facts] Candidate facts for card', {
+            ...baseLog,
+            candidateCount: candidates.length,
+            candidateSummaries: candidates.slice(0, 5).map((c) => ({
+              id: c.id,
+              dateStr: c.dateStr,
+              timeRef: c.timeRef,
+              week: extractWeekNumber(c.dateStr, c.timeRef),
+              isoDate: normalizeIsoDate(c.dateStr),
+            })),
+          });
+
           // Among candidates, treat as the same card using week/date rules:
           // - Same title + same week (even if only one has a date)
           // - Same title + same date (even if only one has a week)
@@ -149,6 +176,20 @@ export const textExplorerRepository: TextExplorerRepository = {
               candidateWeek,
               candidateDate
             );
+          });
+
+          if (existing) {
+            console.log('[TextExplorer Facts] Deduping into existing card', {
+              ...baseLog,
+              existingId: existing.id,
+            });
+          } else {
+            console.log('[TextExplorer Facts] No matching card found, inserting new', baseLog);
+          }
+        } else {
+          console.log('[TextExplorer Facts] No temporal identity, always inserting new card', {
+            ...baseLog,
+            hasTemporalIdentity: false,
           });
         }
 

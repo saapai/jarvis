@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import { put as uploadBlob } from '@vercel/blob';
 
 // ============================================
 // TYPES
@@ -800,41 +801,25 @@ function DumpTab({
       console.log('[Upload] Starting upload...');
 
       if (uploadFile) {
-        // 1) Ask server for a storage target (Vercel Blob)
-        const targetRes = await fetch('/api/text-explorer/upload-target', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: uploadFileName || uploadFile.name,
+        const safeName = (uploadFileName || uploadFile.name || 'upload').replace(
+          /[^a-zA-Z0-9._-]/g,
+          '_'
+        );
+
+        const blob = await uploadBlob(
+          `text-explorer/${Date.now()}-${safeName}`,
+          uploadFile,
+          {
+            access: 'public',
             contentType: uploadFile.type || 'application/octet-stream',
-          }),
-        });
+            token: process.env.NEXT_PUBLIC_BLOB_READ_WRITE_TOKEN,
+          }
+        );
 
-        if (!targetRes.ok) {
-          console.error('[Upload] Failed to get upload target', targetRes.status);
-          return;
-        }
+        const fileUrl = blob.url;
+        console.log('[Upload] Blob upload successful', { fileUrl });
 
-        const { url: fileUrl } = await targetRes.json();
-        console.log('[Upload] Got storage URL', { fileUrl });
-
-        // 2) Upload file directly to storage
-        const blobUploadRes = await fetch(fileUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': uploadFile.type || 'application/octet-stream',
-          },
-          body: uploadFile,
-        });
-
-        if (!blobUploadRes.ok) {
-          console.error('[Upload] Direct storage upload failed', blobUploadRes.status);
-          return;
-        }
-
-        console.log('[Upload] Direct storage upload successful');
-
-        // 3) Tell server to process from storage URL
+        // Tell server to process from storage URL
         const res = await fetch('/api/text-explorer/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

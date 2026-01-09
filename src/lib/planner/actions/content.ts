@@ -122,10 +122,12 @@ ${categoryDescriptions}
 
 Examples:
 - "what are recurring events?" → categories: ["recurring"]
-- "what's on my calendar?" → categories: ["upcoming", "recurring", "announcements", "polls"]
+- "what's on my calendar?" → categories: ["upcoming", "recurring", "announcements", "polls"] (meta query - aggregate all)
 - "what are past announcements?" → categories: ["announcements"]
-- "when is active meeting?" → categories: ["upcoming", "recurring", "facts"] (the event might be recurring)
+- "when is active meeting?" → categories: ["upcoming", "recurring", "facts"] (general future event query - include both upcoming and recurring)
+- "what events are coming up?" → categories: ["upcoming", "recurring"] (general future event query - include both)
 - "tell me about study hall" → categories: ["upcoming", "recurring", "past", "facts"] (general query)
+- Any question about future events without specific category → include both ["upcoming", "recurring"]
 
 Respond with JSON: { "categories": string[], "reasoning": string }
 Categories should be one of: upcoming, recurring, past, facts, announcements, polls`
@@ -169,6 +171,18 @@ function detectQueryCategoriesByKeywords(message: string): {
   const lower = message.toLowerCase()
   const categories: ContentCategory[] = []
 
+  // Check for general future event queries (should include both upcoming and recurring)
+  const futureEventKeywords = ['coming up', 'coming up', 'what events', 'future events', 'what\'s happening', 'whats happening']
+  const isFutureEventQuery = futureEventKeywords.some(kw => lower.includes(kw))
+  
+  if (isFutureEventQuery) {
+    categories.push('upcoming', 'recurring')
+    return {
+      categories,
+      reasoning: 'General future event query - includes both upcoming and recurring'
+    }
+  }
+
   for (const [cat, config] of Object.entries(CATEGORY_CONFIG) as [ContentCategory, typeof CATEGORY_CONFIG[ContentCategory]][]) {
     if (config.keywords.some(kw => lower.includes(kw))) {
       categories.push(cat)
@@ -187,10 +201,61 @@ function detectQueryCategoriesByKeywords(message: string): {
 }
 
 /**
+ * Check if content describes a recurring event by examining body text
+ */
+async function isRecurringFromContent(body: string): Promise<boolean> {
+  if (!process.env.OPENAI_API_KEY) {
+    // Fallback: simple keyword check
+    const bodyLower = body.toLowerCase()
+    return bodyLower.includes('every') && 
+           (bodyLower.includes('wednesday') || bodyLower.includes('monday') || bodyLower.includes('tuesday') || 
+            bodyLower.includes('thursday') || bodyLower.includes('friday') || bodyLower.includes('saturday') || 
+            bodyLower.includes('sunday') || bodyLower.includes('week') || bodyLower.includes('weekly'))
+  }
+
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Determine if this content describes a RECURRING event (happens regularly like "every Wednesday", "weekly meeting"). Respond with JSON: { "isRecurring": boolean }'
+        },
+        {
+          role: 'user',
+          content: `Content: "${body.substring(0, 300)}"\nIs this a recurring event that happens on a regular schedule?`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 50,
+      response_format: { type: 'json_object' }
+    })
+
+    const content = response.choices[0].message.content
+    if (content) {
+      const parsed = JSON.parse(content)
+      return parsed.isRecurring || false
+    }
+  } catch (error) {
+    console.error('[ContentQuery] Recurring detection from content failed:', error)
+  }
+
+  // Fallback: keyword check
+  const bodyLower = body.toLowerCase()
+  return bodyLower.includes('every') && 
+         (bodyLower.includes('wednesday') || bodyLower.includes('monday') || bodyLower.includes('tuesday') || 
+          bodyLower.includes('thursday') || bodyLower.includes('friday') || bodyLower.includes('saturday') || 
+          bodyLower.includes('sunday') || bodyLower.includes('week') || bodyLower.includes('weekly'))
+}
+
+/**
  * Assign category to a content result based on its existing metadata (dateStr, timeRef, eventDate)
  * Uses the same categorization logic as the inbox: UPCOMING, RECURRING, PAST, FACTS
  */
-function assignCategoryToResult(result: ContentResult & { source?: 'content' | 'announcement' | 'poll'; eventDate?: Date }): ContentCategory {
+async function assignCategoryToResult(result: ContentResult & { source?: 'content' | 'announcement' | 'poll'; eventDate?: Date }): Promise<ContentCategory> {
   const now = new Date()
   now.setHours(0, 0, 0, 0) // Compare dates only, not times
 
@@ -210,6 +275,14 @@ function assignCategoryToResult(result: ContentResult & { source?: 'content' | '
         timeRefLower.includes('weekly') || 
         timeRefLower.includes('recurring') ||
         /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*(at|@)?/.test(timeRefLower)) {
+      return 'recurring'
+    }
+  }
+
+  // Check body content for recurring patterns if no dateStr or timeRef indicates it
+  if (result.body) {
+    const isRecurring = await isRecurringFromContent(result.body)
+    if (isRecurring) {
       return 'recurring'
     }
   }
@@ -575,38 +648,47 @@ YOUR TASK:
 2. Use the Category metadata to understand which category each result belongs to and its time directionality
 3. For category queries (e.g., "what are recurring events"), return only results from that category with their details
 4. For object queries (e.g., "when is active meeting"), infer the category from results (likely RECURRING or UPCOMING) and provide details
-5. For meta queries (e.g., "what's on my calendar"), aggregate relevant categories (UPCOMING, RECURRING, ANNOUNCEMENTS, POLLS)
-6. Extract and present information from the results, even if incomplete:
+5. For meta/summary queries (e.g., "what's on my calendar", "what events are coming up"):
+   - Aggregate and summarize events across all relevant categories (UPCOMING, RECURRING, ANNOUNCEMENTS, POLLS)
+   - Organize by category (UPCOMING, RECURRING, etc.) as headers
+   - Sort by most upcoming first - recurring events with next occurrence dates, then upcoming events by date
+   - For recurring events, show the pattern AND next occurrence date
+   - For upcoming events, show the specific date
+   - Keep the summary concise but informative
+6. For general future event queries (questions about "what's coming up", "future events", etc.), include BOTH upcoming and recurring categories
+7. Extract and present information from the results, even if incomplete:
    - If a fact says "Study Hall every Wednesday at 6:30 PM", present that information (category: RECURRING)
    - If a fact says "AE Summons date is TBD", say "AE Summons date is TBD (to be determined)" (category: FACTS)
    - If time/location isn't mentioned, don't make it up, but do provide what IS available
-7. For ALL events (recurring or one-time), ALWAYS include what information is available:
+8. For ALL events (recurring or one-time), ALWAYS include what information is available:
    - Date (specific date, recurrence pattern, or "TBD" if mentioned)
    - Time (if mentioned in results)
    - Location (if mentioned in results)
    - For recurring: state the pattern (e.g., "every Wednesday") AND calculate the next occurrence if possible
-8. For recurring items, ALWAYS mention when the next occurrence will be if you can calculate it:
+9. For recurring items, ALWAYS mention when the next occurrence will be if you can calculate it:
    * If today is Tuesday Jan 9 and the event is every Wednesday, next is Wednesday Jan 14
    * State it clearly: "every Wednesday, next is January 14"
    * If date is TBD, say "date is TBD (to be determined)"
-9. When you see both a recurring pattern AND an announcement about a specific occurrence:
+10. When you see both a recurring pattern AND an announcement about a specific occurrence:
    * The announcement tells you when one specific instance happened (relative to its sent date)
    * Use that to determine the last occurrence date
    * Then calculate the next occurrence from today's date using the recurring pattern
    * Example: Announcement sent Jan 6 says "active meeting is tmr" → that's Jan 7. Pattern is every Wednesday. Today is Jan 9 (Tuesday). Last was Jan 7 (Wednesday). Next is Jan 14 (next Wednesday).
-10. Supplement events with associated announcements/polls if they provide context
-11. Combine relevant information from multiple results to provide complete answers
-12. If a date is not in the results, calculate it from recurring patterns and today's date if possible
-13. DO NOT make up dates that aren't in the results or can't be calculated
-14. If information is incomplete (e.g., "TBD", no date mentioned), state what you know and note what's missing
+11. Supplement events with associated announcements/polls if they provide context
+12. Combine relevant information from multiple results to provide complete answers
+13. If a date is not in the results, calculate it from recurring patterns and today's date if possible
+14. DO NOT make up dates that aren't in the results or can't be calculated
+15. If information is incomplete (e.g., "TBD", no date mentioned), state what you know and note what's missing
 
 FORMATTING RULES:
-- DO NOT use markdown formatting (no asterisks ** for bold, no markdown lists)
+- DO NOT use markdown formatting - NO asterisks, NO bold, NO markdown lists
 - Write plain text as if sending a text message
-- Use simple dashes or numbers for lists if needed (e.g., "1. item" or "- item")
+- Use simple dashes or numbers for lists (e.g., "1. item" or "- item")
+- For category headers, use ALL CAPS followed by colon (e.g., "UPCOMING:", "RECURRING:", "PAST ANNOUNCEMENTS:")
 - Keep formatting minimal and natural
 - When responding to category queries, clearly state which category you're providing information about
-- When responding to object queries, infer and state the category if relevant (e.g., "this is a recurring event", "this announcement was sent a week ago")`
+- When responding to object queries, infer and state the category if relevant (e.g., "this is a recurring event", "this announcement was sent a week ago")
+- For meta/summary queries, organize by category and sort by most upcoming first`
 
     const categoryInfo = targetCategories.length > 0 && targetCategories.length < 6
       ? `\n\nQuery is asking about categories: ${targetCategories.join(', ')}`
@@ -697,17 +779,19 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       const contentResults = await searchContent(message)
       console.log(`[ContentQuery] Found ${contentResults.length} content results`)
       
-      // Assign categories to all results using existing metadata
-      const categorizedResults = contentResults.map(r => {
-        const category = assignCategoryToResult({ ...r, source: 'content' })
-        return { 
-          ...r, 
-          source: 'content' as const,
-          category,
-          dateStr: r.dateStr || null,
-          timeRef: r.timeRef || null
-        }
-      })
+      // Assign categories to all results using existing metadata (await since it's async)
+      const categorizedResults = await Promise.all(
+        contentResults.map(async r => {
+          const category = await assignCategoryToResult({ ...r, source: 'content' })
+          return { 
+            ...r, 
+            source: 'content' as const,
+            category,
+            dateStr: r.dateStr || null,
+            timeRef: r.timeRef || null
+          }
+        })
+      )
       
       allResults.push(...categorizedResults)
     } catch (error) {

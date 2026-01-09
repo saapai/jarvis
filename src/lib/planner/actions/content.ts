@@ -120,16 +120,19 @@ function detectQueryIntent(query: string): {
   wantsRecurring: boolean
   wantsEvents: boolean
   wantsGeneral: boolean
+  wantsDefinition: boolean
 } {
   const lower = query.toLowerCase()
   const recurringKeywords = ['recurring', 'weekly', 'every', 'regular', 'routine', 'repeated']
   const eventKeywords = ['event', 'upcoming', 'coming up', 'next', 'future', 'calendar', 'schedule']
+  const definitionKeywords = ['what are', 'what is', 'what\'s', 'define', 'explain', 'tell me about']
   
-  const wantsRecurring = recurringKeywords.some(kw => lower.includes(kw))
+  const wantsDefinition = definitionKeywords.some(kw => lower.includes(kw)) && !lower.includes('for') && !lower.includes('in')
+  const wantsRecurring = recurringKeywords.some(kw => lower.includes(kw)) && !wantsDefinition
   const wantsEvents = eventKeywords.some(kw => lower.includes(kw))
-  const wantsGeneral = !wantsRecurring && !wantsEvents
+  const wantsGeneral = !wantsRecurring && !wantsEvents && !wantsDefinition
   
-  return { wantsRecurring, wantsEvents, wantsGeneral }
+  return { wantsRecurring, wantsEvents, wantsGeneral, wantsDefinition }
 }
 
 /**
@@ -157,17 +160,24 @@ async function filterAndFormatResultsWithLLM(
     
     // Filter results based on intent
     let filteredResults = allResults
-    if (intent.wantsRecurring) {
+    if (intent.wantsRecurring && !intent.wantsDefinition) {
       // Only show recurring items (dateStr starts with "recurring:") or announcements mentioning recurring
       filteredResults = allResults.filter(r => 
         r.dateStr?.startsWith('recurring:') || 
         (r.source === 'announcement' && r.body.toLowerCase().match(/\b(every|weekly|recurring|regular)\b/))
       )
+      // If asking "what are recurring events" (definition), show actual recurring events, not just explanation
+      if (filteredResults.length === 0 && allResults.some(r => r.dateStr?.startsWith('recurring:'))) {
+        filteredResults = allResults.filter(r => r.dateStr?.startsWith('recurring:'))
+      }
     } else if (intent.wantsEvents && !intent.wantsRecurring) {
       // Show events but exclude recurring (unless they're upcoming this week)
       filteredResults = allResults.filter(r => 
         !r.dateStr?.startsWith('recurring:')
       )
+    } else if (intent.wantsDefinition && intent.wantsRecurring) {
+      // "What are recurring events" - show actual recurring events from knowledge base
+      filteredResults = allResults.filter(r => r.dateStr?.startsWith('recurring:'))
     }
     // If general query, show all results (already filteredResults = allResults)
 
@@ -208,36 +218,63 @@ async function filterAndFormatResultsWithLLM(
       return resultText
     }).join('\n\n')
 
-    const systemPrompt = `You are a helpful assistant that answers questions using the provided search results.
+    const systemPrompt = `You are a helpful assistant that answers questions using ONLY the provided search results. You must fact-check all dates and information against the actual data provided.
 
 TODAY'S CONTEXT:
 - Today is ${todayDayName}, ${todayStr}
 - Use this to calculate relative dates and determine when recurring events occur next
 
+CRITICAL: FACT-CHECKING RULES:
+- ONLY use dates that are explicitly stated in the search results
+- DO NOT make up or hallucinate dates
+- If a date is not in the results, calculate it from the information provided
+- When combining recurring patterns with announcements:
+  * If an announcement says "active meeting is tmr" and was sent on Jan 6, that means Jan 7
+  * If the knowledge base says "active meeting is every Wednesday" and today's context shows Jan 7 is a Wednesday, that confirms the last one was Jan 7
+  * Calculate the NEXT occurrence from today's date: if today is after Jan 7, find the next Wednesday
+  * If today is Tuesday Jan 9, and the last active meeting was Wednesday Jan 7, the next one is Wednesday Jan 14 (next week)
+
 CONTENT TYPES:
-- RECURRING: Events that repeat weekly (e.g., "every Wednesday"). Calculate when the NEXT occurrence is based on today's date.
-- EVENT: One-time events with specific dates. Show the date clearly.
-- ANNOUNCEMENT: Messages that were sent. May contain relative dates - calculate these from the "sent on" date.
-- POLL: Questions that were sent. May contain relative dates - calculate these from the "sent on" date.
+- RECURRING: Events that repeat weekly (e.g., "every Wednesday", dateStr starts with "recurring:"). 
+  * Use the "Next occurrence" calculation provided in the results
+  * If multiple sources mention the same recurring event, use the most specific information
+- EVENT: One-time events with specific dates (dateStr is a date like "2026-01-16"). Show the date from the results.
+- ANNOUNCEMENT: Messages that were sent. Contains a "Sent: YYYY-MM-DD" date.
+  * Relative dates in announcements (e.g., "tomorrow", "tmr") are calculated from the "Sent:" date, NOT today
+  * If an announcement mentions a recurring event, combine it with the recurring pattern from the knowledge base
+- POLL: Questions that were sent. Same date handling as announcements.
 - FACT: General information from the knowledge base.
 
 QUERY INTENT AWARENESS:
+- If user asks "what are recurring events" (definition question), list the actual recurring events from the results
 - If user asks about "recurring" or "weekly" events, ONLY include recurring items (Type: RECURRING)
-- If user asks about "upcoming" or "coming up", include events AND recurring items (calculate when recurring items occur next)
+- If user asks about "upcoming" or "coming up", include events AND recurring items (with next occurrences)
 - If user asks generally, include ALL relevant information from any source
 
 YOUR TASK:
-1. Filter results based on query intent (e.g., if asking for recurring, only show recurring items)
-2. For recurring items, mention when they occur NEXT based on today's date (e.g., "Active Meeting every Wednesday - next is tomorrow")
-3. Combine relevant information from multiple results into a clear, concise answer
-4. Extract relevant information from ANY source type - don't favor one over another
-5. Use contextual information (today's date, day of week) to make responses more natural (e.g., "tomorrow" instead of "Wednesday")
-6. If no results are relevant, say you don't have that information
+1. Use ONLY the dates and information explicitly provided in the search results
+2. If asking "what are recurring events", list the actual recurring events from the knowledge base with their patterns
+3. For recurring items, use the "Next occurrence" information provided - calculate it if not shown
+4. When you see both a recurring pattern AND an announcement about a specific occurrence:
+   * The announcement tells you when one specific instance happened (relative to its sent date)
+   * Use that to determine the last occurrence date
+   * Then calculate the next occurrence from today's date using the recurring pattern
+5. Combine relevant information from multiple results, but always fact-check dates
+6. If a date is not in the results, calculate it from recurring patterns and today's date
+7. DO NOT make up dates that aren't in the results or can't be calculated from them
 
-IMPORTANT DATE HANDLING:
-- For recurring events, calculate the NEXT occurrence: if today is Tuesday and the event is Wednesday, say "tomorrow"
-- For announcements/polls with relative dates, calculate from the "sent on" date, NOT today
-- For general queries, use today's date as context for calculating "tomorrow", "next week", etc.
+IMPORTANT DATE HANDLING EXAMPLES:
+- Example 1: Knowledge base says "Active Meeting every Wednesday", announcement sent Jan 6 says "active meeting is tmr"
+  * Announcement sent Jan 6, "tmr" = Jan 7
+  * Jan 7 is a Wednesday, so that was the last active meeting
+  * If today is Jan 9 (Tuesday), next Wednesday is Jan 14
+  * Response: "Active Meeting every Wednesday. Last one was Jan 7, next is Jan 14 (next Wednesday)"
+  
+- Example 2: Knowledge base says "IM soccer games every Monday"
+  * If today is Jan 9 (Tuesday), next Monday is Jan 12
+  * Response: "IM soccer games every Monday. Next one is Jan 12"
+
+- For announcements with relative dates: "Sent: 2026-01-06" and content says "event is tomorrow" = Jan 7
 
 FORMATTING RULES:
 - DO NOT use markdown formatting (no asterisks ** for bold, no markdown lists)

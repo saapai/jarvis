@@ -181,6 +181,16 @@ export async function detectAnnouncementsChannel(): Promise<string | null> {
 
     console.log('[Slack] Detecting announcements channel from', channels.length, 'channels');
 
+    // First, try to find channels with "announce" in the name (highest priority)
+    const announceChannels = channels.filter(ch => 
+      ch.name.toLowerCase().includes('announce')
+    );
+    
+    if (announceChannels.length > 0) {
+      console.log('[Slack] Found channel with "announce" in name:', announceChannels[0].name);
+      return announceChannels[0].name;
+    }
+
     const prompt = `You are analyzing a list of Slack channels to identify which one is the announcements channel.
 
 An announcements channel is typically used for:
@@ -190,6 +200,9 @@ An announcements channel is typically used for:
 - General information broadcasts
 - May be named "announcements", "announcement", "news", "updates", or similar
 - May be private (organization-specific) or public
+- NOT a general discussion channel like "general" or "random"
+
+CRITICAL: Do NOT select "general" or "random" channels. These are for general discussion, not announcements.
 
 Here are the available channels:
 ${JSON.stringify(channelList, null, 2)}

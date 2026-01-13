@@ -84,6 +84,12 @@ async function parseCalendarDates(fact: {
     const currentMonth = today.getMonth() + 1;
     const currentDay = today.getDate();
     
+    // Sanitize inputs to prevent issues
+    const sanitize = (str: string | null | undefined): string => {
+      if (!str) return '';
+      return str.substring(0, 500).replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
+    };
+    
     const prompt = `Extract ALL dates for this event and return them as an array of YYYY-MM-DD dates.
 
 CRITICAL: If the event spans multiple days, return ALL dates in the range, not just the start and end dates.
@@ -106,17 +112,17 @@ Recurring events (return empty array):
 Today's date: ${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}
 
 Fact information:
-- subcategory: "${fact.subcategory || 'none'}"
-- timeRef: "${fact.timeRef || 'none'}"
-- content: "${fact.content?.substring(0, 300) || 'none'}"
-- dateStr: "${fact.dateStr || 'none'}"
+- subcategory: "${sanitize(fact.subcategory)}"
+- timeRef: "${sanitize(fact.timeRef)}"
+- content: "${sanitize(fact.content)}"
+- dateStr: "${sanitize(fact.dateStr)}"
 
 Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a precise date parser. Extract ALL dates from date ranges, including every day between start and end dates. Return dates in YYYY-MM-DD format.' },
+        { role: 'system', content: 'You are a precise date parser. Extract ALL dates from date ranges, including every day between start and end dates. Return dates in YYYY-MM-DD format. Return ONLY valid JSON.' },
         { role: 'user', content: prompt }
       ],
       response_format: { type: 'json_object' },
@@ -126,8 +132,15 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
 
     const content = response.choices[0]?.message?.content;
     if (content) {
-      const parsed = JSON.parse(content);
-      return parsed.dates || [];
+      try {
+        const parsed = JSON.parse(content);
+        const dates = parsed.dates || [];
+        // Validate dates are in YYYY-MM-DD format
+        return dates.filter((d: any) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
+      } catch (parseError) {
+        console.error('[TextExplorer] JSON parse error in calendar dates:', parseError, 'Content:', content?.substring(0, 200));
+        return [];
+      }
     }
   } catch (error) {
     console.error('[TextExplorer] Calendar date parsing failed:', error);
@@ -161,9 +174,30 @@ export const textExplorerRepository: TextExplorerRepository = {
     
     const hasEmbeddingColumn = columnExists[0]?.exists ?? false;
     
-    // Use interactive transaction so async upserts are valid
+    // Pre-process calendar dates and prepare facts outside transaction to avoid timeout
+    const factsWithCalendarDates = await Promise.all(
+      facts.map(async (fact) => {
+        try {
+          const calendarDates = await parseCalendarDates({
+            subcategory: fact.subcategory,
+            timeRef: fact.timeRef,
+            content: fact.content,
+            dateStr: fact.dateStr,
+          });
+          return { fact, calendarDates };
+        } catch (error) {
+          console.error('[TextExplorer Facts] Calendar date parsing failed for fact', {
+            subcategory: fact.subcategory,
+            error,
+          });
+          return { fact, calendarDates: [] };
+        }
+      })
+    );
+
+    // Use interactive transaction with increased timeout (30s) for async upserts
     await prisma.$transaction(async (tx) => {
-      for (const fact of facts) {
+      for (const { fact, calendarDates } of factsWithCalendarDates) {
         // Compute temporal identity from week + ISO date for card identity
         const factWeek = extractWeekNumber(fact.dateStr, fact.timeRef);
         const factDate = normalizeIsoDate(fact.dateStr);
@@ -264,13 +298,6 @@ export const textExplorerRepository: TextExplorerRepository = {
           });
         }
 
-        // Parse calendar dates for this fact (server-side, once)
-        const calendarDates = await parseCalendarDates({
-          subcategory: fact.subcategory,
-          timeRef: fact.timeRef,
-          content: fact.content,
-          dateStr: fact.dateStr,
-        });
         const calendarDatesJson = calendarDates.length > 0 ? JSON.stringify(calendarDates) : null;
 
         if (existing) {

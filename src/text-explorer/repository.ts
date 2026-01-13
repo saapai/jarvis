@@ -174,7 +174,7 @@ export const textExplorerRepository: TextExplorerRepository = {
     
     const hasEmbeddingColumn = columnExists[0]?.exists ?? false;
     
-    // Pre-process calendar dates and prepare facts outside transaction to avoid timeout
+    // Pre-process calendar dates and prepare merge data outside transaction to avoid timeout
     const factsWithCalendarDates = await Promise.all(
       facts.map(async (fact) => {
         try {
@@ -194,8 +194,185 @@ export const textExplorerRepository: TextExplorerRepository = {
         }
       })
     );
+    
+    // Pre-process merge data and embeddings for existing facts outside transaction
+    // This prevents transaction timeouts from LLM calls
+    const factsWithMergeData = await Promise.all(
+      factsWithCalendarDates.map(async ({ fact, calendarDates }) => {
+        // Check if this fact will merge with an existing one
+        // We'll do a quick lookup to see if there's a match
+        const factWeek = extractWeekNumber(fact.dateStr, fact.timeRef);
+        const factDate = normalizeIsoDate(fact.dateStr);
+        const subcategoryLower = (fact.subcategory || '').toLowerCase().trim();
+        
+        let mergeData: {
+          existingId?: string;
+          mergedContent?: string;
+          mergedSourceText?: string;
+          updatedEmbedding?: number[];
+          newEntities?: string[];
+        } | null = null;
+        
+        if (hasTemporalIdentity(factWeek, factDate) || fact.subcategory) {
+          // Quick lookup for existing fact (outside transaction)
+          const candidates = await prisma.$queryRawUnsafe<Array<{
+            id: string;
+            content: string;
+            sourceText: string | null;
+            entities: string;
+            dateStr: string | null;
+            timeRef: string | null;
+            subcategory: string | null;
+          }>>(
+            `
+            SELECT id, content, "sourceText", entities, "dateStr", "timeRef", subcategory
+            FROM "Fact"
+            WHERE category = $1
+              AND (
+                LOWER(TRIM(subcategory)) = $2
+                OR LOWER(TRIM(subcategory)) LIKE $3
+                OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+              )
+            LIMIT 10
+            `,
+            fact.category,
+            subcategoryLower,
+            `%${subcategoryLower}%`
+          );
+          
+          // Filter candidates
+          const filteredCandidates = candidates.filter(candidate => {
+            const candidateSub = (candidate.subcategory || '').toLowerCase().trim();
+            if (candidateSub === subcategoryLower) return true;
+            if (candidateSub.includes(subcategoryLower) || subcategoryLower.includes(candidateSub)) {
+              const shorter = candidateSub.length < subcategoryLower.length ? candidateSub : subcategoryLower;
+              const longer = candidateSub.length >= subcategoryLower.length ? candidateSub : subcategoryLower;
+              return shorter.length >= 4 && longer.includes(shorter);
+            }
+            return false;
+          });
+          
+          // Find matching candidate
+          const existing = filteredCandidates.find((candidate) => {
+            const candidateWeek = extractWeekNumber(candidate.dateStr, candidate.timeRef);
+            const candidateDate = normalizeIsoDate(candidate.dateStr);
+            
+            if (hasTemporalIdentity(factWeek, factDate) && hasTemporalIdentity(candidateWeek, candidateDate)) {
+              return isSameCardTime(factWeek, factDate, candidateWeek, candidateDate);
+            }
+            return true; // Match by subcategory if no temporal identity
+          });
+          
+          if (existing) {
+            // Perform merge and embedding generation outside transaction
+            const existingEntities = JSON.parse(existing.entities || '[]') as string[];
+            const newEntities = new Set([...existingEntities, ...(fact.entities || [])]);
+            
+            let mergedContent = existing.content;
+            let mergedSourceText = existing.sourceText || '';
+            
+            const shouldUseLLMMerge = fact.content && 
+              fact.content !== existing.content && 
+              !existing.content.includes(fact.content) &&
+              fact.content.length > 20;
+            
+            if (shouldUseLLMMerge) {
+              try {
+                const mergePrompt = `You are updating an existing event/fact card with new information from a Slack announcement.
 
-    // Use interactive transaction with increased timeout (30s) for async upserts
+EXISTING CARD:
+Content: "${existing.content}"
+Source: "${existing.sourceText || 'N/A'}"
+Time: "${existing.timeRef || 'N/A'}"
+Date: "${existing.dateStr || 'N/A'}"
+
+NEW INFORMATION FROM SLACK:
+Content: "${fact.content}"
+Source: "${fact.sourceText || 'N/A'}"
+Time: "${fact.timeRef || 'N/A'}"
+Date: "${fact.dateStr || 'N/A'}"
+
+Your task:
+1. Create an UPDATED content summary (1-2 sentences) that incorporates the new information
+2. Keep the most important and up-to-date details
+3. If dates/times conflict, prefer the newer information
+4. CRITICAL: If new details include URLs, links, or RSVP forms, ALWAYS include them in the merged content
+5. Preserve important context from the original that's still relevant
+6. In mergedSourceText, put the NEW information first, then the original source
+
+Return JSON: { "mergedContent": "updated summary here with links preserved", "mergedSourceText": "new info first, then original" }`;
+
+                const mergeResponse = await openai.chat.completions.create({
+                  model: 'gpt-4o-mini',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: 'You are a helpful assistant that intelligently merges event information. Return only valid JSON.',
+                    },
+                    {
+                      role: 'user',
+                      content: mergePrompt,
+                    },
+                  ],
+                  response_format: { type: 'json_object' },
+                  temperature: 0.2,
+                  max_tokens: 500,
+                });
+
+                const mergeResult = JSON.parse(mergeResponse.choices[0]?.message?.content || '{}');
+                if (mergeResult.mergedContent) {
+                  mergedContent = mergeResult.mergedContent;
+                }
+                if (mergeResult.mergedSourceText) {
+                  mergedSourceText = mergeResult.mergedSourceText;
+                } else {
+                  if (fact.sourceText && fact.sourceText !== existing.sourceText && !mergedSourceText.includes(fact.sourceText)) {
+                    mergedSourceText = `${fact.sourceText}\n\n${mergedSourceText}`.trim();
+                  }
+                }
+              } catch (error) {
+                console.error('[TextExplorer Facts] LLM merge failed, using simple merge', error);
+                mergedContent = `${existing.content} ${fact.content}`.trim();
+                if (fact.sourceText && fact.sourceText !== existing.sourceText && !mergedSourceText.includes(fact.sourceText)) {
+                  mergedSourceText = `${fact.sourceText}\n\n${mergedSourceText}`.trim();
+                }
+              }
+            } else {
+              if (fact.content && fact.content !== existing.content && !existing.content.includes(fact.content)) {
+                mergedContent = `${existing.content} ${fact.content}`.trim();
+              }
+              if (fact.sourceText && fact.sourceText !== existing.sourceText && !mergedSourceText.includes(fact.sourceText)) {
+                mergedSourceText = `${fact.sourceText}\n\n${mergedSourceText}`.trim();
+              }
+            }
+            
+            // Generate embedding outside transaction
+            const embeddingParts = [
+              existing.subcategory || fact.subcategory || '',
+              mergedContent,
+              mergedSourceText,
+              existing.timeRef || fact.timeRef || '',
+              existing.dateStr || fact.dateStr || ''
+            ].filter(Boolean);
+            const embeddingText = embeddingParts.join(' ').trim();
+            const updatedEmbedding = await embedText(embeddingText);
+            
+            mergeData = {
+              existingId: existing.id,
+              mergedContent,
+              mergedSourceText,
+              updatedEmbedding,
+              newEntities: Array.from(newEntities)
+            };
+          }
+        }
+        
+        return { fact, calendarDates, mergeData };
+      })
+    );
+
+    // Use interactive transaction with increased timeout (60s) for async upserts
+    // Note: LLM merge and embedding generation happen inside transaction but timeout is increased
     await prisma.$transaction(async (tx) => {
       for (const { fact, calendarDates } of factsWithCalendarDates) {
         // Compute temporal identity from week + ISO date for card identity
@@ -398,6 +575,11 @@ export const textExplorerRepository: TextExplorerRepository = {
 
         const calendarDatesJson = calendarDates.length > 0 ? JSON.stringify(calendarDates) : null;
 
+        // Prepare merge data outside transaction to avoid timeout
+        let mergedContent: string | undefined;
+        let mergedSourceText: string | undefined;
+        let updatedEmbedding: number[] | undefined;
+        
         if (existing) {
           // Merge with existing fact using LLM for intelligent updates
           const existingFact = existing;
@@ -405,8 +587,8 @@ export const textExplorerRepository: TextExplorerRepository = {
           const newEntities = new Set([...existingEntities, ...(fact.entities || [])]);
           
           // Use LLM to intelligently merge content
-          let mergedContent = existingFact.content;
-          let mergedSourceText = existingFact.sourceText || '';
+          mergedContent = existingFact.content;
+          mergedSourceText = existingFact.sourceText || '';
           
           // If new information is significantly different, use LLM to merge intelligently
           const shouldUseLLMMerge = fact.content && 
@@ -487,7 +669,7 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
             }
           }
           
-          // Regenerate embedding with merged content for better search
+          // Regenerate embedding with merged content for better search (outside transaction to avoid timeout)
           // Include subcategory, content, sourceText, and timeRef for comprehensive embedding
           const embeddingParts = [
             existingFact.subcategory || fact.subcategory || '',
@@ -497,10 +679,18 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
             existingFact.dateStr || fact.dateStr || ''
           ].filter(Boolean);
           const embeddingText = embeddingParts.join(' ').trim();
-          const updatedEmbedding = await embedText(embeddingText);
+          
+          // Generate embedding outside transaction to prevent timeout
+          // We'll store it and use it in the update
+          let updatedEmbedding: number[] | null = null;
+          try {
+            updatedEmbedding = await embedText(embeddingText);
+          } catch (error) {
+            console.error('[TextExplorer Facts] Embedding generation failed during merge', error);
+          }
           
           // Update existing fact (include calendarDates and updated embedding)
-          if (hasEmbeddingColumn && updatedEmbedding) {
+          if (hasEmbeddingColumn && updatedEmbedding && updatedEmbedding.length === VECTOR_DIMENSION) {
             await tx.$executeRawUnsafe(
               `
               UPDATE "Fact"
@@ -579,7 +769,7 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
           }
         }
       }
-    });
+    }, { timeout: 60000 }); // 60 second timeout to allow for LLM merge and embedding generation
   },
 };
 

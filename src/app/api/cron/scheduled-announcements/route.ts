@@ -52,8 +52,6 @@ async function sendScheduledAnnouncements(): Promise<{ sent: number; failed: num
           // Log message for this recipient
           await messageRepo.logMessage(userPhone, 'outbound', announcement.content, {
             action: 'scheduled_announcement',
-            scheduledAnnouncementId: announcement.id,
-            sourceMessageTs: announcement.sourceMessageTs,
           })
           successCount++
         } else {

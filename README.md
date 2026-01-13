@@ -7,6 +7,7 @@ SMS-powered organizational assistant with LLM-based intent classification, weigh
 - **SMS Announcements** - Broadcast messages to all subscribers with draft/edit/send workflow
 - **Polls** - Create polls with yes/no/maybe responses, tracked in normalized database tables
 - **Text Explorer** - Upload documents and extract structured facts with AI
+- **Slack Integration** - Automatically sync messages from Slack announcements channel to knowledge base
 - **Smart Q&A** - Users can text questions and get answers from the knowledge base (semantic search via pgvector + OpenAI embeddings)
 - **LLM Routing** - OpenAI-powered intent classification with conversation context
 - **Personality Engine** - Jarvis's sassy personality applied to all responses
@@ -29,6 +30,7 @@ SMS-powered organizational assistant with LLM-based intent classification, weigh
 - `PollMeta` - Poll questions with metadata
 - `PollResponse` - Normalized poll responses
 - `Fact` - Knowledge base extracted from documents
+- `SlackSync` - Tracks last synced timestamp for Slack channels
 
 ### SMS Pipeline
 
@@ -102,6 +104,12 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 AIRTABLE_API_KEY=your_airtable_key
 AIRTABLE_BASE_ID=your_base_id
 AIRTABLE_TABLE_NAME=your_table_name
+
+# Slack (for knowledge base sync)
+# Note: Must be a bot token (xoxb-), not an app-level token (xapp-)
+# Get this from: https://api.slack.com/apps → Your App → OAuth & Permissions → Bot User OAuth Token
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+SLACK_ANNOUNCEMENTS_CHANNEL=announcements  # Optional: fallback if LLM detection fails
 
 ### 3. Airtable Fields
 
@@ -183,6 +191,8 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 AIRTABLE_API_KEY=your_airtable_key
 AIRTABLE_BASE_ID=your_base_id
 AIRTABLE_TABLE_NAME=your_table_name
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+SLACK_ANNOUNCEMENTS_CHANNEL=announcements
 ADMIN_PHONE_NUMBERS=1234567890
 APP_URL=https://your-app.vercel.app
 ```
@@ -204,46 +214,59 @@ git push origin main
 vercel deploy --prod
 ```
 
-## Commands Reference
+## Slack Integration
 
-| Command | Who | What it does |
-|---------|-----|--------------|
-| `announce [msg]` | Admin | Send message to everyone |
-| `poll [question]` | Admin | Ask everyone a question |
-| `STOP` | Anyone | Unsubscribe |
-| `START` | Anyone | Re-subscribe |
-| `HELP` | Anyone | Show commands |
-| Any question | Anyone | Search knowledge base |
+### Setup
 
-vercel deploy --prod
+1. Create a Slack app at https://api.slack.com/apps
+2. Add a bot token with the following OAuth scopes:
+   - `channels:history` - Read messages from public channels
+   - `groups:history` - Read messages from private channels
+   - `channels:read` - View basic information about public channels
+   - `groups:read` - View basic information about private channels
+3. Install the app to your workspace
+4. Copy the bot token (starts with `xoxb-`) and set it as `SLACK_BOT_TOKEN`
+5. Set `SLACK_ANNOUNCEMENTS_CHANNEL` to the name of your announcements channel (default: `announcements`)
+
+### Syncing Messages
+
+Sync messages from your Slack announcements channel to the knowledge base:
+
+```bash
+# Sync new messages (incremental)
+curl -X POST https://your-app.vercel.app/api/slack/sync \
+  -H "Content-Type: application/json" \
+  -d '{"channelName": "announcements"}'
+
+# Force full sync (re-sync all messages)
+curl -X POST https://your-app.vercel.app/api/slack/sync \
+  -H "Content-Type: application/json" \
+  -d '{"channelName": "announcements", "forceFullSync": true}'
+
+# Check sync status
+curl https://your-app.vercel.app/api/slack/sync
 ```
 
-## Commands Reference
+The sync process:
+1. Fetches messages from the specified Slack channel
+2. Processes each message through the same LLM extraction pipeline as document uploads
+3. Extracts structured facts (events, dates, entities, etc.)
+4. Generates embeddings for semantic search
+5. Stores facts in the knowledge base
+6. Tracks the last synced timestamp to avoid re-processing
 
-| Command | Who | What it does |
-|---------|-----|--------------|
-| `announce [msg]` | Admin | Send message to everyone |
-| `poll [question]` | Admin | Ask everyone a question |
-| `STOP` | Anyone | Unsubscribe |
-| `START` | Anyone | Re-subscribe |
-| `HELP` | Anyone | Show commands |
-| Any question | Anyone | Search knowledge base |
+### Automated Syncing
 
-vercel deploy --prod
-```
+You can set up a cron job (e.g., using Vercel Cron) to automatically sync new messages:
 
-## Commands Reference
-
-| Command | Who | What it does |
-|---------|-----|--------------|
-| `announce [msg]` | Admin | Send message to everyone |
-| `poll [question]` | Admin | Ask everyone a question |
-| `STOP` | Anyone | Unsubscribe |
-| `START` | Anyone | Re-subscribe |
-| `HELP` | Anyone | Show commands |
-| Any question | Anyone | Search knowledge base |
-
-vercel deploy --prod
+```json
+// vercel.json
+{
+  "crons": [{
+    "path": "/api/slack/sync",
+    "schedule": "0 */6 * * *"
+  }]
+}
 ```
 
 ## Commands Reference

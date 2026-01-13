@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/event-nudges",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/slack-sync",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

@@ -121,3 +121,10 @@ model Event {
   @@index([eventDate, morningReminderSent])
 }
 
+model SlackSync {
+  channelName     String   @id
+  lastSyncedTs    String?  // Slack timestamp of last synced message
+  lastSyncedAt    DateTime @default(now())
+  updatedAt       DateTime @default(now())
+}
+

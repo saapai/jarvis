@@ -1,6 +1,6 @@
 import { getPrisma } from '@/lib/prisma';
 import { TextExplorerRepository, ExtractedFact } from './types';
-import { VECTOR_DIMENSION } from './embeddings';
+import { VECTOR_DIMENSION, embedText } from './embeddings';
 import { openai } from '@/lib/openai';
 
 // ---- Time helpers for card-oriented identity ----
@@ -274,25 +274,99 @@ export const textExplorerRepository: TextExplorerRepository = {
         const calendarDatesJson = calendarDates.length > 0 ? JSON.stringify(calendarDates) : null;
 
         if (existing) {
-          // Merge with existing fact
+          // Merge with existing fact using LLM for intelligent updates
           const existingFact = existing;
           const existingEntities = JSON.parse(existingFact.entities || '[]') as string[];
           const newEntities = new Set([...existingEntities, ...(fact.entities || [])]);
           
-          // Merge content if new info is present
+          // Use LLM to intelligently merge content
           let mergedContent = existingFact.content;
-          if (fact.content && fact.content !== existingFact.content && !existingFact.content.includes(fact.content)) {
-            mergedContent = `${existingFact.content} ${fact.content}`.trim();
-          }
-          
-          // Merge sourceText if new info is present
           let mergedSourceText = existingFact.sourceText || '';
-          if (fact.sourceText && fact.sourceText !== existingFact.sourceText && !(existingFact.sourceText || '').includes(fact.sourceText)) {
-            mergedSourceText = `${existingFact.sourceText || ''}\n\n${fact.sourceText}`.trim();
+          
+          // If new information is significantly different, use LLM to merge intelligently
+          const shouldUseLLMMerge = fact.content && 
+            fact.content !== existingFact.content && 
+            !existingFact.content.includes(fact.content) &&
+            fact.content.length > 20; // Only for substantial new content
+          
+          if (shouldUseLLMMerge) {
+            try {
+              const mergePrompt = `You are updating an existing event/fact card with new information from a Slack announcement.
+
+EXISTING CARD:
+Content: "${existingFact.content}"
+Source: "${existingFact.sourceText || 'N/A'}"
+Time: "${existingFact.timeRef || 'N/A'}"
+Date: "${existingFact.dateStr || 'N/A'}"
+
+NEW INFORMATION FROM SLACK:
+Content: "${fact.content}"
+Source: "${fact.sourceText || 'N/A'}"
+Time: "${fact.timeRef || 'N/A'}"
+Date: "${fact.dateStr || 'N/A'}"
+
+Your task:
+1. Create an UPDATED content summary (1-2 sentences) that incorporates the new information
+2. Keep the most important and up-to-date details
+3. If dates/times conflict, prefer the newer information
+4. If new details are provided (like RSVP links, locations, etc.), include them
+5. Preserve important context from the original that's still relevant
+
+Return JSON: { "mergedContent": "updated summary here", "mergedSourceText": "combined source text with new info first" }`;
+
+              const mergeResponse = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'You are a helpful assistant that intelligently merges event information. Return only valid JSON.',
+                  },
+                  {
+                    role: 'user',
+                    content: mergePrompt,
+                  },
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.2,
+                max_tokens: 500,
+              });
+
+              const mergeResult = JSON.parse(mergeResponse.choices[0]?.message?.content || '{}');
+              if (mergeResult.mergedContent) {
+                mergedContent = mergeResult.mergedContent;
+              }
+              if (mergeResult.mergedSourceText) {
+                mergedSourceText = mergeResult.mergedSourceText;
+              } else {
+                // Fallback: append new source text
+                if (fact.sourceText && fact.sourceText !== existingFact.sourceText && !mergedSourceText.includes(fact.sourceText)) {
+                  mergedSourceText = `${fact.sourceText}\n\n${mergedSourceText}`.trim();
+                }
+              }
+            } catch (error) {
+              console.error('[TextExplorer Facts] LLM merge failed, using simple merge', error);
+              // Fallback to simple merge
+              mergedContent = `${existingFact.content} ${fact.content}`.trim();
+              if (fact.sourceText && fact.sourceText !== existingFact.sourceText && !mergedSourceText.includes(fact.sourceText)) {
+                mergedSourceText = `${fact.sourceText}\n\n${mergedSourceText}`.trim();
+              }
+            }
+          } else {
+            // Simple merge for minor updates
+            if (fact.content && fact.content !== existingFact.content && !existingFact.content.includes(fact.content)) {
+              mergedContent = `${existingFact.content} ${fact.content}`.trim();
+            }
+            if (fact.sourceText && fact.sourceText !== existingFact.sourceText && !mergedSourceText.includes(fact.sourceText)) {
+              mergedSourceText = `${fact.sourceText}\n\n${mergedSourceText}`.trim();
+            }
           }
           
-          // Update existing fact (include calendarDates)
-          if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
+          // Regenerate embedding with merged content for better search
+          const embeddingText = `${mergedContent} ${mergedSourceText}`.trim();
+          const updatedEmbedding = await embedText(embeddingText);
+          
+          // Update existing fact (include calendarDates and updated embedding)
+          if (hasEmbeddingColumn && updatedEmbedding) {
             await tx.$executeRawUnsafe(
               `
               UPDATE "Fact"
@@ -307,7 +381,7 @@ export const textExplorerRepository: TextExplorerRepository = {
               mergedSourceText,
               JSON.stringify(Array.from(newEntities)),
               calendarDatesJson,
-              `[${factEmbedding.join(',')}]`,
+              `[${updatedEmbedding.join(',')}]`,
               existingFact.id
             );
           } else {

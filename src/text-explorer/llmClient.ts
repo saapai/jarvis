@@ -31,6 +31,7 @@ For each extracted fact, create ONE entry with:
 4. subcategory: A SHORT, human-readable title for this specific event or fact (e.g., "Active Meeting", "Retreat", "Ski Trip", "Kegger", "Tentative Media Day", "Formal", "Dues", "Membership Criteria"). 
    - NEVER use generic section headers like "Social Calendar", "Announcements", "Updates", or "Agenda" as the subcategory.
    - If the slide has a header and then bullet-point events, the header is context, but each bullet-point event gets its OWN subcategory based on the event name in the bullet text.
+   - CRITICAL: If the message is about an existing event (e.g., mentions "retreat" and provides RSVP link, updates, or additional info), use the SAME subcategory name as the original event (e.g., "Retreat", not "Retreat RSVP" or "Retreat Update"). This ensures updates merge with existing cards.
 5. timeRef: The exact time reference ("November 8th", "week 4", "every Wednesday at 8:00 PM", "January 16–19", "Jan 16-19")
 6. dateStr: Parse to date format. IMPORTANT: For date RANGES, store only the START date:
    - For date ranges (e.g., "January 16 to January 19", "jan 16-19", "16-19"): Store ONLY the start date (e.g., "2026-01-16")

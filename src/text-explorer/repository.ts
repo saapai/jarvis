@@ -216,6 +216,7 @@ export const textExplorerRepository: TextExplorerRepository = {
           entities: string;
           dateStr: string | null;
           timeRef: string | null;
+          subcategory: string | null;
         };
 
         let existing: Candidate | undefined;
@@ -237,7 +238,8 @@ export const textExplorerRepository: TextExplorerRepository = {
             hasTemporalIdentity: true,
           });
 
-          // Look up candidate facts with same category + title (subcategory, case-insensitive)
+          // Look up candidate facts with same category + similar title (subcategory)
+          // Try exact match first, then fuzzy match for similar names (e.g., "Retreat RSVP" should match "Retreat")
           const candidates = await tx.$queryRawUnsafe<Array<Candidate>>(
             `
             SELECT id,
@@ -245,20 +247,45 @@ export const textExplorerRepository: TextExplorerRepository = {
                    "sourceText",
                    entities,
                    "dateStr",
-                   "timeRef"
+                   "timeRef",
+                   subcategory
             FROM "Fact"
             WHERE category = $1
-              AND LOWER(TRIM(subcategory)) = $2
+              AND (
+                LOWER(TRIM(subcategory)) = $2
+                OR LOWER(TRIM(subcategory)) LIKE $3
+                OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+              )
             `,
             fact.category,
-            subcategoryLower
+            subcategoryLower,
+            `%${subcategoryLower}%`
           );
+          
+          // Filter to only keep candidates where the subcategory is similar enough
+          // (e.g., "Retreat RSVP" matches "Retreat", but "Retreat" doesn't match "Ski Trip")
+          const filteredCandidates = candidates.filter(candidate => {
+            const candidateSub = (candidate.subcategory || '').toLowerCase().trim();
+            // Exact match
+            if (candidateSub === subcategoryLower) return true;
+            // One contains the other (e.g., "retreat" in "retreat rsvp" or vice versa)
+            if (candidateSub.includes(subcategoryLower) || subcategoryLower.includes(candidateSub)) {
+              // But make sure it's not too different (e.g., "retreat" shouldn't match "great retreat")
+              const shorter = candidateSub.length < subcategoryLower.length ? candidateSub : subcategoryLower;
+              const longer = candidateSub.length >= subcategoryLower.length ? candidateSub : subcategoryLower;
+              // If the shorter is at least 4 chars and is a significant part of the longer, it's a match
+              return shorter.length >= 4 && longer.includes(shorter);
+            }
+            return false;
+          });
 
           console.log('[TextExplorer Facts] Candidate facts for card', {
             ...baseLog,
             candidateCount: candidates.length,
-            candidateSummaries: candidates.slice(0, 5).map((c) => ({
+            filteredCount: filteredCandidates.length,
+            candidateSummaries: filteredCandidates.slice(0, 5).map((c) => ({
               id: c.id,
+              subcategory: c.subcategory,
               dateStr: c.dateStr,
               timeRef: c.timeRef,
               week: extractWeekNumber(c.dateStr, c.timeRef),
@@ -266,21 +293,31 @@ export const textExplorerRepository: TextExplorerRepository = {
             })),
           });
 
-          // Among candidates, treat as the same card using week/date rules:
+          // Among filtered candidates, treat as the same card using week/date rules:
           // - Same title + same week (even if only one has a date)
           // - Same title + same date (even if only one has a week)
-          existing = candidates.find((candidate) => {
+          // - Same title even without matching dates (for updates/RSVPs that don't have dates)
+          existing = filteredCandidates.find((candidate) => {
             const candidateWeek = extractWeekNumber(
               candidate.dateStr,
               candidate.timeRef
             );
             const candidateDate = normalizeIsoDate(candidate.dateStr);
-            return isSameCardTime(
-              factWeek,
-              factDate,
-              candidateWeek,
-              candidateDate
-            );
+            
+            // If both have temporal identity, use strict matching
+            if (hasTemporalIdentity(factWeek, factDate) && hasTemporalIdentity(candidateWeek, candidateDate)) {
+              return isSameCardTime(
+                factWeek,
+                factDate,
+                candidateWeek,
+                candidateDate
+              );
+            }
+            
+            // If new fact has no temporal identity but candidate does, still match (update/RSVP)
+            // If candidate has no temporal identity but new fact does, still match (adding date to existing)
+            // If neither has temporal identity, match by subcategory only
+            return true;
           });
 
           if (existing) {

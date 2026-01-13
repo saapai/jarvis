@@ -231,8 +231,9 @@ export const textExplorerRepository: TextExplorerRepository = {
           isoDate: factDate,
         };
 
-        // Only try to deduplicate when the fact has a temporal identifier
-        if (hasTemporalIdentity(factWeek, factDate)) {
+        // Try to deduplicate - check both facts with temporal identity AND facts without
+        // (e.g., "Retreat RSVP" update should merge with existing "Retreat" card)
+        if (hasTemporalIdentity(factWeek, factDate) || fact.subcategory) {
           console.log('[TextExplorer Facts] Considering fact for dedup', {
             ...baseLog,
             hasTemporalIdentity: true,
@@ -328,11 +329,71 @@ export const textExplorerRepository: TextExplorerRepository = {
           } else {
             console.log('[TextExplorer Facts] No matching card found, inserting new', baseLog);
           }
+        } else if (!fact.subcategory) {
+          // Only skip deduplication if there's no subcategory at all
+          console.log('[TextExplorer Facts] No subcategory, inserting new card', {
+            ...baseLog,
+          });
         } else {
-          console.log('[TextExplorer Facts] No temporal identity, always inserting new card', {
+          // Fact has subcategory but no temporal identity - still try to match
+          console.log('[TextExplorer Facts] No temporal identity but has subcategory, checking for matches', {
             ...baseLog,
             hasTemporalIdentity: false,
           });
+          
+          // Look for existing facts with similar subcategory (even without temporal matching)
+          const candidates = await tx.$queryRawUnsafe<Array<Candidate>>(
+            `
+            SELECT id,
+                   content,
+                   "sourceText",
+                   entities,
+                   "dateStr",
+                   "timeRef",
+                   subcategory
+            FROM "Fact"
+            WHERE category = $1
+              AND (
+                LOWER(TRIM(subcategory)) = $2
+                OR LOWER(TRIM(subcategory)) LIKE $3
+                OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+              )
+            `,
+            fact.category,
+            subcategoryLower,
+            `%${subcategoryLower}%`
+          );
+          
+          const filteredCandidates = candidates.filter(candidate => {
+            const candidateSub = (candidate.subcategory || '').toLowerCase().trim();
+            if (candidateSub === subcategoryLower) return true;
+            if (candidateSub.includes(subcategoryLower) || subcategoryLower.includes(candidateSub)) {
+              const shorter = candidateSub.length < subcategoryLower.length ? candidateSub : subcategoryLower;
+              const longer = candidateSub.length >= subcategoryLower.length ? candidateSub : subcategoryLower;
+              return shorter.length >= 4 && longer.includes(shorter);
+            }
+            return false;
+          });
+          
+          // For facts without temporal identity, match to the most recent similar fact
+          if (filteredCandidates.length > 0) {
+            // Prefer facts with temporal identity (actual events) over facts without
+            const withTemporal = filteredCandidates.filter(c => {
+              const cWeek = extractWeekNumber(c.dateStr, c.timeRef);
+              const cDate = normalizeIsoDate(c.dateStr);
+              return hasTemporalIdentity(cWeek, cDate);
+            });
+            
+            existing = (withTemporal.length > 0 ? withTemporal : filteredCandidates)[0];
+            
+            if (existing) {
+              console.log('[TextExplorer Facts] Found matching card without temporal identity', {
+                ...baseLog,
+                existingId: existing.id,
+                existingSubcategory: existing.subcategory,
+              });
+            }
+          }
         }
 
         const calendarDatesJson = calendarDates.length > 0 ? JSON.stringify(calendarDates) : null;

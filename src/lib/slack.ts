@@ -118,14 +118,14 @@ export async function fetchChannelMessages(
     }
 
     const messages: SlackMessage[] = [];
-    let cursor: string | undefined;
-    let hasMore = true;
+    let messageCursor: string | undefined;
+    let hasMoreMessages = true;
 
-    while (hasMore) {
+    while (hasMoreMessages) {
       const result = await client.conversations.history({
         channel: channel.id,
         oldest,
-        cursor,
+        cursor: messageCursor,
         limit: 200,
       });
 
@@ -152,8 +152,8 @@ export async function fetchChannelMessages(
         }
       }
 
-      cursor = result.response_metadata?.next_cursor;
-      hasMore = !!cursor;
+      messageCursor = result.response_metadata?.next_cursor;
+      hasMoreMessages = !!messageCursor;
     }
 
     return messages;

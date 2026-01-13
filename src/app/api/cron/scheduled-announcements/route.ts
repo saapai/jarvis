@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 /**
  * Send scheduled announcements that are due
  */
-async function sendScheduledAnnouncements(): Promise<{ sent: number; failed: number; scheduled: ScheduledAnnouncement[] }> {
+async function sendScheduledAnnouncements(): Promise<{ sent: number; failed: number; scheduled: any[] }> {
   const prisma = await getPrisma()
   const now = new Date()
   

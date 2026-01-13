@@ -286,10 +286,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Count scheduled announcements created
+    const scheduledCount = await prisma.scheduledAnnouncement.count({
+      where: {
+        sourceMessageTs: {
+          in: messages.map(m => m.ts),
+        },
+        sent: false,
+      },
+    });
+
     console.log('[Slack Sync] Sync completed', {
       channelName,
       messagesProcessed: messages.length,
       factsSynced: syncedCount,
+      scheduledAnnouncementsCreated: scheduledCount,
       latestTs,
     });
 
@@ -298,6 +309,7 @@ export async function POST(req: NextRequest) {
       channelName,
       messagesProcessed: messages.length,
       factsSynced: syncedCount,
+      scheduledAnnouncementsCreated: scheduledCount,
       latestTs,
     });
   } catch (error) {

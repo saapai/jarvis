@@ -646,17 +646,43 @@ async function filterAndFormatResultsWithLLM(
       
       let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}${relevanceNote}\n${r.body}`
       
-      // Add sourceText if available (contains full original text with URLs/links)
-      if (r.sourceText && r.sourceText !== r.body) {
-        // Extract URLs from sourceText
-        const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi
-        const urls = r.sourceText.match(urlPattern)
-        if (urls && urls.length > 0) {
-          resultText += `\nLinks: ${urls.join(', ')}`
+      // Always extract and display links from sourceText if available
+      // This is critical for queries asking for links
+      if (r.sourceText) {
+        // Extract URLs from sourceText (handle both regular URLs and Slack format <https://...>)
+        const slackLinkPattern = /<https?:\/\/([^>|]+)(\|[^>]*)?>/gi
+        const regularUrlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi
+        
+        const urls: string[] = []
+        
+        // First, extract Slack-formatted links <https://url>
+        let match
+        while ((match = slackLinkPattern.exec(r.sourceText)) !== null) {
+          urls.push(`https://${match[1]}`)
         }
+        
+        // Then extract regular URLs (avoid duplicates)
+        const allUrls = r.sourceText.match(regularUrlPattern) || []
+        for (const url of allUrls) {
+          if (!urls.includes(url)) {
+            urls.push(url)
+          }
+        }
+        
+        if (urls.length > 0) {
+          // Always show links prominently, especially if query mentions "link"
+          const queryLower = query.toLowerCase()
+          const isLinkQuery = queryLower.includes('link') || queryLower.includes('url') || queryLower.includes('rsvp')
+          if (isLinkQuery) {
+            resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}${relevanceNote}\n${r.body}\n\n🔗 LINKS: ${urls.join('\n')}`
+          } else {
+            resultText += `\n🔗 Links: ${urls.join(', ')}`
+          }
+        }
+        
         // Also include full sourceText if it's significantly different (contains more detail)
-        if (r.sourceText.length > r.body.length * 1.5) {
-          resultText += `\nFull details: ${r.sourceText.substring(0, 200)}${r.sourceText.length > 200 ? '...' : ''}`
+        if (r.sourceText.length > r.body.length * 1.5 && !resultText.includes('Full details:')) {
+          resultText += `\nFull details: ${r.sourceText.substring(0, 300)}${r.sourceText.length > 300 ? '...' : ''}`
         }
       }
       
@@ -799,9 +825,11 @@ YOUR TASK:
 13. If a date is not in the results, calculate it from recurring patterns and today's date if possible
 14. DO NOT make up dates that aren't in the results or can't be calculated
 15. If information is incomplete (e.g., "TBD", no date mentioned), state what you know and note what's missing
-16. CRITICAL: If a result includes "Links:" or "Full details:" sections, ALWAYS extract and include any URLs/links in your response
-17. When user asks for links (e.g., "RSVP link", "registration link"), prioritize results that have links in their sourceText
-18. Always include URLs/links when they're available in the search results, especially for RSVP forms, registration pages, etc.
+16. CRITICAL: If a result includes "🔗 Links:" or "🔗 LINKS:" sections, ALWAYS extract and include those URLs/links in your response
+17. When user asks for links (e.g., "RSVP link", "registration link", "what's the link"), you MUST include the links from the results that have them
+18. Links are marked with 🔗 emoji - if you see "🔗 LINKS:" or "🔗 Links:", those are the exact URLs to provide
+19. If a result has links, include them in your response even if the content doesn't explicitly mention them
+20. For queries asking specifically about links, prioritize results that have the 🔗 Links: section
 
 FORMATTING RULES:
 - DO NOT use markdown formatting - NO asterisks, NO bold, NO markdown lists

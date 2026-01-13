@@ -231,6 +231,33 @@ function parseSemanticText(text: string, entities: string[], timeRef?: string): 
   return parts.length > 0 ? parts : [{ text, type: 'text' }];
 }
 
+// Parse text and convert URLs to clickable links
+function parseLinks(text: string): Array<{ text: string; type: 'link' | 'text'; url?: string }> {
+  if (!text) return [{ text, type: 'text' }];
+  
+  const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
+  const parts: Array<{ text: string; type: 'link' | 'text'; url?: string }> = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = urlPattern.exec(text)) !== null) {
+    // Add text before the URL
+    if (match.index > lastIndex) {
+      parts.push({ text: text.slice(lastIndex, match.index), type: 'text' });
+    }
+    // Add the URL as a link
+    parts.push({ text: match[0], type: 'link', url: match[0] });
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push({ text: text.slice(lastIndex), type: 'text' });
+  }
+  
+  return parts.length > 0 ? parts : [{ text, type: 'text' }];
+}
+
 // Semantic block component for clickable inline text (times, locations, people)
 function SemanticBlock({ 
   text, 
@@ -2081,7 +2108,21 @@ function DumpTab({
                             <span>{new Date(announcement.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
                           </div>
                           <p className="mt-2 text-sm text-[var(--text-on-card)] whitespace-pre-wrap">
-                            {announcement.content}
+                            {parseLinks(announcement.content).map((part, idx) => 
+                              part.type === 'link' ? (
+                                <a
+                                  key={idx}
+                                  href={part.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[var(--highlight-blue)] hover:underline break-all"
+                                >
+                                  {part.text}
+                                </a>
+                              ) : (
+                                <span key={idx}>{part.text}</span>
+                              )
+                            )}
                           </p>
                         </div>
                         <button

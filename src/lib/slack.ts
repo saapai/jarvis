@@ -31,26 +31,51 @@ export async function fetchChannelMessages(
   const client = getSlackClient();
   
   try {
-    const channelList = await client.conversations.list({
-      types: 'public_channel,private_channel',
-      exclude_archived: true,
-    });
+    // Get channels - for private channels, bot must be a member
+    // Note: conversations.list may not return all private channels if bot isn't properly authenticated
+    let allChannels: any[] = [];
+    let cursor: string | undefined;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const channelList = await client.conversations.list({
+        types: 'public_channel,private_channel',
+        exclude_archived: true,
+        limit: 200,
+        cursor,
+      });
+      
+      if (channelList.channels) {
+        allChannels = [...allChannels, ...channelList.channels];
+      }
+      
+      cursor = channelList.response_metadata?.next_cursor;
+      hasMore = !!cursor;
+    }
+    
+    console.log('[Slack] Fetching messages from channel:', channelName);
+    console.log('[Slack] Total channels available:', allChannels.length);
+    console.log('[Slack] Private channels in list:', allChannels.filter(ch => ch.is_private).map(ch => ({
+      name: ch.name,
+      isMember: ch.is_member,
+      id: ch.id
+    })));
 
     // Try exact match first
-    let channel = channelList.channels?.find(
+    let channel = allChannels.find(
       (ch) => ch.name === channelName
     );
 
     // If not found, try case-insensitive match
     if (!channel) {
-      channel = channelList.channels?.find(
+      channel = allChannels.find(
         (ch) => ch.name?.toLowerCase() === channelName.toLowerCase()
       );
     }
 
     // If still not found, try partial match (for truncated names)
     if (!channel) {
-      channel = channelList.channels?.find(
+      channel = allChannels.find(
         (ch) => ch.name?.toLowerCase().includes(channelName.toLowerCase()) ||
                 channelName.toLowerCase().includes(ch.name?.toLowerCase() || '')
       );
@@ -58,12 +83,12 @@ export async function fetchChannelMessages(
 
     if (!channel || !channel.id) {
       // List available channels for debugging
-      const availableChannels = channelList.channels?.map(ch => ({
+      const availableChannels = allChannels.map(ch => ({
         name: ch.name,
         id: ch.id,
         isPrivate: ch.is_private,
         isMember: ch.is_member
-      })) || [];
+      }));
       
       const announceChannels = availableChannels.filter(ch => 
         ch.name?.toLowerCase().includes('announce')
@@ -79,7 +104,8 @@ export async function fetchChannelMessages(
       throw new Error(
         `Channel "${channelName}" not found. ` +
         `Available channels: ${channelListStr}. ` +
-        `Note: For private channels, the bot must be a member to access them.`
+        `Note: For private channels, the bot must be a member to access them. ` +
+        `If the channel exists but isn't listed, the bot may need to be re-invited.`
       );
     }
 
@@ -168,15 +194,36 @@ export async function listAllChannels(): Promise<ChannelInfo[]> {
   const client = getSlackClient();
   
   try {
-    const channelList = await client.conversations.list({
-      types: 'public_channel,private_channel',
-      exclude_archived: true,
-    });
+    // Get all channels with pagination
+    let allChannels: any[] = [];
+    let cursor: string | undefined;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const channelList = await client.conversations.list({
+        types: 'public_channel,private_channel',
+        exclude_archived: true,
+        limit: 200,
+        cursor,
+      });
+      
+      if (channelList.channels) {
+        allChannels = [...allChannels, ...channelList.channels];
+      }
+      
+      cursor = channelList.response_metadata?.next_cursor;
+      hasMore = !!cursor;
+    }
+    
+    console.log('[Slack] Total channels found:', allChannels.length);
+    console.log('[Slack] Private channels:', allChannels.filter(ch => ch.is_private).map(ch => ({
+      name: ch.name,
+      isMember: ch.is_member
+    })));
 
     const channels: ChannelInfo[] = [];
     
-    if (channelList.channels) {
-      for (const ch of channelList.channels) {
+    for (const ch of allChannels) {
         if (ch.id && ch.name) {
           const isPrivate = ch.is_private || false;
           
@@ -199,7 +246,6 @@ export async function listAllChannels(): Promise<ChannelInfo[]> {
             topic,
           });
         }
-      }
     }
 
     return channels;

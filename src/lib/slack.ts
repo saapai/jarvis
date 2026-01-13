@@ -33,14 +33,62 @@ export async function fetchChannelMessages(
   try {
     const channelList = await client.conversations.list({
       types: 'public_channel,private_channel',
+      exclude_archived: true,
     });
 
-    const channel = channelList.channels?.find(
+    // Try exact match first
+    let channel = channelList.channels?.find(
       (ch) => ch.name === channelName
     );
 
+    // If not found, try case-insensitive match
+    if (!channel) {
+      channel = channelList.channels?.find(
+        (ch) => ch.name?.toLowerCase() === channelName.toLowerCase()
+      );
+    }
+
+    // If still not found, try partial match (for truncated names)
+    if (!channel) {
+      channel = channelList.channels?.find(
+        (ch) => ch.name?.toLowerCase().includes(channelName.toLowerCase()) ||
+                channelName.toLowerCase().includes(ch.name?.toLowerCase() || '')
+      );
+    }
+
     if (!channel || !channel.id) {
-      throw new Error(`Channel "${channelName}" not found`);
+      // List available channels for debugging
+      const availableChannels = channelList.channels?.map(ch => ({
+        name: ch.name,
+        id: ch.id,
+        isPrivate: ch.is_private,
+        isMember: ch.is_member
+      })) || [];
+      
+      const announceChannels = availableChannels.filter(ch => 
+        ch.name?.toLowerCase().includes('announce')
+      );
+      
+      console.error('[Slack] Channel not found. Available channels:', availableChannels);
+      console.error('[Slack] Channels with "announce" in name:', announceChannels);
+      
+      const channelListStr = availableChannels.map(c => 
+        `${c.name}${c.isPrivate ? ' (private' : ' (public'}${c.isMember ? ', member)' : ', not member)'}`
+      ).join(', ');
+      
+      throw new Error(
+        `Channel "${channelName}" not found. ` +
+        `Available channels: ${channelListStr}. ` +
+        `Note: For private channels, the bot must be a member to access them.`
+      );
+    }
+
+    // Check if bot is a member of private channels
+    if (channel.is_private && !channel.is_member) {
+      throw new Error(
+        `Bot is not a member of private channel "${channelName}". ` +
+        `Please invite the bot (@YourBotName) to the channel first using /invite @YourBotName`
+      );
     }
 
     const messages: SlackMessage[] = [];

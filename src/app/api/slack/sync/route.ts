@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchChannelMessages, detectAnnouncementsChannel } from '@/lib/slack';
+import { fetchChannelMessages, detectAnnouncementsChannel, listAllChannels } from '@/lib/slack';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
 import { getPrisma } from '@/lib/prisma';
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       
       if (detected) {
         channelName = detected;
+        console.log('[Slack Sync] Detected channel:', channelName);
       } else {
         const fallback = process.env.SLACK_ANNOUNCEMENTS_CHANNEL || 'announcements';
         console.log('[Slack Sync] Could not detect channel, using fallback:', fallback);
@@ -175,6 +176,27 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('[Slack Sync] Sync error', error);
+    
+    // If channel not found, list available channels
+    if (error instanceof Error && error.message.includes('not found')) {
+      try {
+        const availableChannels = await listAllChannels();
+        return NextResponse.json(
+          { 
+            error: 'Failed to sync Slack messages', 
+            details: error.message,
+            availableChannels: availableChannels.map(ch => ({
+              name: ch.name,
+              isPrivate: ch.isPrivate
+            }))
+          },
+          { status: 404 }
+        );
+      } catch (listError) {
+        // If listing fails, just return the original error
+      }
+    }
+    
     return NextResponse.json(
       { error: 'Failed to sync Slack messages', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

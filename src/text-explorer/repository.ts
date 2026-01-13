@@ -373,10 +373,11 @@ Your task:
 1. Create an UPDATED content summary (1-2 sentences) that incorporates the new information
 2. Keep the most important and up-to-date details
 3. If dates/times conflict, prefer the newer information
-4. If new details are provided (like RSVP links, locations, etc.), include them
+4. CRITICAL: If new details include URLs, links, or RSVP forms, ALWAYS include them in the merged content
 5. Preserve important context from the original that's still relevant
+6. In mergedSourceText, put the NEW information first, then the original source
 
-Return JSON: { "mergedContent": "updated summary here", "mergedSourceText": "combined source text with new info first" }`;
+Return JSON: { "mergedContent": "updated summary here with links preserved", "mergedSourceText": "new info first, then original" }`;
 
               const mergeResponse = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',

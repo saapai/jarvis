@@ -2116,6 +2116,11 @@ function DumpTab({
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-[var(--highlight-blue)] hover:underline break-all"
+                                  onClick={(e) => {
+                                    // Stop propagation so command+click doesn't trigger parent handlers
+                                    e.stopPropagation();
+                                    // Allow default behavior (opens in new tab)
+                                  }}
                                 >
                                   {part.text}
                                 </a>

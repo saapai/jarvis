@@ -133,7 +133,7 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
     const content = response.choices[0]?.message?.content;
     if (content) {
       try {
-        const parsed = JSON.parse(content);
+      const parsed = JSON.parse(content);
         const dates = parsed.dates || [];
         // Validate dates are in YYYY-MM-DD format
         return dates.filter((d: any) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
@@ -484,12 +484,12 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
             
             // If both have temporal identity, use strict matching
             if (hasTemporalIdentity(factWeek, factDate) && hasTemporalIdentity(candidateWeek, candidateDate)) {
-              return isSameCardTime(
-                factWeek,
-                factDate,
-                candidateWeek,
-                candidateDate
-              );
+            return isSameCardTime(
+              factWeek,
+              factDate,
+              candidateWeek,
+              candidateDate
+            );
             }
             
             // If new fact has no temporal identity but candidate does, still match (update/RSVP)
@@ -576,10 +576,10 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
         const calendarDatesJson = calendarDates.length > 0 ? JSON.stringify(calendarDates) : null;
 
         // Prepare merge data outside transaction to avoid timeout
-        let mergedContent: string | undefined;
-        let mergedSourceText: string | undefined;
-        let updatedEmbedding: number[] | undefined;
-        
+        let mergedContent: string = fact.content;
+        let mergedSourceText: string = fact.sourceText || '';
+        let updatedEmbedding: number[] | null = null;
+
         if (existing) {
           // Merge with existing fact using LLM for intelligent updates
           const existingFact = existing;
@@ -661,8 +661,8 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
             }
           } else {
             // Simple merge for minor updates
-            if (fact.content && fact.content !== existingFact.content && !existingFact.content.includes(fact.content)) {
-              mergedContent = `${existingFact.content} ${fact.content}`.trim();
+          if (fact.content && fact.content !== existingFact.content && !existingFact.content.includes(fact.content)) {
+            mergedContent = `${existingFact.content} ${fact.content}`.trim();
             }
             if (fact.sourceText && fact.sourceText !== existingFact.sourceText && !mergedSourceText.includes(fact.sourceText)) {
               mergedSourceText = `${fact.sourceText}\n\n${mergedSourceText}`.trim();
@@ -682,12 +682,22 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
           
           // Generate embedding outside transaction to prevent timeout
           // We'll store it and use it in the update
-          let updatedEmbedding: number[] | null = null;
           try {
             updatedEmbedding = await embedText(embeddingText);
           } catch (error) {
             console.error('[TextExplorer Facts] Embedding generation failed during merge', error);
+            updatedEmbedding = null;
           }
+        }
+        
+        // Update existing fact if we have merge data
+        if (existing && mergedContent && mergedSourceText !== undefined) {
+          const existingFact = existing;
+          const existingEntities = JSON.parse(existingFact.entities || '[]') as string[];
+          const newEntities = new Set([
+            ...existingEntities,
+            ...(fact.entities || [])
+          ]);
           
           // Update existing fact (include calendarDates and updated embedding)
           if (hasEmbeddingColumn && updatedEmbedding && updatedEmbedding.length === VECTOR_DIMENSION) {
@@ -719,7 +729,7 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
               WHERE id = $5
               `,
               mergedContent,
-              mergedSourceText,
+              mergedSourceText || '',
               JSON.stringify(Array.from(newEntities)),
               calendarDatesJson,
               existingFact.id

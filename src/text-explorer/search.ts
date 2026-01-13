@@ -59,10 +59,11 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
   // Use $queryRawUnsafe with properly formatted vector literal
   // The vector needs to be quoted as a string and cast to vector type
   // Include ALL facts, prioritizing those with embeddings but also including recurring events
+  // Include sourceText to preserve URLs/links
   const rows = await prisma.$queryRawUnsafe<
-    Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; score: number }>
+    Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; score: number }>
   >(`
-    SELECT content, subcategory, category, "timeRef", "dateStr",
+    SELECT content, subcategory, category, "timeRef", "dateStr", "sourceText",
       CASE 
         WHEN embedding IS NOT NULL THEN 1 - (embedding <=> ${vectorArray})
         ELSE 0.5
@@ -82,7 +83,8 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
     body: buildBody(row.content, row.timeRef, row.subcategory, row.dateStr),
     score: row.score ?? 0,
     dateStr: row.dateStr || null,
-    timeRef: row.timeRef || null
+    timeRef: row.timeRef || null,
+    sourceText: row.sourceText || null
   }))
 }
 
@@ -168,7 +170,8 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
     body: buildBody(fact.content, fact.timeRef, fact.subcategory || undefined, fact.dateStr || undefined),
     score: 0,
     dateStr: fact.dateStr || null,
-    timeRef: fact.timeRef || null
+    timeRef: fact.timeRef || null,
+    sourceText: fact.sourceText || null
   }))
 }
 

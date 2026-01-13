@@ -138,7 +138,10 @@ Classify this message into ONE of these actions:
 CONTEXT UNDERSTANDING:
 - Pay attention to conversation history - if user is editing a draft, recent messages show what they're referring to
 - Words like "wait", "no", "actually", "instead" signal draft edits, NOT new conversations
-- If draft exists and user says something new, it's likely an edit (draft_write), not chat
+- IMPORTANT: Questions like "tell me about X", "what is X", "when is X" are ALWAYS content_query, even if a draft exists
+- "Tell me about", "give me info about", "what's the deal with" = content_query (asking for information)
+- Only classify as draft_write if user is clearly providing content to send or editing existing draft content
+- If draft exists but message is a question, it's content_query, NOT draft_write
 - Use the weighted history (higher weight = more recent/relevant)
 
 Respond with JSON only:

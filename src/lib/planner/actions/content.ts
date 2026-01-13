@@ -128,6 +128,9 @@ Examples:
 - "when is active meeting?" → categories: ["upcoming", "recurring", "facts"] (general future event query - include both upcoming and recurring)
 - "what events are coming up?" → categories: ["upcoming", "recurring"] (general future event query - include both)
 - "tell me about study hall" → categories: ["upcoming", "recurring", "past", "facts"] (general query)
+- "what is the retreat rsvp link" or "retreat link" → categories: ["upcoming", "recurring", "facts"] (link queries should search all categories where the event might be)
+- "rsvp link" or "registration link" → categories: ["upcoming", "recurring", "facts", "announcements"] (link queries need to search broadly)
+- Any question about links/RSVPs for events → include ["upcoming", "recurring", "facts"] to find the event
 - Any question about future events without specific category → include both ["upcoming", "recurring"]
 
 Respond with JSON: { "categories": string[], "reasoning": string }
@@ -925,7 +928,13 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   
   // 1. Search content database (Facts)
   // Search broadly and let categorization + LLM processing handle filtering
-  if (searchContent && (targetCategories.includes('facts') || targetCategories.includes('upcoming') || targetCategories.includes('recurring') || targetCategories.includes('past'))) {
+  // For link queries, always search all categories to find events with links
+  const isLinkQuery = message.toLowerCase().includes('link') || message.toLowerCase().includes('rsvp') || message.toLowerCase().includes('url')
+  const categoriesToSearch = isLinkQuery 
+    ? ['facts', 'upcoming', 'recurring', 'past'] // Search all categories for link queries
+    : targetCategories
+  
+  if (searchContent && (categoriesToSearch.includes('facts') || categoriesToSearch.includes('upcoming') || categoriesToSearch.includes('recurring') || categoriesToSearch.includes('past'))) {
     console.log(`[ContentQuery] Searching content database...`)
     try {
       // Use LLM to generate a better search query if this is a category query
@@ -1134,9 +1143,12 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
         }
       }
       
+  // For link queries, don't filter by category - include all results that have links
+  const categoriesForFiltering = isLinkQuery ? ['facts', 'upcoming', 'recurring', 'past', 'announcements', 'polls'] : targetCategories
+  
   // Use LLM to filter and format the most relevant results
-  console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM (target categories: ${targetCategories.join(', ')})...`)
-  const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults, targetCategories)
+  console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)
+  const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults, categoriesForFiltering)
   console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
   
   return {

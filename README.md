@@ -230,18 +230,25 @@ vercel deploy --prod
 
 ### Syncing Messages
 
+**IMPORTANT**: After deployment, you must manually trigger the first sync to import messages into the knowledge base.
+
 Sync messages from your Slack announcements channel to the knowledge base:
 
 ```bash
-# Sync new messages (incremental)
+# Auto-detect announcements channel and sync new messages (incremental)
 curl -X POST https://your-app.vercel.app/api/slack/sync \
   -H "Content-Type: application/json" \
-  -d '{"channelName": "announcements"}'
+  -d '{}'
 
-# Force full sync (re-sync all messages)
+# Force full sync (re-sync all messages from beginning)
 curl -X POST https://your-app.vercel.app/api/slack/sync \
   -H "Content-Type: application/json" \
-  -d '{"channelName": "announcements", "forceFullSync": true}'
+  -d '{"forceFullSync": true}'
+
+# Sync specific channel
+curl -X POST https://your-app.vercel.app/api/slack/sync \
+  -H "Content-Type: application/json" \
+  -d '{"channelName": "winter26-announcements"}'
 
 # Check sync status
 curl https://your-app.vercel.app/api/slack/sync

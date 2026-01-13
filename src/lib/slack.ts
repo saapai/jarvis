@@ -57,10 +57,19 @@ export async function fetchChannelMessages(
 
       if (result.messages) {
         for (const msg of result.messages) {
-          if (msg.ts && msg.text && !msg.subtype) {
+          // Skip system messages (subtype indicates system events like channel_join, etc.)
+          // Only process regular user messages
+          if (msg.subtype && !['thread_broadcast'].includes(msg.subtype)) {
+            continue;
+          }
+          
+          // Get text from message
+          const messageText = msg.text || '';
+          
+          if (msg.ts && messageText.trim().length > 0) {
             messages.push({
               ts: msg.ts,
-              text: msg.text,
+              text: messageText,
               user: msg.user,
               channel: channel.id,
               thread_ts: msg.thread_ts,

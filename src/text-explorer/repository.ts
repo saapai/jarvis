@@ -488,7 +488,15 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
           }
           
           // Regenerate embedding with merged content for better search
-          const embeddingText = `${mergedContent} ${mergedSourceText}`.trim();
+          // Include subcategory, content, sourceText, and timeRef for comprehensive embedding
+          const embeddingParts = [
+            existingFact.subcategory || fact.subcategory || '',
+            mergedContent,
+            mergedSourceText,
+            existingFact.timeRef || fact.timeRef || '',
+            existingFact.dateStr || fact.dateStr || ''
+          ].filter(Boolean);
+          const embeddingText = embeddingParts.join(' ').trim();
           const updatedEmbedding = await embedText(embeddingText);
           
           // Update existing fact (include calendarDates and updated embedding)

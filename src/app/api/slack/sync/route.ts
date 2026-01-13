@@ -107,9 +107,16 @@ export async function POST(req: NextRequest) {
         if (processResult.facts.length > 0) {
           const factsWithEmbeddings: ExtractedFact[] = await Promise.all(
             processResult.facts.map(async (fact) => {
-              const embedding = await embedText(
-                `${fact.content} ${fact.sourceText || ''}`.trim()
-              );
+              // Include subcategory, content, sourceText, and timeRef for comprehensive embedding
+              const embeddingParts = [
+                fact.subcategory || '',
+                fact.content || '',
+                fact.sourceText || '',
+                fact.timeRef || '',
+                fact.dateStr || ''
+              ].filter(Boolean);
+              const embeddingText = embeddingParts.join(' ').trim();
+              const embedding = await embedText(embeddingText);
               return { ...fact, embedding };
             })
           );

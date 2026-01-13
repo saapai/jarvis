@@ -930,8 +930,8 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   // Search broadly and let categorization + LLM processing handle filtering
   // For link queries, always search all categories to find events with links
   const isLinkQuery = message.toLowerCase().includes('link') || message.toLowerCase().includes('rsvp') || message.toLowerCase().includes('url')
-  const categoriesToSearch = isLinkQuery 
-    ? ['facts', 'upcoming', 'recurring', 'past'] // Search all categories for link queries
+  const categoriesToSearch: ContentCategory[] = isLinkQuery 
+    ? ['facts', 'upcoming', 'recurring', 'past'] as ContentCategory[] // Search all categories for link queries
     : targetCategories
   
   if (searchContent && (categoriesToSearch.includes('facts') || categoriesToSearch.includes('upcoming') || categoriesToSearch.includes('recurring') || categoriesToSearch.includes('past'))) {
@@ -1144,7 +1144,9 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       }
       
   // For link queries, don't filter by category - include all results that have links
-  const categoriesForFiltering = isLinkQuery ? ['facts', 'upcoming', 'recurring', 'past', 'announcements', 'polls'] : targetCategories
+  const categoriesForFiltering: ContentCategory[] = isLinkQuery 
+    ? ['facts', 'upcoming', 'recurring', 'past', 'announcements', 'polls'] as ContentCategory[]
+    : targetCategories
   
   // Use LLM to filter and format the most relevant results
   console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)

@@ -1,12 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
   extensions = [pgvector(schema: "public")]
 }
 
@@ -24,21 +24,21 @@ model Fact {
   uploadId String
   upload   Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
 
-  content     String   // Summary/key point
-  sourceText  String?  // Original full text chunk
-  category    String   // social, professional, pledging, events, meetings, other
-  subcategory String?  // Event name like "Study Hall", "Creatathon"
-  timeRef     String?  // "tomorrow", "November 8th", "every Wednesday"
-  dateStr     String?  // Parsed date: "2024-11-08", "recurring:wednesday"
+  content       String // Summary/key point
+  sourceText    String? // Original full text chunk
+  category      String // social, professional, pledging, events, meetings, other
+  subcategory   String? // Event name like "Study Hall", "Creatathon"
+  timeRef       String? // "tomorrow", "November 8th", "every Wednesday"
+  dateStr       String? // Parsed date: "2024-11-08", "recurring:wednesday"
   calendarDates String? // JSON array of YYYY-MM-DD dates for calendar display
-  entities    String   // JSON array of entities
-  embedding   Unsupported("vector")?
-  
-  parentId  String?
-  parent    Fact?    @relation("FactTree", fields: [parentId], references: [id])
-  children  Fact[]   @relation("FactTree")
+  entities      String // JSON array of entities
+  embedding     Unsupported("vector")?
 
-  linkedEvents Event[]  // Events linked to this fact
+  parentId String?
+  parent   Fact?   @relation("FactTree", fields: [parentId], references: [id])
+  children Fact[]  @relation("FactTree")
+
+  linkedEvents Event[] // Events linked to this fact
 
   createdAt DateTime @default(now())
 }
@@ -46,18 +46,18 @@ model Fact {
 model Message {
   id          String   @id @default(cuid())
   phoneNumber String
-  direction   String   // "inbound" or "outbound"
+  direction   String // "inbound" or "outbound"
   text        String
-  meta        String?  // JSON: {draftId, pollId, tags}
+  meta        String? // JSON: {draftId, pollId, tags}
   createdAt   DateTime @default(now())
-  
+
   @@index([phoneNumber, createdAt])
 }
 
 model ConversationState {
   phoneNumber  String   @id
-  stateType    String?  // "onboarding", "draft_announcement", "answering_poll"
-  statePayload String?  // JSON: task-specific context
+  stateType    String? // "onboarding", "draft_announcement", "answering_poll"
+  statePayload String? // JSON: task-specific context
   updatedAt    DateTime @default(now())
 }
 
@@ -65,24 +65,24 @@ model AnnouncementDraft {
   id                String   @id @default(cuid())
   phoneNumber       String
   draftText         String
-  structuredPayload String?  // JSON: {event, time, date, tone, audience}
-  status            String   // "in_progress" or "finalized"
+  structuredPayload String? // JSON: {event, time, date, tone, audience}
+  status            String // "in_progress" or "finalized"
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now())
-  
+
   @@index([phoneNumber, status])
 }
 
 model PollMeta {
-  id                  String         @id @default(cuid())
+  id                  String   @id @default(cuid())
   questionText        String
-  requiresReasonForNo Boolean        @default(false)
-  isActive            Boolean        @default(true)
-  createdBy           String         // phone number
-  createdAt           DateTime       @default(now())
-  
-  responses           PollResponse[]
-  
+  requiresReasonForNo Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  createdBy           String // phone number
+  createdAt           DateTime @default(now())
+
+  responses PollResponse[]
+
   @@index([isActive, createdAt])
 }
 
@@ -91,40 +91,52 @@ model PollResponse {
   pollId      String
   poll        PollMeta @relation(fields: [pollId], references: [id], onDelete: Cascade)
   phoneNumber String
-  response    String   // "Yes", "No", "Maybe"
+  response    String // "Yes", "No", "Maybe"
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now())
-  
+
   @@unique([pollId, phoneNumber])
   @@index([pollId, phoneNumber])
 }
 
 model Event {
-  id              String    @id @default(cuid())
-  title           String    // Event name/title
-  description     String?   // Full description
-  eventDate       DateTime  // When the event occurs
-  location        String?   // Where it happens
-  createdBy       String    // Phone number of creator
-  category        String?   // Type of event (social, professional, etc.)
-  reminderSent    Boolean   @default(false)  // Has 2-hour reminder been sent?
-  morningReminderSent Boolean @default(false) // Has 9am reminder been sent?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now())
-  
+  id                  String   @id @default(cuid())
+  title               String // Event name/title
+  description         String? // Full description
+  eventDate           DateTime // When the event occurs
+  location            String? // Where it happens
+  createdBy           String // Phone number of creator
+  category            String? // Type of event (social, professional, etc.)
+  reminderSent        Boolean  @default(false) // Has 2-hour reminder been sent?
+  morningReminderSent Boolean  @default(false) // Has 9am reminder been sent?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now())
+
   // Optional link to extracted facts
-  linkedFactId    String?
-  linkedFact      Fact?     @relation(fields: [linkedFactId], references: [id])
-  
+  linkedFactId String?
+  linkedFact   Fact?   @relation(fields: [linkedFactId], references: [id])
+
   @@index([eventDate, reminderSent])
   @@index([eventDate, morningReminderSent])
 }
 
 model SlackSync {
-  channelName     String   @id
-  lastSyncedTs    String?  // Slack timestamp of last synced message
-  lastSyncedAt    DateTime @default(now())
-  updatedAt       DateTime @default(now())
+  channelName  String   @id
+  lastSyncedTs String? // Slack timestamp of last synced message
+  lastSyncedAt DateTime @default(now())
+  updatedAt    DateTime @default(now())
 }
 
+model ScheduledAnnouncement {
+  id              String    @id @default(cuid())
+  content         String // Message content to send
+  scheduledFor    DateTime // When to send it
+  sent            Boolean   @default(false)
+  sentAt          DateTime?
+  sourceFactId    String? // Optional link to Fact that created this
+  sourceMessageTs String? // Slack message timestamp
+  createdAt       DateTime  @default(now())
+
+  @@index([scheduledFor, sent])
+}

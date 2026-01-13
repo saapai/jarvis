@@ -13,6 +13,10 @@
     {
       "path": "/api/cron/slack-sync",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/scheduled-announcements",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

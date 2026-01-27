@@ -117,9 +117,12 @@ export async function POST(req: NextRequest) {
     const prisma = await getPrisma();
 
     let oldest: string | undefined;
+    // Use findFirst since the unique key is now compound (spaceId, channelName)
+    // For global/legacy sync, we use spaceId: null
+    let syncState: { id: string; lastSyncedTs: string | null } | null = null;
     if (!forceFullSync) {
-      const syncState = await prisma.slackSync.findUnique({
-        where: { channelName },
+      syncState = await prisma.slackSync.findFirst({
+        where: { channelName, spaceId: null },
       });
       if (syncState?.lastSyncedTs) {
         oldest = syncState.lastSyncedTs;
@@ -270,20 +273,43 @@ export async function POST(req: NextRequest) {
     }
 
     if (latestTs) {
-      await prisma.slackSync.upsert({
-        where: { channelName },
-        update: {
-          lastSyncedTs: latestTs,
-          lastSyncedAt: new Date(),
-          updatedAt: new Date(),
-        },
-        create: {
-          channelName,
-          lastSyncedTs: latestTs,
-          lastSyncedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
+      // For global/legacy sync with spaceId: null, we can't use upsert with nullable compound key
+      // Instead, use findFirst + update/create pattern
+      if (syncState) {
+        await prisma.slackSync.update({
+          where: { id: syncState.id },
+          data: {
+            lastSyncedTs: latestTs,
+            lastSyncedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+      } else {
+        // Need to check again in case forceFullSync was true
+        const existingSync = await prisma.slackSync.findFirst({
+          where: { channelName, spaceId: null },
+        });
+        if (existingSync) {
+          await prisma.slackSync.update({
+            where: { id: existingSync.id },
+            data: {
+              lastSyncedTs: latestTs,
+              lastSyncedAt: new Date(),
+              updatedAt: new Date(),
+            },
+          });
+        } else {
+          await prisma.slackSync.create({
+            data: {
+              channelName,
+              spaceId: null,
+              lastSyncedTs: latestTs,
+              lastSyncedAt: new Date(),
+              updatedAt: new Date(),
+            },
+          });
+        }
+      }
     }
 
     // Count scheduled announcements created

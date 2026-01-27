@@ -10,13 +10,97 @@ datasource db {
   extensions = [pgvector(schema: "public")]
 }
 
+// ============================================
+// MULTI-SPACE CORE MODELS
+// ============================================
+
+model User {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  name        String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  spacesOwned Space[]       @relation("SpaceOwner")
+  memberships SpaceMember[]
+}
+
+model Space {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  joinCode  String   @unique // e.g. "SEP", "MYCLUB" - for SMS JOIN command
+  ownerId   String
+  owner     User     @relation("SpaceOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+
+  // Config for legacy integrations
+  airtableBaseId    String? // If set, use Airtable for this space
+  airtableTableName String?
+
+  // Relations
+  members                SpaceMember[]
+  messages               Message[]
+  conversationStates     ConversationState[]
+  announcementDrafts     AnnouncementDraft[]
+  polls                  PollMeta[]
+  events                 Event[]
+  uploads                Upload[]
+  slackSyncs             SlackSync[]
+  scheduledAnnouncements ScheduledAnnouncement[]
+  invites                SpaceInvite[]
+  facts                  Fact[]
+
+  @@index([joinCode])
+}
+
+model SpaceMember {
+  id       String   @id @default(cuid())
+  spaceId  String
+  space    Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("member") // "owner", "admin", "member"
+  name     String? // Display name within this space
+  joinedAt DateTime @default(now())
+  optedOut Boolean  @default(false)
+
+  @@unique([spaceId, userId])
+  @@index([spaceId])
+  @@index([userId])
+}
+
+model SpaceInvite {
+  id        String    @id @default(cuid())
+  spaceId   String
+  space     Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  code      String    @unique // Random invite code for web links
+  expiresAt DateTime?
+  maxUses   Int?
+  uses      Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([spaceId])
+  @@index([code])
+}
+
+// ============================================
+// CONTENT MODELS
+// ============================================
+
 model Upload {
   id        String   @id @default(cuid())
   name      String
   rawText   String
   createdAt DateTime @default(now())
 
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
   facts Fact[]
+
+  @@index([spaceId])
 }
 
 model Fact {
@@ -40,7 +124,13 @@ model Fact {
 
   linkedEvents Event[] // Events linked to this fact
 
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
+
+  @@index([spaceId])
 }
 
 model Message {
@@ -51,14 +141,31 @@ model Message {
   meta        String? // JSON: {draftId, pollId, tags}
   createdAt   DateTime @default(now())
 
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
   @@index([phoneNumber, createdAt])
+  @@index([spaceId, phoneNumber, createdAt])
 }
 
 model ConversationState {
-  phoneNumber  String   @id
+  id           String   @id @default(cuid())
+  phoneNumber  String
   stateType    String? // "onboarding", "draft_announcement", "answering_poll"
   statePayload String? // JSON: task-specific context
   updatedAt    DateTime @default(now())
+
+  // Space scope - which space this conversation state belongs to
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  // Track which space user is currently interacting with (for SMS routing)
+  activeSpaceId String?
+
+  @@unique([phoneNumber, spaceId])
+  @@index([phoneNumber])
+  @@index([spaceId])
 }
 
 model AnnouncementDraft {
@@ -70,7 +177,12 @@ model AnnouncementDraft {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now())
 
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
   @@index([phoneNumber, status])
+  @@index([spaceId, phoneNumber, status])
 }
 
 model PollMeta {
@@ -81,9 +193,14 @@ model PollMeta {
   createdBy           String // phone number
   createdAt           DateTime @default(now())
 
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
   responses PollResponse[]
 
   @@index([isActive, createdAt])
+  @@index([spaceId, isActive, createdAt])
 }
 
 model PollResponse {
@@ -113,19 +230,32 @@ model Event {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @default(now())
 
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
   // Optional link to extracted facts
   linkedFactId String?
   linkedFact   Fact?   @relation(fields: [linkedFactId], references: [id])
 
   @@index([eventDate, reminderSent])
   @@index([eventDate, morningReminderSent])
+  @@index([spaceId, eventDate])
 }
 
 model SlackSync {
-  channelName  String   @id
+  id           String   @id @default(cuid())
+  channelName  String
   lastSyncedTs String? // Slack timestamp of last synced message
   lastSyncedAt DateTime @default(now())
   updatedAt    DateTime @default(now())
+
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, channelName])
+  @@index([spaceId])
 }
 
 model ScheduledAnnouncement {
@@ -138,5 +268,10 @@ model ScheduledAnnouncement {
   sourceMessageTs String? // Slack message timestamp
   createdAt       DateTime  @default(now())
 
+  // Space scope
+  spaceId String?
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
   @@index([scheduledFor, sent])
+  @@index([spaceId, scheduledFor, sent])
 }

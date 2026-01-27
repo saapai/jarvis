@@ -296,6 +296,7 @@ export interface DraftActionInput {
     createdAt: Date
     meta?: { action?: string; draftContent?: string } | null
   }>
+  spaceId?: string | null
 }
 
 /**

@@ -7,6 +7,7 @@ export interface PollResponseInput {
   phone: string
   message: string
   userName: string | null
+  spaceId?: string | null
 }
 
 /**

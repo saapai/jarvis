@@ -33,36 +33,41 @@ export interface PollWithResponses extends PollMeta {
 
 /**
  * Generate next progressive poll ID (1.0, 1.1, 1.2, etc.)
+ * @param spaceId - Optional space ID to scope the count
  */
-async function getNextPollId(): Promise<string> {
+async function getNextPollId(spaceId?: string | null): Promise<string> {
   const prisma = await getPrisma()
-  
-  // Count all polls ever created
-  const totalPolls = await prisma.pollMeta.count()
-  
+
+  // Count polls (optionally scoped to space)
+  const where = spaceId ? { spaceId } : {}
+  const totalPolls = await prisma.pollMeta.count({ where })
+
   // Format: 1.0, 1.1, 1.2, etc.
   const majorVersion = Math.floor(totalPolls / 10) + 1
   const minorVersion = totalPolls % 10
-  
+
   return `${majorVersion}.${minorVersion}`
 }
 
 /**
  * Create a new poll (deactivates previous ones)
+ * @param spaceId - Optional space ID for multi-tenant support
  */
 export async function createPoll(
   questionText: string,
   createdBy: string,
-  requiresReasonForNo: boolean = false
+  requiresReasonForNo: boolean = false,
+  spaceId?: string | null
 ): Promise<PollMeta & { pollIdentifier: string }> {
   const prisma = await getPrisma()
 
-  const pollIdentifier = await getNextPollId()
+  const pollIdentifier = await getNextPollId(spaceId)
   console.log(`[PollRepo] Creating poll with identifier: ${pollIdentifier}`)
 
-  // Deactivate prior polls
+  // Deactivate prior polls (optionally scoped to space)
+  const deactivateWhere = spaceId ? { isActive: true, spaceId } : { isActive: true }
   await prisma.pollMeta.updateMany({
-    where: { isActive: true },
+    where: deactivateWhere,
     data: { isActive: false }
   })
 
@@ -74,6 +79,7 @@ export async function createPoll(
       requiresReasonForNo,
       isActive: true,
       createdBy,
+      spaceId: spaceId || null,
       createdAt: new Date()
     }
   })
@@ -87,30 +93,39 @@ export async function createPoll(
 
 /**
  * Get active poll with pollIdentifier
+ * @param spaceId - Optional space ID to filter polls
  */
-export async function getActivePoll(): Promise<(PollMeta & { pollIdentifier: string }) | null> {
+export async function getActivePoll(spaceId?: string | null): Promise<(PollMeta & { pollIdentifier: string }) | null> {
   const prisma = await getPrisma()
 
+  const where: { isActive: boolean; spaceId?: string | null } = { isActive: true }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   const poll = await prisma.pollMeta.findFirst({
-    where: { isActive: true },
+    where,
     orderBy: { createdAt: 'desc' }
   })
-  
+
   if (!poll) return null
-  
-  // Calculate poll identifier based on creation order
-  const totalPollsBefore = await prisma.pollMeta.count({
-    where: {
-      createdAt: {
-        lt: poll.createdAt
-      }
+
+  // Calculate poll identifier based on creation order (scoped to space if provided)
+  const countWhere: { createdAt: { lt: Date }; spaceId?: string | null } = {
+    createdAt: {
+      lt: poll.createdAt
     }
-  })
-  
+  }
+  if (poll.spaceId) {
+    countWhere.spaceId = poll.spaceId
+  }
+
+  const totalPollsBefore = await prisma.pollMeta.count({ where: countWhere })
+
   const majorVersion = Math.floor(totalPollsBefore / 10) + 1
   const minorVersion = totalPollsBefore % 10
   const pollIdentifier = `${majorVersion}.${minorVersion}`
-  
+
   return {
     ...poll,
     pollIdentifier

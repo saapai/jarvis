@@ -30,16 +30,19 @@ export interface Message {
   text: string
   meta: MessageMeta | null
   createdAt: Date
+  spaceId?: string | null
 }
 
 /**
  * Log an inbound or outbound message
+ * @param spaceId - Optional space ID for multi-tenant support
  */
 export async function logMessage(
   phoneNumber: string,
   direction: 'inbound' | 'outbound',
   text: string,
-  meta: MessageMeta | null
+  meta: MessageMeta | null,
+  spaceId?: string | null
 ): Promise<Message> {
   const prisma = await getPrisma()
 
@@ -48,7 +51,8 @@ export async function logMessage(
       phoneNumber,
       direction,
       text,
-      meta: meta ? JSON.stringify(meta) : null
+      meta: meta ? JSON.stringify(meta) : null,
+      spaceId: spaceId || null
     }
   })
 
@@ -61,15 +65,22 @@ export async function logMessage(
 
 /**
  * Get recent messages for a phone number (chronological)
+ * @param spaceId - Optional space ID to filter messages
  */
 export async function getRecentMessages(
   phoneNumber: string,
-  limit: number = 10
+  limit: number = 10,
+  spaceId?: string | null
 ): Promise<Message[]> {
   const prisma = await getPrisma()
 
+  const where: { phoneNumber: string; spaceId?: string | null } = { phoneNumber }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   const messages = await prisma.message.findMany({
-    where: { phoneNumber },
+    where,
     orderBy: { createdAt: 'desc' },
     take: limit
   })
@@ -83,12 +94,18 @@ export async function getRecentMessages(
 
 /**
  * Get all messages for a phone number (oldest first)
+ * @param spaceId - Optional space ID to filter messages
  */
-export async function getAllMessages(phoneNumber: string): Promise<Message[]> {
+export async function getAllMessages(phoneNumber: string, spaceId?: string | null): Promise<Message[]> {
   const prisma = await getPrisma()
 
+  const where: { phoneNumber: string; spaceId?: string | null } = { phoneNumber }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   const messages = await prisma.message.findMany({
-    where: { phoneNumber },
+    where,
     orderBy: { createdAt: 'asc' }
   })
 
@@ -116,8 +133,9 @@ export async function deleteOldMessages(daysOld: number = 30): Promise<number> {
 
 /**
  * Get recent announcements and polls that were sent
+ * @param spaceId - Optional space ID to filter actions
  */
-export async function getPastActions(limit: number = 20): Promise<Array<{
+export async function getPastActions(limit: number = 20, spaceId?: string | null): Promise<Array<{
   type: 'announcement' | 'poll'
   content: string
   sentAt: Date
@@ -125,14 +143,19 @@ export async function getPastActions(limit: number = 20): Promise<Array<{
 }>> {
   const prisma = await getPrisma()
 
+  const where: { direction: string; meta: { contains: string }; spaceId?: string | null } = {
+    direction: 'outbound',
+    meta: {
+      contains: 'draft_send'
+    }
+  }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   // Find outbound messages with draft_send action
   const messages = await prisma.message.findMany({
-    where: {
-      direction: 'outbound',
-      meta: {
-        contains: 'draft_send'
-      }
-    },
+    where,
     orderBy: { createdAt: 'desc' },
     take: limit
   })

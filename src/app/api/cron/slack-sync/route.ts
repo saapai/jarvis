@@ -112,8 +112,10 @@ export async function GET(req: NextRequest) {
     const prisma = await getPrisma();
 
     let oldest: string | undefined;
-    const syncState = await prisma.slackSync.findUnique({
-      where: { channelName },
+    // Use findFirst since the unique key is now compound (spaceId, channelName)
+    // For global/legacy sync, we use spaceId: null
+    const syncState = await prisma.slackSync.findFirst({
+      where: { channelName, spaceId: null },
     });
     if (syncState?.lastSyncedTs) {
       oldest = syncState.lastSyncedTs;
@@ -231,20 +233,28 @@ export async function GET(req: NextRequest) {
     }
 
     if (latestTs) {
-      await prisma.slackSync.upsert({
-        where: { channelName },
-        update: {
-          lastSyncedTs: latestTs,
-          lastSyncedAt: new Date(),
-          updatedAt: new Date(),
-        },
-        create: {
-          channelName,
-          lastSyncedTs: latestTs,
-          lastSyncedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
+      // For global/legacy sync with spaceId: null, we can't use upsert with nullable compound key
+      // Instead, use findFirst + update/create pattern
+      if (syncState) {
+        await prisma.slackSync.update({
+          where: { id: syncState.id },
+          data: {
+            lastSyncedTs: latestTs,
+            lastSyncedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+      } else {
+        await prisma.slackSync.create({
+          data: {
+            channelName,
+            spaceId: null,
+            lastSyncedTs: latestTs,
+            lastSyncedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+      }
     }
 
     console.log('[Slack Sync Cron] Sync completed', {

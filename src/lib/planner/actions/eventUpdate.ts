@@ -20,6 +20,7 @@ export interface EventUpdateInput {
     updates: Record<string, unknown>
     description: string
   }
+  spaceId?: string | null
 }
 
 /**

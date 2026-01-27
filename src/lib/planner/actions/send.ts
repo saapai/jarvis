@@ -15,6 +15,7 @@ export interface SendActionInput {
   // Function to actually send the announcement/poll
   sendAnnouncement: (content: string, senderPhone: string) => Promise<number>
   sendPoll: (question: string, senderPhone: string, requiresExcuse?: boolean) => Promise<number>
+  spaceId?: string | null
 }
 
 /**

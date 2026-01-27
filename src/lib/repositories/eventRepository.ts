@@ -16,12 +16,14 @@ export interface Event {
   reminderSent: boolean
   morningReminderSent: boolean
   linkedFactId: string | null
+  spaceId: string | null
   createdAt: Date
   updatedAt: Date
 }
 
 /**
  * Create a new event
+ * @param spaceId - Optional space ID for multi-tenant support
  */
 export async function createEvent(params: {
   title: string
@@ -31,6 +33,7 @@ export async function createEvent(params: {
   createdBy: string
   category?: string
   linkedFactId?: string
+  spaceId?: string
 }): Promise<Event> {
   const prisma = await getPrisma()
 
@@ -42,7 +45,8 @@ export async function createEvent(params: {
       location: params.location || null,
       createdBy: params.createdBy,
       category: params.category || null,
-      linkedFactId: params.linkedFactId || null
+      linkedFactId: params.linkedFactId || null,
+      spaceId: params.spaceId || null
     }
   })
 
@@ -123,18 +127,24 @@ export async function mark2HourReminderSent(eventId: string): Promise<void> {
 
 /**
  * Get all upcoming events
+ * @param spaceId - Optional space ID to filter events
  */
-export async function getUpcomingEvents(limit: number = 10): Promise<Event[]> {
+export async function getUpcomingEvents(limit: number = 10, spaceId?: string | null): Promise<Event[]> {
   const prisma = await getPrisma()
 
   const now = new Date()
 
+  const where: { eventDate: { gte: Date }; spaceId?: string | null } = {
+    eventDate: {
+      gte: now
+    }
+  }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   const events = await prisma.event.findMany({
-    where: {
-      eventDate: {
-        gte: now
-      }
-    },
+    where,
     orderBy: { eventDate: 'asc' },
     take: limit
   })
@@ -144,18 +154,24 @@ export async function getUpcomingEvents(limit: number = 10): Promise<Event[]> {
 
 /**
  * Get all past events
+ * @param spaceId - Optional space ID to filter events
  */
-export async function getPastEvents(limit: number = 10): Promise<Event[]> {
+export async function getPastEvents(limit: number = 10, spaceId?: string | null): Promise<Event[]> {
   const prisma = await getPrisma()
 
   const now = new Date()
 
+  const where: { eventDate: { lt: Date }; spaceId?: string | null } = {
+    eventDate: {
+      lt: now
+    }
+  }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   const events = await prisma.event.findMany({
-    where: {
-      eventDate: {
-        lt: now
-      }
-    },
+    where,
     orderBy: { eventDate: 'desc' },
     take: limit
   })

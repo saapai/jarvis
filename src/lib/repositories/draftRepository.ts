@@ -26,16 +26,19 @@ export interface AnnouncementDraftDB {
   status: 'in_progress' | 'finalized'
   createdAt: Date
   updatedAt: Date
+  spaceId?: string | null
 }
 
 /**
  * Create a new draft
+ * @param spaceId - Optional space ID for multi-tenant support
  */
 export async function createDraft(
   phoneNumber: string,
   type: DraftType,
   content: string,
-  structuredPayload: StructuredPayload | null = null
+  structuredPayload: StructuredPayload | null = null,
+  spaceId?: string | null
 ): Promise<AnnouncementDraftDB> {
   const prisma = await getPrisma()
 
@@ -51,6 +54,7 @@ export async function createDraft(
       draftText: content,
       structuredPayload: JSON.stringify(payloadWithType),
       status: 'in_progress',
+      spaceId: spaceId || null,
       createdAt: new Date(),
       updatedAt: new Date()
     }
@@ -65,12 +69,21 @@ export async function createDraft(
 
 /**
  * Get active draft for a phone number
+ * @param spaceId - Optional space ID to filter drafts
  */
-export async function getActiveDraft(phoneNumber: string): Promise<Draft | null> {
+export async function getActiveDraft(phoneNumber: string, spaceId?: string | null): Promise<Draft | null> {
   const prisma = await getPrisma()
 
+  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+    phoneNumber,
+    status: 'in_progress'
+  }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   const draft = await prisma.announcementDraft.findFirst({
-    where: { phoneNumber, status: 'in_progress' },
+    where,
     orderBy: { createdAt: 'desc' }
   })
 
@@ -130,6 +143,7 @@ export async function updateDraft(
 
 /**
  * Update draft by phone number
+ * @param spaceId - Optional space ID to filter drafts
  */
 export async function updateDraftByPhone(
   phoneNumber: string,
@@ -137,12 +151,21 @@ export async function updateDraftByPhone(
     draftText?: string
     structuredPayload?: StructuredPayload | null
     status?: 'in_progress' | 'finalized'
-  }
+  },
+  spaceId?: string | null
 ): Promise<AnnouncementDraftDB | null> {
   const prisma = await getPrisma()
 
+  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+    phoneNumber,
+    status: 'in_progress'
+  }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   const existingDraft = await prisma.announcementDraft.findFirst({
-    where: { phoneNumber, status: 'in_progress' },
+    where,
     orderBy: { createdAt: 'desc' }
   })
 
@@ -152,25 +175,41 @@ export async function updateDraftByPhone(
 
 /**
  * Mark draft as finalized
+ * @param spaceId - Optional space ID to filter drafts
  */
-export async function finalizeDraft(phoneNumber: string): Promise<void> {
+export async function finalizeDraft(phoneNumber: string, spaceId?: string | null): Promise<void> {
   const prisma = await getPrisma()
 
+  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+    phoneNumber,
+    status: 'in_progress'
+  }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
   await prisma.announcementDraft.updateMany({
-    where: { phoneNumber, status: 'in_progress' },
+    where,
     data: { status: 'finalized', updatedAt: new Date() }
   })
 }
 
 /**
  * Delete draft
+ * @param spaceId - Optional space ID to filter drafts
  */
-export async function deleteDraft(phoneNumber: string): Promise<void> {
+export async function deleteDraft(phoneNumber: string, spaceId?: string | null): Promise<void> {
   const prisma = await getPrisma()
 
-  await prisma.announcementDraft.deleteMany({
-    where: { phoneNumber, status: 'in_progress' }
-  })
+  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+    phoneNumber,
+    status: 'in_progress'
+  }
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
+  await prisma.announcementDraft.deleteMany({ where })
 }
 
 /**

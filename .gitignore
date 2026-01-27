@@ -48,3 +48,4 @@ coverage/
 prisma/dev.db
 .env
 .env*.local
+.env.vercel

@@ -29,7 +29,17 @@ function LoginForm() {
   }
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value)
+    let value = e.target.value
+    
+    // Remove any existing +1 prefix if user types it
+    if (value.startsWith('+1')) {
+      value = value.slice(2)
+    }
+    if (value.startsWith('1') && value.length > 10) {
+      value = value.slice(1)
+    }
+    
+    const formatted = formatPhoneNumber(value)
     setPhone(formatted)
   }
 
@@ -39,7 +49,12 @@ function LoginForm() {
     setError(null)
 
     // Extract just the digits
-    const digits = phone.replace(/\D/g, '')
+    let digits = phone.replace(/\D/g, '')
+
+    // Remove leading 1 if present (US country code)
+    if (digits.length === 11 && digits.startsWith('1')) {
+      digits = digits.slice(1)
+    }
 
     if (digits.length !== 10) {
       setError('Please enter a valid 10-digit phone number')
@@ -50,8 +65,10 @@ function LoginForm() {
     try {
       const supabase = createClient()
 
-      // Format for E.164 (required by Supabase)
+      // Format for E.164 (required by Supabase) - always add +1 for US numbers
       const e164Phone = `+1${digits}`
+      
+      console.log('[Login] Sending OTP to:', e164Phone)
 
       const { error: signInError } = await supabase.auth.signInWithOtp({
         phone: e164Phone,
@@ -69,6 +86,8 @@ function LoginForm() {
         // Provide more helpful error messages
         if (signInError.message.includes('Invalid API key') || signInError.message.includes('API key')) {
           setError('Supabase API key is missing or invalid. Please check your environment variables.')
+        } else if (signInError.message.includes('Unsupported phone provider')) {
+          setError('Phone authentication is not enabled for this provider. Please check your Supabase project settings or contact support.')
         } else {
           setError(signInError.message)
         }

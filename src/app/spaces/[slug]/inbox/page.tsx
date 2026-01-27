@@ -27,15 +27,9 @@ async function getFacts(spaceId: string) {
   console.log(`[Inbox] Facts with spaceId=${spaceId}: ${factsWithSpaceId}`)
   console.log(`[Inbox] Facts without spaceId: ${factsWithoutSpaceId}`)
   
-  // Get facts that either match this spaceId OR have no spaceId (for backward compatibility)
-  // This allows existing facts to show up until they're properly migrated
+  // Get facts for this space
   const facts = await prisma.fact.findMany({
-    where: {
-      OR: [
-        { spaceId },
-        { spaceId: null }
-      ]
-    },
+    where: { spaceId },
     orderBy: { createdAt: 'desc' },
     take: 200,
     include: {

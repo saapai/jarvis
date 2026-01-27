@@ -70,20 +70,77 @@ Twilio Webhook → /api/twilio/sms
 
 ```bash
 npm install
-# set DATABASE_URL and DIRECT_URL for Supabase Postgres before running:
-# export DATABASE_URL=\"postgresql://...\" 
-# export DIRECT_URL=\"postgresql://...\" 
-npx prisma migrate dev --name supabase-init
-npm run dev
 ```
+
+### 2. Set Up Dev Environment
+
+The project uses PostgreSQL schemas to isolate dev data from production. Local development uses the `dev` schema, while production uses the `public` schema.
+
+**First-time setup:**
+
+1. **Set up the dev schema:**
+   ```bash
+   # Set your production DATABASE_URL (without schema parameter)
+   export DATABASE_URL="postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres"
+   
+   # Run the setup script to create dev schema and run migrations
+   node scripts/setup-dev-schema.js
+   ```
+
+2. **Create `.env.local` file:**
+   ```bash
+   # Copy the example template (if it exists) or create manually
+   # .env.local is already in .gitignore
+   ```
+
+   Add the following to `.env.local`:
+   ```env
+   # Database (Supabase Postgres) - uses dev schema for local development
+   # IMPORTANT: Add ?schema=dev&search_path=dev,public to use dev schema
+   # The 'public' in search_path allows access to extensions (like pgvector) installed in public schema
+   DATABASE_URL=postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres?schema=dev&search_path=dev,public
+   DIRECT_URL=postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres?schema=dev&search_path=dev,public
+   SUPABASE_URL=https://yourproject.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   
+   # OpenAI
+   OPENAI_API_KEY=your_openai_key
+   
+   # Twilio (use test credentials for local dev)
+   TWILIO_ACCOUNT_SID=your_twilio_sid
+   TWILIO_AUTH_TOKEN=your_twilio_token
+   TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
+   
+   # Airtable (for SMS users)
+   AIRTABLE_API_KEY=your_airtable_key
+   AIRTABLE_BASE_ID=your_base_id
+   AIRTABLE_TABLE_NAME=your_table_name
+   
+   # Slack (for knowledge base sync)
+   SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+   SLACK_ANNOUNCEMENTS_CHANNEL=announcements
+   
+   # Admin phone numbers (comma-separated)
+   ADMIN_PHONE_NUMBERS=1234567890
+   
+   # App URL (for local development)
+   APP_URL=http://localhost:3000
+   ```
+
+3. **Run the app:**
+   ```bash
+   npm run dev
+   ```
+
+**Note:** The `?schema=dev&search_path=dev` parameters in `DATABASE_URL` ensure all database operations use the `dev` schema, keeping your local development data completely isolated from production.
 
 #### pgvector setup (embeddings for semantic search)
 - Enable the `pgvector` extension on your Postgres instance.
-- Run the new Prisma migration to add the `embedding` vector column to `Fact` (after updating `DATABASE_URL`): `npx prisma migrate dev --name add-fact-embeddings`
+- The dev schema setup script will handle migrations automatically.
 
-### 2. Environment Variables
+### 3. Environment Variables (Legacy - use .env.local instead)
 
-Create `.env` for local development (no secrets committed):
+For reference, here are all environment variables. **Use `.env.local` for local development** (already in `.gitignore`):
 
 ```env
 # Database (Supabase Postgres)
@@ -111,7 +168,7 @@ AIRTABLE_TABLE_NAME=your_table_name
 SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
 SLACK_ANNOUNCEMENTS_CHANNEL=announcements  # Optional: fallback if LLM detection fails
 
-### 3. Airtable Fields
+### 4. Airtable Fields
 
 Add these fields to your Airtable table:
 
@@ -125,7 +182,7 @@ Add these fields to your Airtable table:
 | Last_Response | Single select | Yes, No, Maybe |
 | Last_Notes | Long text | Response notes |
 
-### 4. Configure Twilio Webhook
+### 5. Configure Twilio Webhook
 
 Set webhook URL to: `https://your-app.vercel.app/api/twilio/sms` (POST)
 

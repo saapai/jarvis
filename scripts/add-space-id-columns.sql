@@ -59,12 +59,13 @@ CREATE INDEX IF NOT EXISTS "ConversationState_spaceId_idx" ON public."Conversati
 CREATE INDEX IF NOT EXISTS "ConversationState_phoneNumber_idx" ON public."ConversationState"("phoneNumber");
 
 -- Add unique constraint on phoneNumber and spaceId
+-- Note: NULL values in spaceId are considered distinct, so this allows multiple rows with same phoneNumber but NULL spaceId
 ALTER TABLE public."ConversationState" 
 DROP CONSTRAINT IF EXISTS "ConversationState_phoneNumber_spaceId_key";
 
 ALTER TABLE public."ConversationState" 
 ADD CONSTRAINT "ConversationState_phoneNumber_spaceId_key" 
-UNIQUE ("phoneNumber", COALESCE("spaceId", ''));
+UNIQUE ("phoneNumber", "spaceId");
 
 -- Add spaceId to AnnouncementDraft table
 ALTER TABLE public."AnnouncementDraft" 
@@ -119,12 +120,13 @@ ADD COLUMN IF NOT EXISTS "spaceId" TEXT;
 CREATE INDEX IF NOT EXISTS "SlackSync_spaceId_idx" ON public."SlackSync"("spaceId");
 
 -- Add unique constraint on spaceId and channelName
+-- Note: NULL values in spaceId are considered distinct, so this allows multiple rows with same channelName but NULL spaceId
 ALTER TABLE public."SlackSync" 
 DROP CONSTRAINT IF EXISTS "SlackSync_spaceId_channelName_key";
 
 ALTER TABLE public."SlackSync" 
 ADD CONSTRAINT "SlackSync_spaceId_channelName_key" 
-UNIQUE (COALESCE("spaceId", ''), "channelName");
+UNIQUE ("spaceId", "channelName");
 
 -- Add spaceId to ScheduledAnnouncement table
 ALTER TABLE public."ScheduledAnnouncement" 

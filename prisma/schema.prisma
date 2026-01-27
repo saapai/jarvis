@@ -17,8 +17,6 @@ model Upload {
   createdAt DateTime @default(now())
 
   facts Fact[]
-
-  @@schema("public")
 }
 
 model Fact {
@@ -43,8 +41,6 @@ model Fact {
   linkedEvents Event[] // Events linked to this fact
 
   createdAt DateTime @default(now())
-
-  @@schema("public")
 }
 
 model Message {
@@ -55,7 +51,6 @@ model Message {
   meta        String? // JSON: {draftId, pollId, tags}
   createdAt   DateTime @default(now())
 
-  @@schema("public")
   @@index([phoneNumber, createdAt])
 }
 
@@ -64,8 +59,6 @@ model ConversationState {
   stateType    String? // "onboarding", "draft_announcement", "answering_poll"
   statePayload String? // JSON: task-specific context
   updatedAt    DateTime @default(now())
-
-  @@schema("public")
 }
 
 model AnnouncementDraft {
@@ -77,7 +70,6 @@ model AnnouncementDraft {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now())
 
-  @@schema("public")
   @@index([phoneNumber, status])
 }
 
@@ -91,7 +83,6 @@ model PollMeta {
 
   responses PollResponse[]
 
-  @@schema("public")
   @@index([isActive, createdAt])
 }
 
@@ -105,7 +96,6 @@ model PollResponse {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now())
 
-  @@schema("public")
   @@unique([pollId, phoneNumber])
   @@index([pollId, phoneNumber])
 }
@@ -127,7 +117,6 @@ model Event {
   linkedFactId String?
   linkedFact   Fact?   @relation(fields: [linkedFactId], references: [id])
 
-  @@schema("public")
   @@index([eventDate, reminderSent])
   @@index([eventDate, morningReminderSent])
 }
@@ -137,8 +126,6 @@ model SlackSync {
   lastSyncedTs String? // Slack timestamp of last synced message
   lastSyncedAt DateTime @default(now())
   updatedAt    DateTime @default(now())
-
-  @@schema("public")
 }
 
 model ScheduledAnnouncement {
@@ -151,6 +138,5 @@ model ScheduledAnnouncement {
   sourceMessageTs String? // Slack message timestamp
   createdAt       DateTime  @default(now())
 
-  @@schema("public")
   @@index([scheduledFor, sent])
 }

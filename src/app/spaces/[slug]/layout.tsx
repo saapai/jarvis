@@ -58,23 +58,23 @@ export default async function SpaceLayout({ children, params }: SpaceLayoutProps
   const isAdmin = space.role === 'owner' || space.role === 'admin'
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-[var(--bg-secondary)] border-b border-[var(--text-meta)]/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
-              <Link href="/spaces" className="text-gray-500 hover:text-gray-700">
+              <Link href="/spaces" className="text-[var(--text-meta)] hover:text-[var(--text-on-dark)]">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </Link>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{space.name}</h1>
-                <p className="text-sm text-gray-500">
+                <h1 className="text-xl font-bold text-[var(--text-on-dark)]">{space.name}</h1>
+                <p className="text-sm text-[var(--text-meta)]">
                   {space.memberCount} {space.memberCount === 1 ? 'member' : 'members'}
                   <span className="mx-2">·</span>
-                  <span className="font-mono bg-gray-100 px-1 rounded text-xs">JOIN {space.joinCode}</span>
+                  <span className="font-mono bg-[var(--bg-tertiary)] px-1 rounded text-xs border border-[var(--text-meta)]/20">JOIN {space.joinCode}</span>
                 </p>
               </div>
             </div>

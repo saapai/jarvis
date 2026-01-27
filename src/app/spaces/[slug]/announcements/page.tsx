@@ -93,16 +93,16 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Announcements & Polls</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="text-lg font-semibold text-[var(--text-on-dark)]">Announcements & Polls</h2>
+        <p className="text-sm text-[var(--text-meta)]">
           History of messages sent to all members
         </p>
       </div>
 
       {allItems.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
+        <div className="text-center py-12 bg-[var(--card-bg)] rounded-lg shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] border border-[var(--card-border)]">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400"
+            className="mx-auto h-12 w-12 text-[var(--text-meta)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -114,48 +114,48 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
               d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
             />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No announcements yet</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <h3 className="mt-2 text-sm font-medium text-[var(--text-on-card-title)]">No announcements yet</h3>
+          <p className="mt-1 text-sm text-[var(--text-meta)]">
             Announcements and polls sent via SMS will appear here.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {allItems.map(({ type, item, date }) => (
-            <div key={item.id} className="bg-white rounded-lg shadow p-6">
+            <div key={item.id} className="bg-[var(--card-bg)] rounded-lg shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] border border-[var(--card-border)] p-6">
               {type === 'announcement' ? (
                 <div>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[rgba(59,124,150,0.25)] text-[var(--highlight-blue)] border border-[var(--highlight-blue)]/40">
                         Announcement
                       </span>
                     </div>
-                    <span className="text-xs text-gray-500">{formatDate(date)}</span>
+                    <span className="text-xs text-[var(--text-meta)]">{formatDate(date)}</span>
                   </div>
-                  <p className="mt-3 text-sm text-gray-900">{(item as any).draftText}</p>
+                  <p className="mt-3 text-sm text-[var(--text-on-card-title)]">{(item as any).draftText}</p>
                 </div>
               ) : (
                 <div>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[rgba(206,96,135,0.25)] text-[var(--highlight-red)] border border-[var(--highlight-red)]/40">
                         Poll
                       </span>
                       {(item as any).isActive && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[rgba(59,124,150,0.25)] text-[var(--highlight-blue)] border border-[var(--highlight-blue)]/40">
                           Active
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-gray-500">{formatDate(date)}</span>
+                    <span className="text-xs text-[var(--text-meta)]">{formatDate(date)}</span>
                   </div>
-                  <p className="mt-3 text-sm text-gray-900">{(item as any).questionText}</p>
+                  <p className="mt-3 text-sm text-[var(--text-on-card-title)]">{(item as any).questionText}</p>
                   <div className="mt-3 flex items-center space-x-4 text-sm">
-                    <span className="text-green-600">Yes: {(item as any).yesCount}</span>
-                    <span className="text-red-600">No: {(item as any).noCount}</span>
-                    <span className="text-yellow-600">Maybe: {(item as any).maybeCount}</span>
-                    <span className="text-gray-500">({(item as any).totalResponses} total)</span>
+                    <span className="text-[var(--highlight-blue)]">Yes: {(item as any).yesCount}</span>
+                    <span className="text-[var(--highlight-red)]">No: {(item as any).noCount}</span>
+                    <span className="text-[var(--highlight-red)]">Maybe: {(item as any).maybeCount}</span>
+                    <span className="text-[var(--text-meta)]">({(item as any).totalResponses} total)</span>
                   </div>
                 </div>
               )}

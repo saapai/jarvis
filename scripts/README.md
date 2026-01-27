@@ -1,53 +1,29 @@
 # Scripts
 
-Utility scripts for development and testing.
+## add-sep-members.ts
 
-## Files
+Adds phone numbers to the SEP (Enclave) workspace.
 
-- **setup-dev-schema.js** - Set up dev schema for local development (creates schema and runs migrations)
-- **test-dev-schema.js** - Test that dev schema is working correctly (verifies isolation from production)
-- **test-connection.js** - Test Supabase database connections (direct and pooler)
-- **migration_add_events.sql** - Manual SQL migration for Event table (if Prisma migrate fails)
-
-## Usage
-
-### Setup Dev Schema (First-time setup)
-Sets up the `dev` schema in Supabase for local development. This isolates dev data from production data in the same database.
+### Usage
 
 ```bash
-# Set your production DATABASE_URL (without schema parameter)
-export DATABASE_URL="postgresql://postgres:password@db.yourproject.supabase.co:5432/postgres"
-
-# Run the setup script
-node scripts/setup-dev-schema.js
+# Make sure DATABASE_URL and DIRECT_URL are set in your environment
+npx tsx scripts/add-sep-members.ts
 ```
 
-The script will:
-1. Create the `dev` schema if it doesn't exist
-2. Run all migrations on the `dev` schema
-3. Provide instructions for creating `.env.local`
+### What it does
 
-### Test Dev Schema Setup
-Verifies that the dev schema is working correctly and isolated from production.
+1. Finds or creates the SEP space (slug: `sep`, joinCode: `SEP`)
+2. For each phone number in the list:
+   - Normalizes the phone number (removes formatting, handles country codes)
+   - Creates a User record if it doesn't exist
+   - Adds the user as a member of the SEP space (skips if already a member)
 
-```bash
-# Make sure .env.local is set up with dev schema connection strings
-node scripts/test-dev-schema.js
-```
+### Phone Number Formats
 
-The script checks:
-- Current schema is `dev`
-- Tables exist in dev schema
-- Production (public) schema is separate
-- Can perform queries on dev schema
+The script handles various phone number formats:
+- `+13853687238` (E.164 with country code)
+- `(408) 763-6262` (formatted US number)
+- `4087636262` (digits only)
 
-### Test Database Connection
-```bash
-node scripts/test-connection.js
-```
-
-### Apply Event Migration Manually
-If Prisma migration fails, run this SQL in Supabase SQL Editor:
-```bash
-cat scripts/migration_add_events.sql
-```
+All formats are normalized to 10-digit US phone numbers.

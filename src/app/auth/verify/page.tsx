@@ -102,8 +102,8 @@ export default function VerifyPage() {
       sessionStorage.removeItem('verifyPhone')
       sessionStorage.removeItem('verifyRedirect')
 
-      // Redirect to intended destination
-      router.push(redirect)
+      // Redirect to intended destination (default to /spaces if not set)
+      router.push(redirect || '/spaces')
     } catch (err) {
       console.error('Unexpected error:', err)
       setError('Something went wrong. Please try again.')
@@ -158,10 +158,10 @@ export default function VerifyPage() {
   return (
     <div className="mt-8">
       <div className="text-center mb-6">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-[var(--text-secondary)]">
           Enter the 6-digit code sent to
         </p>
-        <p className="text-lg font-medium text-gray-900">
+        <p className="text-lg font-medium text-[var(--text-on-dark)]">
           {formatPhone(phone)}
         </p>
       </div>
@@ -180,7 +180,7 @@ export default function VerifyPage() {
                 value={digit}
                 onChange={(e) => handleChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
-                className="w-12 h-14 text-center text-xl font-semibold border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-12 h-14 text-center text-xl font-semibold border border-[var(--text-meta)]/20 bg-[var(--bg-secondary)] text-[var(--text-on-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--highlight-red)]/50 focus:border-[var(--highlight-red)]/50"
                 disabled={loading}
               />
             ))}
@@ -188,9 +188,9 @@ export default function VerifyPage() {
         </div>
 
         {error && (
-          <div className={`rounded-md p-4 ${error === 'Code resent!' ? 'bg-green-50' : 'bg-red-50'}`}>
+          <div className={`rounded-md p-4 border ${error === 'Code resent!' ? 'bg-[rgba(59,124,150,0.15)] border-[var(--highlight-blue)]/30' : 'bg-[rgba(206,96,135,0.15)] border-[var(--highlight-red)]/30'}`}>
             <div className="flex justify-center">
-              <p className={`text-sm font-medium ${error === 'Code resent!' ? 'text-green-800' : 'text-red-800'}`}>
+              <p className={`text-sm font-medium ${error === 'Code resent!' ? 'text-[var(--highlight-blue)]' : 'text-[var(--highlight-red)]'}`}>
                 {error}
               </p>
             </div>
@@ -201,7 +201,7 @@ export default function VerifyPage() {
           <button
             type="submit"
             disabled={loading || code.join('').length !== 6}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-[var(--text-on-dark)] bg-[var(--highlight-red)]/20 hover:bg-[var(--highlight-red)]/30 border-[var(--highlight-red)]/40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--highlight-red)]/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {loading ? 'Verifying...' : 'Verify'}
           </button>
@@ -212,7 +212,7 @@ export default function VerifyPage() {
             type="button"
             onClick={handleResend}
             disabled={loading}
-            className="text-sm text-blue-600 hover:text-blue-500 disabled:opacity-50"
+            className="text-sm text-[var(--highlight-blue)] hover:text-[var(--highlight-blue)]/80 disabled:opacity-50"
           >
             Didn&apos;t receive a code? Resend
           </button>
@@ -222,7 +222,7 @@ export default function VerifyPage() {
           <button
             type="button"
             onClick={() => router.push('/auth/login')}
-            className="text-sm text-gray-600 hover:text-gray-500"
+            className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-on-dark)]"
           >
             Use a different phone number
           </button>

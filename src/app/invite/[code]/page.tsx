@@ -72,15 +72,15 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
   if (!inviteData) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-main)] py-12 px-4">
         <div className="max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Invalid Invite</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-[var(--text-on-dark)]">Invalid Invite</h1>
+          <p className="mt-2 text-[var(--text-secondary)]">
             This invite link is not valid or has been deleted.
           </p>
           <Link
             href="/spaces"
-            className="mt-4 inline-block text-blue-600 hover:text-blue-500"
+            className="mt-4 inline-block text-[var(--highlight-blue)] hover:text-[var(--highlight-blue)]/80"
           >
             Go to your spaces
           </Link>
@@ -91,15 +91,15 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
   if ('expired' in inviteData && inviteData.expired) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-main)] py-12 px-4">
         <div className="max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Invite Expired</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-[var(--text-on-dark)]">Invite Expired</h1>
+          <p className="mt-2 text-[var(--text-secondary)]">
             This invite link has expired. Ask the space admin for a new invite.
           </p>
           <Link
             href="/spaces"
-            className="mt-4 inline-block text-blue-600 hover:text-blue-500"
+            className="mt-4 inline-block text-[var(--highlight-blue)] hover:text-[var(--highlight-blue)]/80"
           >
             Go to your spaces
           </Link>
@@ -110,15 +110,15 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
   if ('maxUsesReached' in inviteData && inviteData.maxUsesReached) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-main)] py-12 px-4">
         <div className="max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Invite Limit Reached</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-[var(--text-on-dark)]">Invite Limit Reached</h1>
+          <p className="mt-2 text-[var(--text-secondary)]">
             This invite link has reached its maximum number of uses. Ask the space admin for a new invite.
           </p>
           <Link
             href="/spaces"
-            className="mt-4 inline-block text-blue-600 hover:text-blue-500"
+            className="mt-4 inline-block text-[var(--highlight-blue)] hover:text-[var(--highlight-blue)]/80"
           >
             Go to your spaces
           </Link>
@@ -135,19 +135,19 @@ export default async function InvitePage({ params }: InvitePageProps) {
   if (!supabaseUser) {
     // Not authenticated - show invite info and prompt to sign in
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-main)] py-12 px-4">
         <div className="max-w-md w-full">
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Join {space.name}</h1>
-            <p className="mt-2 text-gray-600">
+          <div className="bg-[var(--card-bg)] rounded-lg shadow-[inset_0_1px_0_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.08)] border border-[var(--card-border)] p-8 text-center">
+            <h1 className="text-2xl font-bold text-[var(--text-on-card-title)]">Join {space.name}</h1>
+            <p className="mt-2 text-[var(--text-on-card)]">
               You&apos;ve been invited to join <strong>{space.name}</strong> on Jarvis.
             </p>
-            <p className="mt-4 text-sm text-gray-500">
+            <p className="mt-4 text-sm text-[var(--text-meta)]">
               Sign in with your phone number to accept this invite.
             </p>
             <Link
               href={`/auth/login?redirect=/invite/${code}`}
-              className="mt-6 inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+              className="mt-6 inline-flex items-center px-6 py-3 border border-[var(--highlight-red)]/40 text-base font-medium rounded-md shadow-sm text-[var(--text-on-dark)] bg-[var(--highlight-red)]/20 hover:bg-[var(--highlight-red)]/30 transition-all"
             >
               Sign in to join
             </Link>
@@ -162,10 +162,10 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-main)] py-12 px-4">
         <div className="max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Error</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-[var(--text-on-dark)]">Error</h1>
+          <p className="mt-2 text-[var(--text-secondary)]">
             Something went wrong. Please try again.
           </p>
         </div>

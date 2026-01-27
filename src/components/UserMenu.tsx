@@ -38,10 +38,10 @@ export function UserMenu({ user }: UserMenuProps) {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 text-sm text-gray-700 hover:text-gray-900 focus:outline-none"
+        className="flex items-center space-x-2 text-sm text-[var(--text-on-dark)] hover:text-[var(--text-on-dark)] focus:outline-none"
       >
-        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-          <span className="text-blue-600 font-medium">
+        <div className="w-8 h-8 rounded-full bg-[var(--highlight-red)]/20 border border-[var(--highlight-red)]/40 flex items-center justify-center">
+          <span className="text-[var(--highlight-red)] font-medium">
             {user.name ? user.name.charAt(0).toUpperCase() : user.phoneNumber.charAt(0)}
           </span>
         </div>
@@ -59,16 +59,16 @@ export function UserMenu({ user }: UserMenuProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
-          <div className="px-4 py-2 border-b border-gray-100">
-            <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
-            <p className="text-xs text-gray-500">{formatPhone(user.phoneNumber)}</p>
+        <div className="absolute right-0 mt-2 w-48 bg-[var(--card-bg)] rounded-md shadow-[inset_0_1px_0_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.08)] py-1 z-10 border border-[var(--card-border)]">
+          <div className="px-4 py-2 border-b border-[var(--card-border)]">
+            <p className="text-sm font-medium text-[var(--text-on-card-title)]">{user.name || 'User'}</p>
+            <p className="text-xs text-[var(--text-meta)]">{formatPhone(user.phoneNumber)}</p>
           </div>
 
           <Link
             href="/spaces"
             onClick={() => setIsOpen(false)}
-            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="block px-4 py-2 text-sm text-[var(--text-on-card-title)] hover:bg-[var(--bg-hover)] transition-colors"
           >
             All Spaces
           </Link>
@@ -76,7 +76,7 @@ export function UserMenu({ user }: UserMenuProps) {
           <form action="/auth/signout" method="POST">
             <button
               type="submit"
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              className="w-full text-left px-4 py-2 text-sm text-[var(--text-on-card-title)] hover:bg-[var(--bg-hover)] transition-colors"
             >
               Sign out
             </button>

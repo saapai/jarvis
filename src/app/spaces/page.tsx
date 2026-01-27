@@ -15,12 +15,12 @@ export default async function SpacesPage() {
   const spaces = await getUserSpaces(user.id)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-[var(--bg-secondary)] border-b border-[var(--text-meta)]/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Jarvis</h1>
+            <h1 className="text-2xl font-bold text-[var(--text-on-dark)]">jarvis</h1>
             <UserMenu user={user} />
           </div>
         </div>
@@ -29,10 +29,10 @@ export default async function SpacesPage() {
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl font-semibold text-gray-900">Your Spaces</h2>
+          <h2 className="text-xl font-semibold text-[var(--text-on-dark)]">Your Spaces</h2>
           <Link
             href="/spaces/new"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-4 py-2 border border-[var(--highlight-red)]/40 text-sm font-medium rounded-md shadow-sm text-[var(--text-on-dark)] bg-[var(--highlight-red)]/20 hover:bg-[var(--highlight-red)]/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--highlight-red)]/50 transition-all"
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -42,9 +42,9 @@ export default async function SpacesPage() {
         </div>
 
         {spaces.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg shadow">
+          <div className="text-center py-12 bg-[var(--card-bg)] rounded-lg shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] border border-[var(--card-border)]">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400"
+              className="mx-auto h-12 w-12 text-[var(--text-meta)]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -56,14 +56,14 @@ export default async function SpacesPage() {
                 d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
               />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No spaces yet</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <h3 className="mt-2 text-sm font-medium text-[var(--text-on-card-title)]">No spaces yet</h3>
+            <p className="mt-1 text-sm text-[var(--text-meta)]">
               Create a new space or join one with an invite code.
             </p>
             <div className="mt-6 flex justify-center gap-4">
               <Link
                 href="/spaces/new"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                className="inline-flex items-center px-4 py-2 border border-[var(--highlight-red)]/40 text-sm font-medium rounded-md shadow-sm text-[var(--text-on-dark)] bg-[var(--highlight-red)]/20 hover:bg-[var(--highlight-red)]/30 transition-all"
               >
                 Create a Space
               </Link>
@@ -75,27 +75,27 @@ export default async function SpacesPage() {
               <Link
                 key={space.id}
                 href={`/spaces/${space.slug}`}
-                className="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6"
+                className="bg-[var(--card-bg)] rounded-lg shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] border border-[var(--card-border)] hover:border-[var(--highlight-red)]/40 hover:-translate-y-[1px] hover:shadow-[inset_0_1px_0_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.08)] transition-all duration-[120ms] p-6"
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">{space.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <h3 className="text-lg font-medium text-[var(--text-on-card-title)]">{space.name}</h3>
+                    <p className="text-sm text-[var(--text-meta)] mt-1">
                       {space.memberCount} {space.memberCount === 1 ? 'member' : 'members'}
                     </p>
                   </div>
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                     space.role === 'owner'
-                      ? 'bg-purple-100 text-purple-800'
+                      ? 'bg-[rgba(206,96,135,0.25)] text-[var(--highlight-red)] border border-[var(--highlight-red)]/40'
                       : space.role === 'admin'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-800'
+                      ? 'bg-[rgba(59,124,150,0.25)] text-[var(--highlight-blue)] border border-[var(--highlight-blue)]/40'
+                      : 'bg-[var(--text-meta)]/10 text-[var(--text-meta)] border border-[var(--text-meta)]/20'
                   }`}>
                     {space.role.charAt(0).toUpperCase() + space.role.slice(1)}
                   </span>
                 </div>
-                <div className="mt-4 flex items-center text-sm text-gray-500">
-                  <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                <div className="mt-4 flex items-center text-sm text-[var(--text-meta)]">
+                  <span className="font-mono bg-[var(--bg-secondary)] px-2 py-1 rounded border border-[var(--text-meta)]/20">
                     JOIN {space.joinCode}
                   </span>
                 </div>

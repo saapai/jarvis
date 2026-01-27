@@ -8,9 +8,22 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // If Supabase is not configured, allow public routes only
+  if (!url || !key) {
+    const { pathname } = request.nextUrl
+    const publicRoutes = ['/auth/login', '/auth/verify', '/auth/callback']
+    if (!publicRoutes.some(route => pathname.startsWith(route))) {
+      return NextResponse.redirect(new URL('/auth/login?error=supabase_not_configured', request.url))
+    }
+    return response
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    key,
     {
       cookies: {
         getAll() {

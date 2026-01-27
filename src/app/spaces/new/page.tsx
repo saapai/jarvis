@@ -69,27 +69,27 @@ export default function NewSpacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-[var(--bg-secondary)] border-b border-[var(--text-meta)]/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center py-4">
-            <Link href="/spaces" className="text-gray-500 hover:text-gray-700 mr-4">
+            <Link href="/spaces" className="text-[var(--text-meta)] hover:text-[var(--text-on-dark)] mr-4">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <h1 className="text-2xl font-bold text-gray-900">Create New Space</h1>
+            <h1 className="text-2xl font-bold text-[var(--text-on-dark)]">Create New Space</h1>
           </div>
         </div>
       </header>
 
       {/* Main content */}
       <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-[var(--card-bg)] rounded-lg shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] border border-[var(--card-border)] p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="name" className="block text-sm font-medium text-[var(--text-on-dark)]">
                 Space Name
               </label>
               <input
@@ -98,17 +98,17 @@ export default function NewSpacePage() {
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="My Community"
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="mt-1 block w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--text-meta)]/20 rounded-md shadow-sm text-[var(--text-on-dark)] placeholder-[var(--text-meta)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--highlight-red)]/50 focus:border-[var(--highlight-red)]/50 sm:text-sm"
                 required
               />
             </div>
 
             <div>
-              <label htmlFor="joinCode" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="joinCode" className="block text-sm font-medium text-[var(--text-on-dark)]">
                 Join Code
               </label>
               <div className="mt-1 relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[var(--text-meta)]">
                   JOIN
                 </span>
                 <input
@@ -118,32 +118,32 @@ export default function NewSpacePage() {
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
                   placeholder="MYSPACE"
                   maxLength={8}
-                  className="block w-full pl-14 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono uppercase"
+                  className="block w-full pl-14 px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--text-meta)]/20 rounded-md shadow-sm text-[var(--text-on-dark)] placeholder-[var(--text-meta)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--highlight-red)]/50 focus:border-[var(--highlight-red)]/50 sm:text-sm font-mono uppercase"
                   required
                 />
               </div>
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-[var(--text-meta)]">
                 Members can text &quot;JOIN {joinCode || 'CODE'}&quot; to join this space via SMS
               </p>
             </div>
 
             {error && (
-              <div className="rounded-md bg-red-50 p-4">
-                <p className="text-sm text-red-800">{error}</p>
+              <div className="rounded-md bg-[rgba(206,96,135,0.15)] border border-[var(--highlight-red)]/30 p-4">
+                <p className="text-sm text-[var(--highlight-red)]">{error}</p>
               </div>
             )}
 
             <div className="flex justify-end space-x-3">
               <Link
                 href="/spaces"
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-[var(--text-meta)]/20 rounded-md text-sm font-medium text-[var(--text-on-dark)] hover:bg-[var(--bg-hover)] transition-all"
               >
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 border border-[var(--highlight-red)]/40 rounded-md shadow-sm text-sm font-medium text-[var(--text-on-dark)] bg-[var(--highlight-red)]/20 hover:bg-[var(--highlight-red)]/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--highlight-red)]/50 disabled:opacity-50 transition-all"
               >
                 {loading ? 'Creating...' : 'Create Space'}
               </button>

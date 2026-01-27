@@ -16,8 +16,26 @@ async function getSpaceId(slug: string) {
 
 async function getFacts(spaceId: string) {
   const prisma = await getPrisma()
+  
+  // First, check total facts count for debugging
+  const totalFacts = await prisma.fact.count()
+  const factsWithSpaceId = await prisma.fact.count({ where: { spaceId } })
+  const factsWithoutSpaceId = await prisma.fact.count({ where: { spaceId: null } })
+  
+  console.log(`[Inbox] Space ID: ${spaceId}`)
+  console.log(`[Inbox] Total facts: ${totalFacts}`)
+  console.log(`[Inbox] Facts with spaceId=${spaceId}: ${factsWithSpaceId}`)
+  console.log(`[Inbox] Facts without spaceId: ${factsWithoutSpaceId}`)
+  
+  // Get facts that either match this spaceId OR have no spaceId (for backward compatibility)
+  // This allows existing facts to show up until they're properly migrated
   const facts = await prisma.fact.findMany({
-    where: { spaceId },
+    where: {
+      OR: [
+        { spaceId },
+        { spaceId: null }
+      ]
+    },
     orderBy: { createdAt: 'desc' },
     take: 200,
     include: {
@@ -26,6 +44,8 @@ async function getFacts(spaceId: string) {
       }
     }
   })
+  
+  console.log(`[Inbox] Fetched ${facts.length} facts`)
   
   // Transform to match Fact interface
   return facts.map(fact => ({

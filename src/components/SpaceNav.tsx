@@ -19,7 +19,16 @@ export function SpaceNav({ slug, isAdmin }: SpaceNavProps) {
   ]
 
   return (
-    <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+    <nav className="-mb-px flex items-center space-x-6 overflow-x-auto" aria-label="Tabs">
+      <Link 
+        href="/spaces" 
+        className="flex items-center text-[var(--text-meta)] hover:text-[var(--text-on-dark)] transition-colors py-4"
+        title="Back to spaces"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+      </Link>
       {tabs.map((tab) => {
         const isActive = pathname === tab.href || pathname.startsWith(tab.href + '/')
         return (

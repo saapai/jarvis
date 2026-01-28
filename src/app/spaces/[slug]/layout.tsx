@@ -61,14 +61,6 @@ export default async function SpaceLayout({ children, params }: SpaceLayoutProps
       {/* Header with Tabs */}
       <header className="bg-[var(--bg-main)] border-b border-[var(--text-meta)]/10">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between py-3">
-            <Link href="/spaces" className="flex items-center gap-2 text-[var(--text-meta)] hover:text-[var(--text-on-dark)] transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              <span className="text-sm font-mono">back to spaces</span>
-            </Link>
-          </div>
           <SpaceNav slug={slug} isAdmin={isAdmin} />
         </div>
       </header>

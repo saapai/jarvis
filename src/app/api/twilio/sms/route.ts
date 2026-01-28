@@ -162,6 +162,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
 
   if (activeSpaceId) {
     // Multi-space mode: get member from space
+    // For test phone, reload to get fresh data after reset
     const spaceMember = await spaceContext.getSpaceMember(activeSpaceId, phone)
     if (spaceMember) {
       isSpaceMember = true
@@ -169,11 +170,17 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         id: spaceMember.userId,
         phone: spaceMember.phoneNumber,
         name: spaceMember.name,
-        needs_name: !spaceMember.name,
+        needs_name: !spaceMember.name, // Will be true if name is null
         opted_out: spaceMember.optedOut,
         pending_poll: null,
         last_response: null,
         last_notes: null
+      }
+      // For test phone, ensure needs_name is true (force onboarding)
+      if (normalizedPhone === normalizedTestPhone) {
+        user.needs_name = true
+        user.name = null
+        console.log(`[AutoBypass] Forcing needs_name=true for test phone`)
       }
     }
   }
@@ -641,10 +648,10 @@ async function handleOnboarding(phone: string, message: string, user: any, activ
   const isFirstMessage = !user.name && user.needs_name
   
   if (isFirstMessage) {
-    return "hey you know jarvis from iron man? it's your lucky day, i'm your jarvis. what's your name?"
+    return "hey you know jarvis from iron man? it's your lucky day, i'm your jarvis. what's your name?\n\ngo to tryenclave.com to access your space and upload information"
   }
   
-  return "hey! i'm jarvis. what's your name?"
+  return "hey! i'm jarvis. what's your name?\n\ngo to tryenclave.com to access your space and upload information"
 }
 
 // ============================================

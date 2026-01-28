@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/supabase-server'
 import { getOrCreateUser } from '@/lib/auth/user'
 import { getPrisma } from '@/lib/prisma'
 import { getSpaceId } from '@/lib/spaces'
+import { processUpload, llmClient, textExplorerRepository } from '@/text-explorer'
 
 export const dynamic = 'force-dynamic'
 // Note: Removed 'edge' runtime to support OpenAI streaming
@@ -44,6 +45,56 @@ export async function POST(
       return new Response('Message is required', { status: 400 })
     }
 
+    if (!process.env.OPENAI_API_KEY) {
+      return new Response('OpenAI API key not configured', { status: 500 })
+    }
+
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // First, check if the message is informational (providing information) vs a question
+    const classificationResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Classify the user message as either "information" (user is providing facts/information) or "question" (user is asking something). Respond with only one word: "information" or "question".'
+        },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.3,
+      max_tokens: 10
+    })
+
+    const classification = classificationResponse.choices[0]?.message?.content?.toLowerCase().trim()
+
+    // If informational, extract facts and save them
+    if (classification === 'information' || classification?.includes('information')) {
+      try {
+        // Process the message as if it were an upload
+        const processResult = await processUpload(message, llmClient)
+
+        if (processResult.facts.length > 0) {
+          // Create a virtual upload record
+          const { id: uploadId } = await textExplorerRepository.createUpload({
+            name: `Chat message from ${user.name || 'user'}`,
+            rawText: message,
+            spaceId
+          })
+
+          // Save facts
+          await textExplorerRepository.createFacts({
+            uploadId,
+            facts: processResult.facts,
+            spaceId
+          })
+        }
+      } catch (error) {
+        console.error('Error processing informational message:', error)
+        // Continue to respond even if fact extraction fails
+      }
+    }
+
     // Get facts from this space for context
     const facts = await prisma.fact.findMany({
       where: { spaceId },
@@ -69,14 +120,7 @@ export async function POST(
 
 ${context || 'No information available yet. You can help users upload documents to build the knowledge base.'}
 
-Answer questions based on this information. Be concise, helpful, and friendly. If you don't know something, say so.`
-
-    if (!process.env.OPENAI_API_KEY) {
-      return new Response('OpenAI API key not configured', { status: 500 })
-    }
-
-    const OpenAI = (await import('openai')).default
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+Answer questions based on this information. Be concise, helpful, and friendly. If you don't know something, say so.${classification === 'information' || classification?.includes('information') ? ' The user just provided information - acknowledge that you\'ve saved it.' : ''}`
 
     // Create streaming response
     const stream = await openai.chat.completions.create({

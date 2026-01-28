@@ -238,6 +238,12 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         last_notes: null
       }
       isSpaceMember = true
+      // For test phone, ensure needs_name is true (force onboarding)
+      if (normalizedPhone === normalizedTestPhone) {
+        user.needs_name = true
+        user.name = null
+        console.log(`[AutoBypass] Forcing needs_name=true for test phone (second path)`)
+      }
       console.log(`[AutoBypass] Found space member for test phone`)
     }
   }
@@ -256,9 +262,13 @@ async function handleMessage(phone: string, message: string): Promise<string> {
 
   // 4. Handle onboarding (name collection)
   if (user.needs_name) {
+    console.log(`[Onboarding] User needs name - name: ${user.name}, needs_name: ${user.needs_name}`)
     const onboardingResponse = await handleOnboarding(phone, message, user, activeSpaceId, isSpaceMember)
+    console.log(`[Onboarding] Response: ${onboardingResponse.substring(0, 100)}...`)
     await messageRepo.logMessage(phone, 'outbound', onboardingResponse, { action: 'onboarding' }, activeSpaceId)
     return onboardingResponse
+  } else {
+    console.log(`[Onboarding] Skipped - user.name: ${user.name}, user.needs_name: ${user.needs_name}`)
   }
 
   // 5. Load conversation context (space-scoped)
@@ -560,59 +570,86 @@ text STOP to unsubscribe`
  * Extract name from user message
  * Removes common prefixes like "I'm", "my name is", etc.
  */
-function extractName(message: string): string | null {
+/**
+ * Use LLM to intelligently extract a name from a message
+ * Returns null if the message doesn't contain a name
+ */
+async function extractName(message: string): Promise<string | null> {
   const text = message.trim()
   
-  // Check if message is too long or too short
-  if (text.length > 50 || text.length < 2) return null
+  // Quick checks first
+  if (text.length > 100 || text.length < 2) return null
   
-  // Check if it starts with common non-name patterns
-  if (/^(yes|no|maybe|\d+|stop|help|start|announce|poll)$/i.test(text.toLowerCase())) {
+  // Obvious commands - skip LLM call
+  if (/^(yes|no|maybe|\d+|stop|help|start|announce|poll|reset)$/i.test(text.toLowerCase())) {
     return null
   }
   
-  // Remove common prefixes
-  const patterns = [
-    /^i'?m\s+/i,              // "I'm" or "Im"
-    /^my\s+name\s+is\s+/i,    // "my name is"
-    /^this\s+is\s+/i,         // "this is"
-    /^call\s+me\s+/i,         // "call me"
-    /^it'?s\s+/i,             // "it's" or "its"
-    /^i\s+am\s+/i,            // "i am"
-    /^name\s+is\s+/i,         // "name is"
-    /^name:\s*/i,             // "name:"
-    /^hi,?\s+i'?m\s+/i,       // "hi I'm" or "hi im"
-    /^hello,?\s+i'?m\s+/i,    // "hello I'm"
-    /^hey,?\s+i'?m\s+/i,      // "hey I'm"
-  ]
-  
-  let extracted = text
-  for (const pattern of patterns) {
-    extracted = extracted.replace(pattern, '')
-  }
-  
-  // Clean up the extracted name
-  extracted = extracted
-    .replace(/[!.?,;]+$/, '')  // Remove trailing punctuation
-    .trim()
-  
-  // Validate the extracted name
-  if (extracted.length < 2 || extracted.length > 50) return null
-  
-  // Check if it still looks like a command or common phrase
-  if (/^(hi|hello|hey|yes|no|maybe|thanks|ok|okay)$/i.test(extracted)) {
+  // Obvious greetings - skip LLM call
+  if (/^(hi|hello|hey|yo|sup|what'?s up|wassup|hola|heyo)$/i.test(text.toLowerCase())) {
     return null
   }
   
-  // Capitalize first letter of each word
-  return extracted
-    .split(/\s+/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a name extraction assistant. Analyze the user's message and determine if it contains a person's name.
+
+Rules:
+- Return ONLY the name if one is clearly present (can be any ethnicity, any format)
+- Return "NOT_A_NAME" if the message is a greeting, question, casual chat, or doesn't contain a name
+- Names can be 1-3 words typically
+- Be smart: "I'm Sarah" = "Sarah", "my name is John" = "John", "call me Mike" = "Mike"
+- But: "yo what up" = NOT_A_NAME, "when is the trip" = NOT_A_NAME, "hi there" = NOT_A_NAME
+
+Return format: Just the name (capitalized properly) or "NOT_A_NAME"`
+        },
+        {
+          role: 'user',
+          content: `Message: "${text}"\n\nExtract the name or return NOT_A_NAME:`
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 20
+    })
+    
+    const result = response.choices[0]?.message?.content?.trim() || null
+    
+    if (!result || result === 'NOT_A_NAME' || result.toLowerCase() === 'not a name') {
+      return null
+    }
+    
+    // Clean and format the name
+    const cleaned = result
+      .replace(/[!.?,;:]+$/, '')  // Remove trailing punctuation
+      .trim()
+    
+    // Validate length
+    if (cleaned.length < 2 || cleaned.length > 50) {
+      return null
+    }
+    
+    // Capitalize properly (first letter of each word)
+    return cleaned
+      .split(/\s+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+      
+  } catch (error) {
+    console.error('[extractName] LLM error:', error)
+    // Fallback to null if LLM fails
+    return null
+  }
 }
 
 async function handleOnboarding(phone: string, message: string, user: any, activeSpaceId?: string | null, isSpaceMember?: boolean): Promise<string> {
-  const extractedName = extractName(message)
+  const extractedName = await extractName(message)
 
   if (extractedName) {
     // Only update Airtable if user is NOT a space member (legacy mode)

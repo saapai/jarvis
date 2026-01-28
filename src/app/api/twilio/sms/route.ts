@@ -256,7 +256,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
 
   // 4. Handle onboarding (name collection)
   if (user.needs_name) {
-    const onboardingResponse = await handleOnboarding(phone, message, user, activeSpaceId)
+    const onboardingResponse = await handleOnboarding(phone, message, user, activeSpaceId, isSpaceMember)
     await messageRepo.logMessage(phone, 'outbound', onboardingResponse, { action: 'onboarding' }, activeSpaceId)
     return onboardingResponse
   }
@@ -611,13 +611,17 @@ function extractName(message: string): string | null {
     .join(' ')
 }
 
-async function handleOnboarding(phone: string, message: string, user: any, activeSpaceId?: string | null): Promise<string> {
+async function handleOnboarding(phone: string, message: string, user: any, activeSpaceId?: string | null, isSpaceMember?: boolean): Promise<string> {
   const extractedName = extractName(message)
 
   if (extractedName) {
-    await memberRepo.updateMemberName(user.id, extractedName)
+    // Only update Airtable if user is NOT a space member (legacy mode)
+    // Space members are stored in Prisma, not Airtable
+    if (!isSpaceMember) {
+      await memberRepo.updateMemberName(user.id, extractedName)
+    }
 
-    // Also update space member name if in a space
+    // Update space member name if in a space
     if (activeSpaceId) {
       const prisma = await (await import('@/lib/prisma')).getPrisma()
       await prisma.spaceMember.updateMany({

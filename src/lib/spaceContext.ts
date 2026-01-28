@@ -167,6 +167,28 @@ export async function addUserToSpace(phoneNumber: string, spaceId: string, name?
     }
   })
 
+  // Send welcome message if user doesn't have a name (needs onboarding)
+  if (!name) {
+    try {
+      const { sendSms } = await import('@/lib/twilio')
+      const { toE164 } = await import('@/lib/db')
+      const welcomeMessage = "hey you know jarvis from iron man? it's your lucky day, i'm your jarvis. what's your name?\n\ngo to tryenclave.com to access your space and upload information"
+      
+      const result = await sendSms(toE164(normalizedPhone), welcomeMessage)
+      if (result.ok) {
+        // Log the welcome message
+        const messageRepo = await import('@/lib/repositories/messageRepository')
+        await messageRepo.logMessage(normalizedPhone, 'outbound', welcomeMessage, {
+          action: 'onboarding'
+        }, spaceId)
+        console.log(`[SpaceContext] Sent welcome message to ${normalizedPhone} for space ${spaceId}`)
+      }
+    } catch (error) {
+      console.error(`[SpaceContext] Failed to send welcome message:`, error)
+      // Don't fail the membership creation if welcome message fails
+    }
+  }
+
   return { existing: false, membership }
 }
 

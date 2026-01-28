@@ -54,9 +54,10 @@ export async function createEvent(params: {
 }
 
 /**
- * Get upcoming events that need morning reminders (9am same day)
+ * Get upcoming events that need day-of reminders (events happening today)
+ * @param spaceId - Optional space ID to filter events
  */
-export async function getEventsNeedingMorningReminder(): Promise<Event[]> {
+export async function getEventsNeedingMorningReminder(spaceId?: string | null): Promise<Event[]> {
   const prisma = await getPrisma()
 
   const today = new Date()
@@ -65,14 +66,24 @@ export async function getEventsNeedingMorningReminder(): Promise<Event[]> {
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
 
-  const events = await prisma.event.findMany({
-    where: {
-      eventDate: {
-        gte: today,
-        lt: tomorrow
-      },
-      morningReminderSent: false
+  const where: {
+    eventDate: { gte: Date; lt: Date }
+    morningReminderSent: boolean
+    spaceId?: string | null
+  } = {
+    eventDate: {
+      gte: today,
+      lt: tomorrow
     },
+    morningReminderSent: false
+  }
+  
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
+  const events = await prisma.event.findMany({
+    where,
     orderBy: { eventDate: 'asc' }
   })
 
@@ -81,22 +92,33 @@ export async function getEventsNeedingMorningReminder(): Promise<Event[]> {
 
 /**
  * Get upcoming events that need 2-hour reminders
+ * @param spaceId - Optional space ID to filter events
  */
-export async function getEventsNeeding2HourReminder(): Promise<Event[]> {
+export async function getEventsNeeding2HourReminder(spaceId?: string | null): Promise<Event[]> {
   const prisma = await getPrisma()
 
   const now = new Date()
   const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
   const twoHoursThirtyFromNow = new Date(now.getTime() + 2.5 * 60 * 60 * 1000)
 
-  const events = await prisma.event.findMany({
-    where: {
-      eventDate: {
-        gte: twoHoursFromNow,
-        lte: twoHoursThirtyFromNow
-      },
-      reminderSent: false
+  const where: {
+    eventDate: { gte: Date; lte: Date }
+    reminderSent: boolean
+    spaceId?: string | null
+  } = {
+    eventDate: {
+      gte: twoHoursFromNow,
+      lte: twoHoursThirtyFromNow
     },
+    reminderSent: false
+  }
+  
+  if (spaceId !== undefined) {
+    where.spaceId = spaceId
+  }
+
+  const events = await prisma.event.findMany({
+    where,
     orderBy: { eventDate: 'asc' }
   })
 

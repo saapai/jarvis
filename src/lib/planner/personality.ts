@@ -248,6 +248,7 @@ export interface PersonalityInput {
   userName: string | null
   config?: PersonalityConfig
   useLLM?: boolean  // If true, use LLM for personality rendering
+  conversationHistory?: string  // Optional conversation history for context
 }
 
 /**
@@ -289,14 +290,26 @@ CRITICAL RULES:
 
 Transform the base response into your voice:`
 
+    const messages: any[] = [
+      { role: 'system', content: systemPrompt }
+    ]
+    
+    // Add conversation history if available
+    if (conversationHistory) {
+      messages.push({
+        role: 'user',
+        content: `Previous conversation:\n${conversationHistory}\n\nCurrent message: "${userMessage}"\nBase response: "${baseResponse}"\n\nYour response (in Jarvis's voice, considering the conversation context):`
+      })
+    } else {
+      messages.push({
+        role: 'user',
+        content: `User: "${userMessage}"\nBase response: "${baseResponse}"\n\nYour response (in Jarvis's voice):`
+      })
+    }
+    
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { 
-          role: 'user', 
-          content: `User: "${userMessage}"\nBase response: "${baseResponse}"\n\nYour response (in Jarvis's voice):` 
-        }
+      messages
       ],
       temperature: 0.7,
       max_tokens: 150
@@ -366,7 +379,7 @@ export function applyPersonality(input: PersonalityInput): string {
  * Apply personality to a response (async version with optional LLM)
  */
 export async function applyPersonalityAsync(input: PersonalityInput): Promise<string> {
-  const { baseResponse, userMessage, userName, config = DEFAULT_PERSONALITY, useLLM = false } = input
+  const { baseResponse, userMessage, userName, config = DEFAULT_PERSONALITY, useLLM = false, conversationHistory } = input
   
   const tone = analyzeTone(userMessage)
   

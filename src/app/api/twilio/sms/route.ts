@@ -54,15 +54,35 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleMessage(phone: string, message: string): Promise<string> {
-  // 0. Check for space commands (JOIN, SPACES)
-  const spaceCommandResponse = await handleSpaceCommand(phone, message)
-  if (spaceCommandResponse) {
-    await messageRepo.logMessage(phone, 'outbound', spaceCommandResponse, { action: 'space_command' })
-    return spaceCommandResponse
-  }
+  // 0. Auto-bypass for test phone number - route to Amia's space
+  const TEST_PHONE = '3853687238'
+  const normalizedTestPhone = normalizePhone(TEST_PHONE)
+  const normalizedPhone = normalizePhone(phone)
+  
+  let activeSpaceId: string | null = null
+  
+  if (normalizedPhone === normalizedTestPhone) {
+    // Auto-route test phone to Amia's space
+    const prisma = await (await import('@/lib/prisma')).getPrisma()
+    const amiaSpace = await prisma.space.findUnique({
+      where: { slug: 'amias-space' }
+    })
+    if (amiaSpace) {
+      activeSpaceId = amiaSpace.id
+      await spaceContext.setActiveSpaceId(phone, amiaSpace.id)
+      console.log(`[AutoBypass] Routing test phone ${phone} to Amia's space (${amiaSpace.id})`)
+    }
+  } else {
+    // 0. Check for space commands (JOIN, SPACES)
+    const spaceCommandResponse = await handleSpaceCommand(phone, message)
+    if (spaceCommandResponse) {
+      await messageRepo.logMessage(phone, 'outbound', spaceCommandResponse, { action: 'space_command' })
+      return spaceCommandResponse
+    }
 
-  // 1. Get active space for this user
-  const activeSpaceId = await spaceContext.getActiveSpaceId(phone)
+    // 1. Get active space for this user
+    activeSpaceId = await spaceContext.getActiveSpaceId(phone)
+  }
 
   // 1b. Log inbound message (with space context)
   await messageRepo.logMessage(phone, 'inbound', message, null, activeSpaceId)
@@ -98,9 +118,37 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         // Check if user has any spaces they could join
         const userSpaces = await spaceContext.getUserSpacesByPhone(phone)
         if (userSpaces.length === 0) {
-          return "hey! text JOIN <code> to join a space. ask your admin for the code."
+          // For test phone, auto-create in Amia's space if it exists
+          if (normalizedPhone === normalizedTestPhone && activeSpaceId) {
+            const prisma = await (await import('@/lib/prisma')).getPrisma()
+            const testUser = await prisma.user.create({
+              data: { phoneNumber: normalizedPhone }
+            })
+            await prisma.spaceMember.create({
+              data: {
+                spaceId: activeSpaceId,
+                userId: testUser.id,
+                role: 'admin',
+                name: null
+              }
+            })
+            user = {
+              id: testUser.id,
+              phone: normalizedPhone,
+              name: null,
+              needs_name: true,
+              opted_out: false,
+              pending_poll: null,
+              last_response: null,
+              last_notes: null
+            }
+            console.log(`[AutoBypass] Auto-created test user in Amia's space`)
+          } else {
+            return "hey! text JOIN <code> to join a space. ask your admin for the code."
+          }
+        } else {
+          return "hey! couldn't create your account. try again?"
         }
-        return "hey! couldn't create your account. try again?"
       }
     }
   }
@@ -278,7 +326,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     baseResponse: actionResult.response,
     userMessage: message,
     userName: user.name,
-    useLLM: true // LLM-based personality for better context understanding
+    useLLM: true, // LLM-based personality for better context understanding
+    conversationHistory: history // Pass conversation history for context
   })
   
   // 9. Log outbound message with draft content if applicable
@@ -496,6 +545,13 @@ async function handleOnboarding(phone: string, message: string, user: any, activ
   }
 
   // If name extraction failed, ask again with a hint
+  // Check if this is the first message (no name set yet)
+  const isFirstMessage = !user.name && user.needs_name
+  
+  if (isFirstMessage) {
+    return "hey you know jarvis from iron man? it's your lucky day, i'm your jarvis. what's your name?"
+  }
+  
   return "hey! i'm jarvis. what's your name?"
 }
 

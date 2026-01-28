@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as eventRepo from '@/lib/repositories/eventRepository'
 import * as memberRepo from '@/lib/repositories/memberRepository'
 import * as messageRepo from '@/lib/repositories/messageRepository'
+import * as spaceContext from '@/lib/spaceContext'
 import { sendSms } from '@/lib/twilio'
 import { normalizePhone, toE164 } from '@/lib/db'
 
@@ -34,99 +35,172 @@ async function generateReminderMessage(
 }
 
 /**
- * Send morning reminders (9am same day)
+ * Send day-of reminders (sent throughout the day for events happening today)
  */
-async function sendMorningReminders(): Promise<{ sent: number; failed: number }> {
-  const events = await eventRepo.getEventsNeedingMorningReminder()
+async function sendDayOfReminders(): Promise<{ sent: number; failed: number }> {
+  // Get all events (both space-scoped and legacy)
+  const allEvents = await eventRepo.getEventsNeedingMorningReminder()
   
-  console.log(`[MorningReminders] Found ${events.length} events needing morning reminders`)
+  // Group events by spaceId
+  const eventsBySpace = new Map<string | null, eventRepo.Event[]>()
+  for (const event of allEvents) {
+    const key = event.spaceId || null
+    if (!eventsBySpace.has(key)) {
+      eventsBySpace.set(key, [])
+    }
+    eventsBySpace.get(key)!.push(event)
+  }
   
-  let sent = 0
-  let failed = 0
+  let totalSent = 0
+  let totalFailed = 0
   
-  for (const event of events) {
-    try {
-      const message = await generateReminderMessage(event, 'morning')
-      const users = await memberRepo.getOptedInMembers()
-      
-      console.log(`[MorningReminders] Sending reminder for "${event.title}" to ${users.length} users`)
-      
-      for (const user of users) {
-        const userPhone = user.phone ? normalizePhone(user.phone) : ''
-        if (userPhone.length < 10) continue
+  // Process each space group
+  for (const [spaceId, events] of eventsBySpace.entries()) {
+  
+    console.log(`[DayOfReminders] Processing ${events.length} events${spaceId ? ` for space ${spaceId}` : ' (legacy)'}`)
+    
+    for (const event of events) {
+      try {
+        const message = await generateReminderMessage(event, 'morning')
         
-        const result = await sendSms(toE164(userPhone), message)
-        if (result.ok) {
-          // Log message for this recipient
-          await messageRepo.logMessage(userPhone, 'outbound', message, {
-            action: 'event_nudge',
-            eventId: event.id,
-            eventTitle: event.title,
-            nudgeType: 'morning'
-          })
-          sent++
+        // Get users based on space or legacy mode
+        let users: { phone: string; name?: string | null }[] = []
+        
+        if (spaceId) {
+          // Space-scoped: get space members
+          const members = await spaceContext.getSpaceMembers(spaceId)
+          users = members.map(m => ({ phone: m.phoneNumber, name: m.name }))
         } else {
-          failed++
-          console.error(`[MorningReminders] Failed to send to ${userPhone}:`, result.error)
+          // Legacy mode: get all opted-in members
+          const legacyUsers = await memberRepo.getOptedInMembers()
+          users = legacyUsers.map(u => ({ phone: u.phone || '', name: u.name }))
         }
+        
+        console.log(`[DayOfReminders] Sending reminder for "${event.title}" to ${users.length} users${spaceId ? ` (space: ${spaceId})` : ''}`)
+        
+        for (const user of users) {
+          const userPhone = user.phone ? normalizePhone(user.phone) : ''
+          if (userPhone.length < 10) continue
+          
+          const result = await sendSms(toE164(userPhone), message)
+          if (result.ok) {
+            // Log message for this recipient
+            await messageRepo.logMessage(userPhone, 'outbound', message, {
+              action: 'event_nudge',
+              eventId: event.id,
+              eventTitle: event.title,
+              nudgeType: 'dayof',
+              spaceId: spaceId || undefined
+            }, spaceId || undefined)
+            totalSent++
+          } else {
+            totalFailed++
+            console.error(`[DayOfReminders] Failed to send to ${userPhone}:`, result.error)
+          }
+        }
+        
+        await eventRepo.markMorningReminderSent(event.id)
+      } catch (error) {
+        console.error(`[DayOfReminders] Error processing event ${event.id}:`, error)
+        totalFailed++
       }
-      
-      await eventRepo.markMorningReminderSent(event.id)
-    } catch (error) {
-      console.error(`[MorningReminders] Error processing event ${event.id}:`, error)
-      failed++
     }
   }
   
-  return { sent, failed }
+  return { sent: totalSent, failed: totalFailed }
 }
 
 /**
- * Send 2-hour-before reminders
+ * Send 2-hour-before reminders (only if event has a time)
  */
 async function send2HourReminders(): Promise<{ sent: number; failed: number }> {
-  const events = await eventRepo.getEventsNeeding2HourReminder()
+  // Get all events (both space-scoped and legacy)
+  const allEvents = await eventRepo.getEventsNeeding2HourReminder()
   
-  console.log(`[2HourReminders] Found ${events.length} events needing 2-hour reminders`)
+  // Group events by spaceId
+  const eventsBySpace = new Map<string | null, eventRepo.Event[]>()
+  for (const event of allEvents) {
+    const key = event.spaceId || null
+    if (!eventsBySpace.has(key)) {
+      eventsBySpace.set(key, [])
+    }
+    eventsBySpace.get(key)!.push(event)
+  }
   
-  let sent = 0
-  let failed = 0
+  let totalSent = 0
+  let totalFailed = 0
   
-  for (const event of events) {
-    try {
-      const message = await generateReminderMessage(event, 'twohour')
-      const users = await memberRepo.getOptedInMembers()
-      
-      console.log(`[2HourReminders] Sending reminder for "${event.title}" to ${users.length} users`)
-      
-      for (const user of users) {
-        const userPhone = user.phone ? normalizePhone(user.phone) : ''
-        if (userPhone.length < 10) continue
+  // Process each space group
+  for (const [spaceId, events] of eventsBySpace.entries()) {
+    console.log(`[2HourReminders] Processing ${events.length} events${spaceId ? ` for space ${spaceId}` : ' (legacy)'}`)
+    
+    for (const event of events) {
+      try {
+        // Only send 2-hour reminders if event has a specific time (not just a date)
+        const eventTime = event.eventDate
+        const now = new Date()
+        const hoursUntilEvent = (eventTime.getTime() - now.getTime()) / (1000 * 60 * 60)
         
-        const result = await sendSms(toE164(userPhone), message)
-        if (result.ok) {
-          // Log message for this recipient
-          await messageRepo.logMessage(userPhone, 'outbound', message, {
-            action: 'event_nudge',
-            eventId: event.id,
-            eventTitle: event.title,
-            nudgeType: 'twohour'
-          })
-          sent++
-        } else {
-          failed++
-          console.error(`[2HourReminders] Failed to send to ${userPhone}:`, result.error)
+        // Check if event has a time component (not just midnight)
+        const hasTime = eventTime.getHours() !== 0 || eventTime.getMinutes() !== 0
+        
+        if (!hasTime) {
+          console.log(`[2HourReminders] Skipping "${event.title}" - no specific time set`)
+          continue
         }
+        
+        // Only send if we're within 2-2.5 hours before
+        if (hoursUntilEvent < 2 || hoursUntilEvent > 2.5) {
+          continue
+        }
+        
+        const message = await generateReminderMessage(event, 'twohour')
+        
+        // Get users based on space or legacy mode
+        let users: { phone: string; name?: string | null }[] = []
+        
+        if (spaceId) {
+          // Space-scoped: get space members
+          const members = await spaceContext.getSpaceMembers(spaceId)
+          users = members.map(m => ({ phone: m.phoneNumber, name: m.name }))
+        } else {
+          // Legacy mode: get all opted-in members
+          const legacyUsers = await memberRepo.getOptedInMembers()
+          users = legacyUsers.map(u => ({ phone: u.phone || '', name: u.name }))
+        }
+        
+        console.log(`[2HourReminders] Sending reminder for "${event.title}" to ${users.length} users${spaceId ? ` (space: ${spaceId})` : ''}`)
+        
+        for (const user of users) {
+          const userPhone = user.phone ? normalizePhone(user.phone) : ''
+          if (userPhone.length < 10) continue
+          
+          const result = await sendSms(toE164(userPhone), message)
+          if (result.ok) {
+            // Log message for this recipient
+            await messageRepo.logMessage(userPhone, 'outbound', message, {
+              action: 'event_nudge',
+              eventId: event.id,
+              eventTitle: event.title,
+              nudgeType: 'twohour',
+              spaceId: spaceId || undefined
+            }, spaceId || undefined)
+            totalSent++
+          } else {
+            totalFailed++
+            console.error(`[2HourReminders] Failed to send to ${userPhone}:`, result.error)
+          }
+        }
+        
+        await eventRepo.mark2HourReminderSent(event.id)
+      } catch (error) {
+        console.error(`[2HourReminders] Error processing event ${event.id}:`, error)
+        totalFailed++
       }
-      
-      await eventRepo.mark2HourReminderSent(event.id)
-    } catch (error) {
-      console.error(`[2HourReminders] Error processing event ${event.id}:`, error)
-      failed++
     }
   }
   
-  return { sent, failed }
+  return { sent: totalSent, failed: totalFailed }
 }
 
 /**
@@ -146,13 +220,13 @@ export async function GET(request: NextRequest) {
     console.log('[Cron] Running event nudges...')
     
     // Run both types of reminders
-    const [morningResults, twoHourResults] = await Promise.all([
-      sendMorningReminders(),
+    const [dayOfResults, twoHourResults] = await Promise.all([
+      sendDayOfReminders(),
       send2HourReminders()
     ])
     
     const results = {
-      morning: morningResults,
+      dayOf: dayOfResults,
       twoHour: twoHourResults,
       timestamp: new Date().toISOString()
     }

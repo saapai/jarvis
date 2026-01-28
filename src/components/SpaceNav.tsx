@@ -11,43 +11,53 @@ interface SpaceNavProps {
 export function SpaceNav({ slug, isAdmin }: SpaceNavProps) {
   const pathname = usePathname()
 
-  const tabs = [
+  const leftTabs = [
     { name: 'Inbox', href: `/spaces/${slug}/inbox`, icon: InboxIcon },
     { name: 'Chat', href: `/spaces/${slug}/chat`, icon: ChatUploadIcon },
+  ]
+
+  const rightTabs = [
     { name: 'Announcements', href: `/spaces/${slug}/announcements`, icon: MegaphoneIcon },
     { name: 'Settings', href: `/spaces/${slug}/settings`, icon: SettingsIcon },
   ]
 
-  return (
-    <nav className="-mb-px flex items-center space-x-6 overflow-x-auto" aria-label="Tabs">
-      <Link 
-        href="/spaces" 
-        className="flex items-center text-[var(--text-meta)] hover:text-[var(--text-on-dark)] transition-colors py-4"
-        title="Back to spaces"
+  const renderTab = (tab: typeof leftTabs[0]) => {
+    const isActive = pathname === tab.href || pathname.startsWith(tab.href + '/')
+    return (
+      <Link
+        key={tab.name}
+        href={tab.href}
+        className={`
+          flex items-center whitespace-nowrap py-4 px-1 border-b-2 transition-colors
+          ${isActive
+            ? 'border-[var(--highlight-red)]'
+            : 'border-transparent hover:border-[var(--text-meta)]/30'
+          }
+        `}
+        title={tab.name}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
+        <tab.icon className={`w-5 h-5 ${isActive ? 'text-[var(--highlight-red)]' : 'text-[var(--text-meta)] hover:text-[var(--text-on-dark)]'}`} />
       </Link>
-      {tabs.map((tab) => {
-        const isActive = pathname === tab.href || pathname.startsWith(tab.href + '/')
-        return (
-          <Link
-            key={tab.name}
-            href={tab.href}
-            className={`
-              flex items-center whitespace-nowrap py-4 px-1 border-b-2 transition-colors
-              ${isActive
-                ? 'border-[var(--highlight-red)]'
-                : 'border-transparent hover:border-[var(--text-meta)]/30'
-              }
-            `}
-            title={tab.name}
-          >
-            <tab.icon className={`w-5 h-5 ${isActive ? 'text-[var(--highlight-red)]' : 'text-[var(--text-meta)] hover:text-[var(--text-on-dark)]'}`} />
-          </Link>
-        )
-      })}
+    )
+  }
+
+  return (
+    <nav className="-mb-px flex items-center justify-between overflow-x-auto" aria-label="Tabs">
+      <div className="flex items-center space-x-6">
+        <Link 
+          href="/spaces" 
+          className="flex items-center text-[var(--text-meta)] hover:text-[var(--text-on-dark)] transition-colors py-4"
+          title="Back to spaces"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </Link>
+        {leftTabs.map(renderTab)}
+      </div>
+      <div className="flex items-center space-x-6">
+        {rightTabs.map(renderTab)}
+      </div>
     </nav>
   )
 }

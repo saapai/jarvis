@@ -15,7 +15,7 @@ export interface MessageMeta {
   senderPhone?: string
   eventId?: string
   eventTitle?: string
-  nudgeType?: 'morning' | 'twohour'
+  nudgeType?: 'morning' | 'dayof' | 'twohour'
   pendingConfirmation?: {
     eventId: string
     updates: Record<string, unknown>

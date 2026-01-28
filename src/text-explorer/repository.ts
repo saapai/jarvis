@@ -150,16 +150,16 @@ Return JSON: { "dates": ["YYYY-MM-DD", ...] }`;
 }
 
 export const textExplorerRepository: TextExplorerRepository = {
-  async createUpload({ name, rawText }) {
+  async createUpload({ name, rawText, spaceId }) {
     const prisma = await getPrisma();
     const upload = await prisma.upload.create({
-      data: { name, rawText },
+      data: { name, rawText, spaceId },
       select: { id: true },
     });
     return { id: upload.id };
   },
 
-  async createFacts({ uploadId, facts }) {
+  async createFacts({ uploadId, facts, spaceId }) {
     const prisma = await getPrisma();
     
     // Check if embedding column exists
@@ -708,14 +708,16 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
                   "sourceText" = $2,
                   entities = $3,
                   "calendarDates" = $4,
-                  embedding = $5::vector
-              WHERE id = $6
+                  embedding = $5::vector,
+                  "spaceId" = COALESCE("spaceId", $6)
+              WHERE id = $7
               `,
               mergedContent,
               mergedSourceText,
               JSON.stringify(Array.from(newEntities)),
               calendarDatesJson,
               `[${updatedEmbedding.join(',')}]`,
+              spaceId || null,
               existingFact.id
             );
           } else {
@@ -725,13 +727,15 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
               SET content = $1,
                   "sourceText" = $2,
                   entities = $3,
-                  "calendarDates" = $4
-              WHERE id = $5
+                  "calendarDates" = $4,
+                  "spaceId" = COALESCE("spaceId", $5)
+              WHERE id = $6
               `,
               mergedContent,
               mergedSourceText || '',
               JSON.stringify(Array.from(newEntities)),
               calendarDatesJson,
+              spaceId || null,
               existingFact.id
             );
           }
@@ -743,9 +747,9 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
             await tx.$executeRawUnsafe(
               `
               INSERT INTO "Fact" 
-                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, embedding)
+                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, embedding, "spaceId")
               VALUES 
-                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector)
+                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector, $11)
               `,
               uploadId,
               fact.content,
@@ -756,15 +760,16 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
               fact.dateStr,
               calendarDatesJson,
               JSON.stringify(fact.entities),
-              `[${factEmbedding.join(',')}]`
+              `[${factEmbedding.join(',')}]`,
+              spaceId || null
             );
           } else {
             await tx.$executeRawUnsafe(
               `
               INSERT INTO "Fact" 
-                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities)
+                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, "spaceId")
               VALUES 
-                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
+                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
               `,
               uploadId,
               fact.content,
@@ -774,7 +779,8 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
               fact.timeRef,
               fact.dateStr,
               calendarDatesJson,
-              JSON.stringify(fact.entities)
+              JSON.stringify(fact.entities),
+              spaceId || null
             );
           }
         }

@@ -89,8 +89,7 @@ async function sendDayOfReminders(): Promise<{ sent: number; failed: number }> {
               action: 'event_nudge',
               eventId: event.id,
               eventTitle: event.title,
-              nudgeType: 'dayof',
-              spaceId: spaceId || undefined
+              nudgeType: 'dayof'
             }, spaceId || undefined)
             totalSent++
           } else {
@@ -182,8 +181,7 @@ async function send2HourReminders(): Promise<{ sent: number; failed: number }> {
               action: 'event_nudge',
               eventId: event.id,
               eventTitle: event.title,
-              nudgeType: 'twohour',
-              spaceId: spaceId || undefined
+              nudgeType: 'twohour'
             }, spaceId || undefined)
             totalSent++
           } else {

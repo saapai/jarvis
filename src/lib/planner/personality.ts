@@ -258,7 +258,8 @@ async function applyPersonalityLLM(
   baseResponse: string,
   userMessage: string,
   userName: string | null,
-  config: PersonalityConfig
+  config: PersonalityConfig,
+  conversationHistory?: string
 ): Promise<string> {
   try {
     const tone = analyzeTone(userMessage)
@@ -401,7 +402,7 @@ export async function applyPersonalityAsync(input: PersonalityInput): Promise<st
   
   // 4. Use LLM for non-template responses if requested
   if (useLLM && process.env.OPENAI_API_KEY) {
-    return await applyPersonalityLLM(baseResponse, userMessage, userName, config)
+    return await applyPersonalityLLM(baseResponse, userMessage, userName, config, conversationHistory)
   }
   
   // 5. Fallback to rule-based personality

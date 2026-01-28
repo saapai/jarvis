@@ -175,18 +175,25 @@ export async function addUserToSpace(phoneNumber: string, spaceId: string, name?
       const messageRepo = await import('@/lib/repositories/messageRepository')
       const welcomeMessage = "hey you know jarvis from iron man? it's your lucky day, i'm your jarvis. what's your name?\n\ngo to tryenclave.com to access your space and upload information"
       
-      console.log(`[SpaceContext] Sending welcome message to ${normalizedPhone} for space ${spaceId}`)
+      console.log(`[SpaceContext] Sending welcome message to ${normalizedPhone} (${toE164(normalizedPhone)}) for space ${spaceId}`)
       const result = await sendSms(toE164(normalizedPhone), welcomeMessage)
       
+      console.log(`[SpaceContext] sendSms result:`, { ok: result.ok, error: result.error, sid: result.sid })
+      
+      // Always log the message, even if send failed (for admin visibility)
+      await messageRepo.logMessage(normalizedPhone, 'outbound', welcomeMessage, {
+        action: 'onboarding',
+        welcome: true,
+        sent: result.ok,
+        error: result.error || null,
+        twilioSid: result.sid || null
+      }, spaceId)
+      
       if (result.ok) {
-        // Log the welcome message
-        await messageRepo.logMessage(normalizedPhone, 'outbound', welcomeMessage, {
-          action: 'onboarding',
-          welcome: true
-        }, spaceId)
-        console.log(`[SpaceContext] ✅ Sent and logged welcome message to ${normalizedPhone} for space ${spaceId}`)
+        console.log(`[SpaceContext] ✅ Sent and logged welcome message to ${normalizedPhone} for space ${spaceId} (SID: ${result.sid})`)
       } else {
         console.error(`[SpaceContext] ❌ Failed to send welcome message to ${normalizedPhone}:`, result.error)
+        console.error(`[SpaceContext] Message was still logged for admin visibility`)
       }
     } catch (error) {
       console.error(`[SpaceContext] ❌ Error sending welcome message to ${normalizedPhone}:`, error)

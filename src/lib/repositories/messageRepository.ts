@@ -17,6 +17,9 @@ export interface MessageMeta {
   eventTitle?: string
   nudgeType?: 'morning' | 'dayof' | 'twohour'
   welcome?: boolean
+  sent?: boolean
+  error?: string | null
+  twilioSid?: string | null
   pendingConfirmation?: {
     eventId: string
     updates: Record<string, unknown>

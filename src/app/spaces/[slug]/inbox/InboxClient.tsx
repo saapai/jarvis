@@ -251,7 +251,6 @@ function FactCard({
                 setExpandedCards(prev => ({ ...prev, [subcategory]: !isExpanded }))
               }
             }}
-            onDoubleClick={() => handleDoubleClick('title')}
             className="w-full text-left transition-colors"
             disabled={isEditing}
           >
@@ -268,7 +267,13 @@ function FactCard({
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <h3 className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1">
+                <h3 
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    handleDoubleClick('title')
+                  }}
+                  className="text-base font-semibold text-[var(--bg-main)] leading-tight flex-1"
+                >
                   {mainFact.subcategory}
                 </h3>
               )}
@@ -287,6 +292,9 @@ function FactCard({
                 {isEditing && editingField === 'title' && (
                   <span className="text-xs text-[var(--text-meta)]">⌘+Enter to save</span>
                 )}
+                {isEditing && editingField === 'content' && (
+                  <span className="text-xs text-[var(--text-meta)]">⌘+Enter to save</span>
+                )}
               </div>
             </div>
             
@@ -303,7 +311,10 @@ function FactCard({
               />
             ) : (
               <p 
-                onDoubleClick={() => handleDoubleClick('content')}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  handleDoubleClick('content')
+                }}
                 className="text-sm text-[var(--text-on-card)] opacity-60 font-light leading-relaxed"
               >
                 {mainFact.content}

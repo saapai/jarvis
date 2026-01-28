@@ -38,13 +38,13 @@ export function SpaceNav({ slug, isAdmin }: SpaceNavProps) {
             className={`
               flex items-center whitespace-nowrap py-4 px-1 border-b-2 transition-colors
               ${isActive
-                ? 'border-[var(--highlight-red)] text-[var(--text-on-dark)]'
-                : 'border-transparent text-[var(--text-meta)] hover:text-[var(--text-on-dark)] hover:border-[var(--text-meta)]/30'
+                ? 'border-[var(--highlight-red)]'
+                : 'border-transparent hover:border-[var(--text-meta)]/30'
               }
             `}
             title={tab.name}
           >
-            <tab.icon className="w-5 h-5" />
+            <tab.icon className={`w-5 h-5 ${isActive ? 'text-[var(--highlight-red)]' : 'text-[var(--text-meta)] hover:text-[var(--text-on-dark)]'}`} />
           </Link>
         )
       })}

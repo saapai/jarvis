@@ -64,13 +64,72 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   if (normalizedPhone === normalizedTestPhone) {
     // Auto-route test phone to Amia's space
     const prisma = await (await import('@/lib/prisma')).getPrisma()
-    const amiaSpace = await prisma.space.findUnique({
+    // Try multiple possible slug variations
+    let amiaSpace = await prisma.space.findUnique({
       where: { slug: 'amias-space' }
     })
+    if (!amiaSpace) {
+      amiaSpace = await prisma.space.findUnique({
+        where: { slug: 'amia-space' }
+      })
+    }
+    if (!amiaSpace) {
+      // Try finding by name containing "amia"
+      amiaSpace = await prisma.space.findFirst({
+        where: {
+          name: { contains: 'amia', mode: 'insensitive' }
+        }
+      })
+    }
+    
     if (amiaSpace) {
       activeSpaceId = amiaSpace.id
       await spaceContext.setActiveSpaceId(phone, amiaSpace.id)
-      console.log(`[AutoBypass] Routing test phone ${phone} to Amia's space (${amiaSpace.id})`)
+      console.log(`[AutoBypass] Routing test phone ${phone} to Amia's space: ${amiaSpace.name} (${amiaSpace.id})`)
+      
+      // Ensure user exists in Amia's space
+      const existingUser = await prisma.user.findUnique({
+        where: { phoneNumber: normalizedPhone }
+      })
+      
+      if (existingUser) {
+        // Check if user is already a member
+        const existingMember = await prisma.spaceMember.findUnique({
+          where: {
+            spaceId_userId: {
+              spaceId: amiaSpace.id,
+              userId: existingUser.id
+            }
+          }
+        })
+        
+        if (!existingMember) {
+          // Add user as admin to Amia's space
+          await prisma.spaceMember.create({
+            data: {
+              spaceId: amiaSpace.id,
+              userId: existingUser.id,
+              role: 'admin'
+            }
+          })
+          console.log(`[AutoBypass] Added test user to Amia's space as admin`)
+        }
+      } else {
+        // Create user and add to Amia's space
+        const newUser = await prisma.user.create({
+          data: { phoneNumber: normalizedPhone }
+        })
+        await prisma.spaceMember.create({
+          data: {
+            spaceId: amiaSpace.id,
+            userId: newUser.id,
+            role: 'admin'
+          }
+        })
+        console.log(`[AutoBypass] Created test user and added to Amia's space as admin`)
+      }
+    } else {
+      console.log(`[AutoBypass] WARNING: Amia's space not found! Test phone will use default routing.`)
     }
   } else {
     // 0. Check for space commands (JOIN, SPACES)
@@ -109,8 +168,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     }
   }
 
-  // Fallback to legacy Airtable-based member lookup
-  if (!user) {
+  // Fallback to legacy Airtable-based member lookup (only if not in a space)
+  if (!user && !activeSpaceId) {
     user = await memberRepo.getMember(phone)
     if (!user) {
       user = await memberRepo.createMember(phone)
@@ -118,39 +177,57 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         // Check if user has any spaces they could join
         const userSpaces = await spaceContext.getUserSpacesByPhone(phone)
         if (userSpaces.length === 0) {
-          // For test phone, auto-create in Amia's space if it exists
-          if (normalizedPhone === normalizedTestPhone && activeSpaceId) {
-            const prisma = await (await import('@/lib/prisma')).getPrisma()
-            const testUser = await prisma.user.create({
-              data: { phoneNumber: normalizedPhone }
-            })
-            await prisma.spaceMember.create({
-              data: {
-                spaceId: activeSpaceId,
-                userId: testUser.id,
-                role: 'admin',
-                name: null
-              }
-            })
-            user = {
-              id: testUser.id,
-              phone: normalizedPhone,
-              name: null,
-              needs_name: true,
-              opted_out: false,
-              pending_poll: null,
-              last_response: null,
-              last_notes: null
-            }
-            console.log(`[AutoBypass] Auto-created test user in Amia's space`)
-          } else {
-            return "hey! text JOIN <code> to join a space. ask your admin for the code."
-          }
-        } else {
-          return "hey! couldn't create your account. try again?"
+          return "hey! text JOIN <code> to join a space. ask your admin for the code."
         }
+        return "hey! couldn't create your account. try again?"
       }
     }
+  }
+  
+  // If we have activeSpaceId but no user yet, try to get/create user from Prisma
+  if (!user && activeSpaceId) {
+    const prisma = await (await import('@/lib/prisma')).getPrisma()
+    let prismaUser = await prisma.user.findUnique({
+      where: { phoneNumber: normalizedPhone }
+    })
+    
+    if (!prismaUser) {
+      prismaUser = await prisma.user.create({
+        data: { phoneNumber: normalizedPhone }
+      })
+      console.log(`[AutoBypass] Created Prisma user for test phone`)
+    }
+    
+    // Get space member
+    const spaceMember = await prisma.spaceMember.findUnique({
+      where: {
+        spaceId_userId: {
+          spaceId: activeSpaceId,
+          userId: prismaUser.id
+        }
+      },
+      include: { user: true }
+    })
+    
+    if (spaceMember) {
+      user = {
+        id: spaceMember.userId,
+        phone: spaceMember.user.phoneNumber,
+        name: spaceMember.name || spaceMember.user.name,
+        needs_name: !(spaceMember.name || spaceMember.user.name),
+        opted_out: spaceMember.optedOut,
+        pending_poll: null,
+        last_response: null,
+        last_notes: null
+      }
+      isSpaceMember = true
+      console.log(`[AutoBypass] Found space member for test phone`)
+    }
+  }
+
+  // Ensure we have a user at this point
+  if (!user) {
+    return "hey! couldn't create your account. try again?"
   }
 
   // 3. Handle system commands (STOP, START, HELP)

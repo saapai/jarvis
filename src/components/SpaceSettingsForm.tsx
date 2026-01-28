@@ -70,13 +70,13 @@ export function SpaceSettingsForm({ space }: SpaceSettingsFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
+    <form onSubmit={handleSubmit} className="bg-[var(--card-bg)] rounded-lg border border-[var(--card-border)] shadow-[inset_0_1px_0_rgba(0,0,0,0.15)] p-6 space-y-6">
       {/* Basic Settings */}
       <div>
-        <h3 className="text-sm font-medium text-gray-900 mb-4">Basic Settings</h3>
+        <h3 className="text-sm font-medium text-[var(--text-on-card-title)] mb-4">Basic Settings</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="name" className="block text-sm font-medium text-[var(--text-on-card)]">
               Space Name
             </label>
             <input
@@ -85,16 +85,16 @@ export function SpaceSettingsForm({ space }: SpaceSettingsFormProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full px-3 py-2 bg-[var(--bg-main)] border border-[var(--card-border)] rounded-md text-[var(--text-on-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--highlight-red)]/30 focus:border-[var(--highlight-red)]/40 sm:text-sm"
             />
           </div>
 
           <div>
-            <label htmlFor="joinCode" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="joinCode" className="block text-sm font-medium text-[var(--text-on-card)]">
               Join Code
             </label>
             <div className="mt-1 relative">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[var(--text-meta)]">
                 JOIN
               </span>
               <input
@@ -104,10 +104,10 @@ export function SpaceSettingsForm({ space }: SpaceSettingsFormProps) {
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
                 required
                 maxLength={8}
-                className="block w-full pl-14 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono uppercase"
+                className="block w-full pl-14 px-3 py-2 bg-[var(--bg-main)] border border-[var(--card-border)] rounded-md text-[var(--text-on-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--highlight-red)]/30 focus:border-[var(--highlight-red)]/40 sm:text-sm font-mono uppercase"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-[var(--text-meta)]">
               Members text &quot;JOIN {joinCode}&quot; to join via SMS
             </p>
           </div>
@@ -115,14 +115,14 @@ export function SpaceSettingsForm({ space }: SpaceSettingsFormProps) {
       </div>
 
       {/* Airtable Integration */}
-      <div className="border-t border-gray-200 pt-6">
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Airtable Integration (Optional)</h3>
-        <p className="text-sm text-gray-500 mb-4">
+      <div className="border-t border-[var(--card-border)] pt-6">
+        <h3 className="text-sm font-medium text-[var(--text-on-card-title)] mb-2">Airtable Integration (Optional)</h3>
+        <p className="text-sm text-[var(--text-meta)] mb-4">
           Connect to Airtable to sync member data and poll responses with an existing table.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="airtableBaseId" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="airtableBaseId" className="block text-sm font-medium text-[var(--text-on-card)]">
               Airtable Base ID
             </label>
             <input
@@ -131,12 +131,12 @@ export function SpaceSettingsForm({ space }: SpaceSettingsFormProps) {
               value={airtableBaseId}
               onChange={(e) => setAirtableBaseId(e.target.value)}
               placeholder="appXXXXXXXXXXXXXX"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
+              className="mt-1 block w-full px-3 py-2 bg-[var(--bg-main)] border border-[var(--card-border)] rounded-md text-[var(--text-on-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--highlight-red)]/30 focus:border-[var(--highlight-red)]/40 sm:text-sm font-mono"
             />
           </div>
 
           <div>
-            <label htmlFor="airtableTableName" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="airtableTableName" className="block text-sm font-medium text-[var(--text-on-card)]">
               Table Name
             </label>
             <input
@@ -145,21 +145,21 @@ export function SpaceSettingsForm({ space }: SpaceSettingsFormProps) {
               value={airtableTableName}
               onChange={(e) => setAirtableTableName(e.target.value)}
               placeholder="Members"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full px-3 py-2 bg-[var(--bg-main)] border border-[var(--card-border)] rounded-md text-[var(--text-on-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--highlight-red)]/30 focus:border-[var(--highlight-red)]/40 sm:text-sm"
             />
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-800">{error}</p>
+        <div className="rounded-md bg-[rgba(206,96,135,0.15)] border border-[var(--highlight-red)]/30 p-4">
+          <p className="text-sm text-[var(--highlight-red)]">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="rounded-md bg-green-50 p-4">
-          <p className="text-sm text-green-800">Settings saved successfully!</p>
+        <div className="rounded-md bg-[rgba(59,124,150,0.15)] border border-[var(--highlight-blue)]/30 p-4">
+          <p className="text-sm text-[var(--highlight-blue)]">Settings saved successfully!</p>
         </div>
       )}
 
@@ -167,7 +167,7 @@ export function SpaceSettingsForm({ space }: SpaceSettingsFormProps) {
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-[var(--text-on-dark)] bg-[var(--highlight-red)] hover:bg-[var(--highlight-red)]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--highlight-red)]/50 disabled:opacity-50 transition-colors"
         >
           {loading ? 'Saving...' : 'Save Settings'}
         </button>

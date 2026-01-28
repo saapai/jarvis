@@ -1,4 +1,6 @@
 import { getPrisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth/supabase-server'
+import { getOrCreateUser, isSpaceAdmin } from '@/lib/auth/user'
 import InboxClient from './InboxClient'
 
 interface InboxPageProps {
@@ -58,13 +60,21 @@ async function getFacts(spaceId: string) {
 
 export default async function InboxPage({ params }: InboxPageProps) {
   const { slug } = await params
+  const supabaseUser = await requireAuth()
+  const user = await getOrCreateUser(supabaseUser)
+
+  if (!user) {
+    return <div className="text-[var(--text-on-dark)]">Not authenticated</div>
+  }
+
   const spaceId = await getSpaceId(slug)
 
   if (!spaceId) {
     return <div className="text-[var(--text-on-dark)]">Space not found</div>
   }
 
+  const isAdmin = await isSpaceAdmin(user.id, spaceId)
   const facts = await getFacts(spaceId)
 
-  return <InboxClient facts={facts} />
+  return <InboxClient facts={facts} isAdmin={isAdmin} spaceSlug={slug} />
 }

@@ -15,40 +15,31 @@ export function SpaceNav({ slug, isAdmin }: SpaceNavProps) {
     { name: 'Inbox', href: `/spaces/${slug}/inbox`, icon: InboxIcon },
     { name: 'Chat', href: `/spaces/${slug}/chat`, icon: ChatIcon },
     { name: 'Announcements', href: `/spaces/${slug}/announcements`, icon: MegaphoneIcon },
-    { name: 'Members', href: `/spaces/${slug}/members`, icon: UsersIcon },
+    { name: 'Settings', href: `/spaces/${slug}/settings`, icon: SettingsIcon },
   ]
 
-  // Add settings tab for admins
-  if (isAdmin) {
-    tabs.push({ name: 'Settings', href: `/spaces/${slug}/settings`, icon: SettingsIcon })
-  }
-
   return (
-    <div className="bg-[var(--bg-secondary)] border-b border-[var(--text-meta)]/10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-          {tabs.map((tab) => {
-            const isActive = pathname === tab.href || pathname.startsWith(tab.href + '/')
-            return (
-              <Link
-                key={tab.name}
-                href={tab.href}
-                className={`
-                  flex items-center whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium transition-colors
-                  ${isActive
-                    ? 'border-[var(--highlight-red)] text-[var(--text-on-dark)]'
-                    : 'border-transparent text-[var(--text-meta)] hover:text-[var(--text-on-dark)] hover:border-[var(--text-meta)]/30'
-                  }
-                `}
-              >
-                <tab.icon className="w-5 h-5 mr-2" />
-                {tab.name}
-              </Link>
-            )
-          })}
-        </nav>
-      </div>
-    </div>
+    <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+      {tabs.map((tab) => {
+        const isActive = pathname === tab.href || pathname.startsWith(tab.href + '/')
+        return (
+          <Link
+            key={tab.name}
+            href={tab.href}
+            className={`
+              flex items-center whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium transition-colors
+              ${isActive
+                ? 'border-[var(--highlight-red)] text-[var(--text-on-dark)]'
+                : 'border-transparent text-[var(--text-meta)] hover:text-[var(--text-on-dark)] hover:border-[var(--text-meta)]/30'
+              }
+            `}
+          >
+            <tab.icon className="w-5 h-5 mr-2" />
+            {tab.name}
+          </Link>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -73,14 +64,6 @@ function MegaphoneIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-    </svg>
-  )
-}
-
-function UsersIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
     </svg>
   )
 }

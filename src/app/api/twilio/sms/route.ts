@@ -104,18 +104,27 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         })
         
         if (!existingMember) {
-          // Add user as admin to Amia's space
+          // Add user as admin to Amia's space (without name to trigger onboarding)
           await prisma.spaceMember.create({
             data: {
               spaceId: amiaSpace.id,
               userId: existingUser.id,
-              role: 'admin'
+              role: 'admin',
+              name: null // No name = triggers onboarding
             }
           })
-          console.log(`[AutoBypass] Added test user to Amia's space as admin`)
+          console.log(`[AutoBypass] Added test user to Amia's space as admin (test mode - no name)`)
+        } else {
+          // For test mode: always reset name to trigger onboarding flow
+          // This ensures fresh onboarding experience every time for testing
+          await prisma.spaceMember.update({
+            where: { id: existingMember.id },
+            data: { name: null }
+          })
+          console.log(`[AutoBypass] Reset test user name to trigger onboarding flow (test mode)`)
         }
       } else {
-        // Create user and add to Amia's space
+        // Create user and add to Amia's space (without name to trigger onboarding)
         const newUser = await prisma.user.create({
           data: { phoneNumber: normalizedPhone }
         })
@@ -123,10 +132,11 @@ async function handleMessage(phone: string, message: string): Promise<string> {
           data: {
             spaceId: amiaSpace.id,
             userId: newUser.id,
-            role: 'admin'
+            role: 'admin',
+            name: null // No name = triggers onboarding
           }
         })
-        console.log(`[AutoBypass] Created test user and added to Amia's space as admin`)
+        console.log(`[AutoBypass] Created test user and added to Amia's space as admin (test mode - no name)`)
       }
     } else {
       console.log(`[AutoBypass] WARNING: Amia's space not found! Test phone will use default routing.`)

@@ -309,8 +309,7 @@ Transform the base response into your voice:`
     
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages
-      ],
+      messages,
       temperature: 0.7,
       max_tokens: 150
     })

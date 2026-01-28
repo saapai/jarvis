@@ -15,13 +15,13 @@ export default async function SpacesPage() {
   const spaces = await getUserSpaces(user.id)
 
   return (
-    <div className="min-h-screen bg-[var(--bg-main)]" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="min-h-screen bg-[var(--bg-main)]">
       {/* Header */}
       <header className="bg-[var(--bg-main)] border-b border-[var(--text-meta)]/10">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5 text-[#22c55e]" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-[var(--highlight-red)]" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               <span className="text-sm text-[var(--text-on-dark)]">/</span>
@@ -61,7 +61,7 @@ export default async function SpacesPage() {
           <h1 className="text-3xl font-bold text-[var(--text-on-dark)]">Your Spaces</h1>
           <Link
             href="/spaces/new"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-white text-sm font-medium rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--highlight-red)] hover:bg-[var(--highlight-red)]/90 text-white text-sm font-medium rounded-lg transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -92,7 +92,7 @@ export default async function SpacesPage() {
             <div className="mt-6 flex justify-center gap-4">
               <Link
                 href="/spaces/new"
-                className="inline-flex items-center px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-white text-sm font-medium rounded-lg transition-colors"
+                className="inline-flex items-center px-4 py-2 bg-[var(--highlight-red)] hover:bg-[var(--highlight-red)]/90 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 Create a Space
               </Link>

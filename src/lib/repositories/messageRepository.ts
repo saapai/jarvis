@@ -16,6 +16,7 @@ export interface MessageMeta {
   eventId?: string
   eventTitle?: string
   nudgeType?: 'morning' | 'dayof' | 'twohour'
+  welcome?: boolean
   pendingConfirmation?: {
     eventId: string
     updates: Record<string, unknown>

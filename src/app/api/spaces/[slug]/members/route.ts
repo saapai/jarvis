@@ -3,6 +3,7 @@ import { createClient } from '@/lib/auth/supabase-server'
 import { getOrCreateUser, isSpaceAdmin } from '@/lib/auth/user'
 import { getPrisma } from '@/lib/prisma'
 import { normalizePhone } from '@/lib/db'
+import * as spaceContext from '@/lib/spaceContext'
 
 interface RouteParams {
   params: Promise<{ slug: string }>
@@ -117,48 +118,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 })
     }
 
-    // Get or create the user
-    let user = await prisma.user.findUnique({
-      where: { phoneNumber: normalizedPhone }
-    })
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          phoneNumber: normalizedPhone,
-          name: name || null
-        }
-      })
-    }
-
-    // Check if already a member
-    const existingMembership = await prisma.spaceMember.findUnique({
-      where: {
-        spaceId_userId: {
-          spaceId: space.id,
-          userId: user.id
-        }
-      }
-    })
-
-    if (existingMembership) {
+    // Use addUserToSpace which handles welcome messages
+    const result = await spaceContext.addUserToSpace(normalizedPhone, space.id, name || undefined)
+    
+    if (result.existing) {
       return NextResponse.json({ error: 'Already a member' }, { status: 400 })
     }
 
-    // Add as member
-    const membership = await prisma.spaceMember.create({
-      data: {
-        spaceId: space.id,
-        userId: user.id,
-        role: 'member',
-        name: name || null
-      }
+    const membership = result.membership
+    const user = await prisma.user.findUnique({
+      where: { id: membership.userId }
     })
+
+    if (!user) {
+      return NextResponse.json({ error: 'Failed to get user' }, { status: 500 })
+    }
 
     return NextResponse.json({
       id: membership.id,
       userId: user.id,
-      name: name || user.name,
+      name: membership.name || user.name,
       phoneNumber: normalizedPhone,
       role: membership.role,
       joinedAt: membership.joinedAt

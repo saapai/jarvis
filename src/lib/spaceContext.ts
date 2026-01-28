@@ -172,21 +172,28 @@ export async function addUserToSpace(phoneNumber: string, spaceId: string, name?
     try {
       const { sendSms } = await import('@/lib/twilio')
       const { toE164 } = await import('@/lib/db')
+      const messageRepo = await import('@/lib/repositories/messageRepository')
       const welcomeMessage = "hey you know jarvis from iron man? it's your lucky day, i'm your jarvis. what's your name?\n\ngo to tryenclave.com to access your space and upload information"
       
+      console.log(`[SpaceContext] Sending welcome message to ${normalizedPhone} for space ${spaceId}`)
       const result = await sendSms(toE164(normalizedPhone), welcomeMessage)
+      
       if (result.ok) {
         // Log the welcome message
-        const messageRepo = await import('@/lib/repositories/messageRepository')
         await messageRepo.logMessage(normalizedPhone, 'outbound', welcomeMessage, {
-          action: 'onboarding'
+          action: 'onboarding',
+          welcome: true
         }, spaceId)
-        console.log(`[SpaceContext] Sent welcome message to ${normalizedPhone} for space ${spaceId}`)
+        console.log(`[SpaceContext] ✅ Sent and logged welcome message to ${normalizedPhone} for space ${spaceId}`)
+      } else {
+        console.error(`[SpaceContext] ❌ Failed to send welcome message to ${normalizedPhone}:`, result.error)
       }
     } catch (error) {
-      console.error(`[SpaceContext] Failed to send welcome message:`, error)
+      console.error(`[SpaceContext] ❌ Error sending welcome message to ${normalizedPhone}:`, error)
       // Don't fail the membership creation if welcome message fails
     }
+  } else {
+    console.log(`[SpaceContext] Skipping welcome message - user ${normalizedPhone} already has name: ${name}`)
   }
 
   return { existing: false, membership }

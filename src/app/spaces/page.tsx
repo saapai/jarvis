@@ -15,26 +15,29 @@ export default async function SpacesPage() {
   const spaces = await getUserSpaces(user.id)
 
   return (
-    <div className="min-h-screen bg-[var(--bg-main)]">
+    <div className="min-h-screen bg-[var(--bg-main)]" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
-      <header className="bg-[var(--bg-secondary)] border-b border-[var(--text-meta)]/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-[var(--bg-main)] border-b border-[var(--text-meta)]/10">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-[var(--text-on-dark)]">jarvis</h1>
+            <div className="flex items-center space-x-2">
+              {/* Logo/Icon placeholder - can be replaced with actual logo */}
+              <div className="w-6 h-6 rounded bg-gradient-to-br from-green-400 to-green-600"></div>
+            </div>
             <UserMenu user={user} />
           </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl font-semibold text-[var(--text-on-dark)]">Your Spaces</h2>
+      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-white">Your Spaces</h1>
           <Link
             href="/spaces/new"
-            className="inline-flex items-center px-4 py-2 border border-[var(--highlight-red)]/40 text-sm font-medium rounded-md shadow-sm text-[var(--text-on-dark)] bg-[var(--highlight-red)]/20 hover:bg-[var(--highlight-red)]/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--highlight-red)]/50 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             New Space

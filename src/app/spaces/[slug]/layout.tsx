@@ -59,26 +59,28 @@ export default async function SpaceLayout({ children, params }: SpaceLayoutProps
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)]">
-      {/* Header */}
-      <header className="bg-[var(--bg-secondary)] border-b border-[var(--text-meta)]/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <Link href="/spaces" className="text-[var(--text-meta)] hover:text-[var(--text-on-dark)]">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+      {/* Minimal Header */}
+      <header className="bg-[var(--bg-main)] border-b border-[var(--text-meta)]/5">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="flex justify-between items-center py-3">
+            <div className="flex items-center space-x-2">
+              <Link href="/spaces" className="p-1.5 rounded hover:bg-[var(--bg-secondary)] transition-colors">
+                <svg className="w-4 h-4 text-[var(--text-meta)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
               </Link>
-              <div>
-                <h1 className="text-xl font-bold text-[var(--text-on-dark)]">{space.name}</h1>
-                <p className="text-sm text-[var(--text-meta)]">
-                  {space.memberCount} {space.memberCount === 1 ? 'member' : 'members'}
-                  <span className="mx-2">·</span>
-                  <span className="font-mono bg-[var(--bg-tertiary)] px-1 rounded text-xs border border-[var(--text-meta)]/20">JOIN {space.joinCode}</span>
-                </p>
-              </div>
+              <svg className="w-4 h-4 text-[var(--text-meta)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm text-[var(--text-meta)] font-mono">/all_</span>
             </div>
-            <UserMenu user={user} />
+            <div className="flex items-center space-x-3">
+              <span className="text-sm text-[var(--text-meta)] font-mono lowercase">{space.name}_</span>
+              <button className="text-xs text-[var(--text-meta)] px-2 py-1 rounded hover:bg-[var(--bg-secondary)] transition-colors font-mono">viewer</button>
+              <div className="w-6 h-6 rounded bg-[var(--text-meta)]/10"></div>
+              <div className="w-6 h-6 rounded bg-[var(--text-meta)]/10"></div>
+              <UserMenu user={user} />
+            </div>
           </div>
         </div>
       </header>
@@ -87,7 +89,7 @@ export default async function SpaceLayout({ children, params }: SpaceLayoutProps
       <SpaceNav slug={slug} isAdmin={isAdmin} />
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
         {children}
       </main>
     </div>

@@ -214,31 +214,64 @@ export const textExplorerRepository: TextExplorerRepository = {
         } | null = null;
         
         if (hasTemporalIdentity(factWeek, factDate) || fact.subcategory) {
-          // Quick lookup for existing fact (outside transaction)
-          const candidates = await prisma.$queryRawUnsafe<Array<{
-            id: string;
-            content: string;
-            sourceText: string | null;
-            entities: string;
-            dateStr: string | null;
-            timeRef: string | null;
-            subcategory: string | null;
-          }>>(
-            `
-            SELECT id, content, "sourceText", entities, "dateStr", "timeRef", subcategory
-            FROM "Fact"
-            WHERE category = $1
-              AND (
-                LOWER(TRIM(subcategory)) = $2
-                OR LOWER(TRIM(subcategory)) LIKE $3
-                OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
-              )
-            LIMIT 10
-            `,
-            fact.category,
-            subcategoryLower,
-            `%${subcategoryLower}%`
-          );
+          // Quick lookup for existing fact (outside transaction), scoped by space
+          const candidates = await (async () => {
+            if (spaceId) {
+              return prisma.$queryRawUnsafe<Array<{
+                id: string;
+                content: string;
+                sourceText: string | null;
+                entities: string;
+                dateStr: string | null;
+                timeRef: string | null;
+                subcategory: string | null;
+              }>>(
+                `
+                SELECT id, content, "sourceText", entities, "dateStr", "timeRef", subcategory
+                FROM "Fact"
+                WHERE category = $1
+                  AND "spaceId" = $4
+                  AND (
+                    LOWER(TRIM(subcategory)) = $2
+                    OR LOWER(TRIM(subcategory)) LIKE $3
+                    OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+                  )
+                LIMIT 10
+                `,
+                fact.category,
+                subcategoryLower,
+                `%${subcategoryLower}%`,
+                spaceId
+              );
+            }
+
+            // Global/legacy facts (no space) should only dedupe with other global facts
+            return prisma.$queryRawUnsafe<Array<{
+              id: string;
+              content: string;
+              sourceText: string | null;
+              entities: string;
+              dateStr: string | null;
+              timeRef: string | null;
+              subcategory: string | null;
+            }>>(
+              `
+              SELECT id, content, "sourceText", entities, "dateStr", "timeRef", subcategory
+              FROM "Fact"
+              WHERE category = $1
+                AND "spaceId" IS NULL
+                AND (
+                  LOWER(TRIM(subcategory)) = $2
+                  OR LOWER(TRIM(subcategory)) LIKE $3
+                  OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+                )
+              LIMIT 10
+              `,
+              fact.category,
+              subcategoryLower,
+              `%${subcategoryLower}%`
+            );
+          })();
           
           // Filter candidates
           const filteredCandidates = candidates.filter(candidate => {
@@ -406,6 +439,7 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
           dateStr: fact.dateStr,
           week: factWeek,
           isoDate: factDate,
+          spaceId,
         };
 
         // Try to deduplicate - check both facts with temporal identity AND facts without
@@ -416,29 +450,60 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
             hasTemporalIdentity: true,
           });
 
-          // Look up candidate facts with same category + similar title (subcategory)
+          // Look up candidate facts with same category + similar title (subcategory),
+          // scoped to the same space (or global facts with no spaceId)
           // Try exact match first, then fuzzy match for similar names (e.g., "Retreat RSVP" should match "Retreat")
-          const candidates = await tx.$queryRawUnsafe<Array<Candidate>>(
-            `
-            SELECT id,
-                   content,
-                   "sourceText",
-                   entities,
-                   "dateStr",
-                   "timeRef",
-                   subcategory
-            FROM "Fact"
-            WHERE category = $1
-              AND (
-                LOWER(TRIM(subcategory)) = $2
-                OR LOWER(TRIM(subcategory)) LIKE $3
-                OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
-              )
-            `,
-            fact.category,
-            subcategoryLower,
-            `%${subcategoryLower}%`
-          );
+          const candidates = await (async () => {
+            if (spaceId) {
+              return tx.$queryRawUnsafe<Array<Candidate>>(
+                `
+                SELECT id,
+                       content,
+                       "sourceText",
+                       entities,
+                       "dateStr",
+                       "timeRef",
+                       subcategory
+                FROM "Fact"
+                WHERE category = $1
+                  AND "spaceId" = $4
+                  AND (
+                    LOWER(TRIM(subcategory)) = $2
+                    OR LOWER(TRIM(subcategory)) LIKE $3
+                    OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+                  )
+                `,
+                fact.category,
+                subcategoryLower,
+                `%${subcategoryLower}%`,
+                spaceId
+              );
+            }
+
+            // Global/legacy facts (no space) should only dedupe with other global facts
+            return tx.$queryRawUnsafe<Array<Candidate>>(
+              `
+              SELECT id,
+                     content,
+                     "sourceText",
+                     entities,
+                     "dateStr",
+                     "timeRef",
+                     subcategory
+              FROM "Fact"
+              WHERE category = $1
+                AND "spaceId" IS NULL
+                AND (
+                  LOWER(TRIM(subcategory)) = $2
+                  OR LOWER(TRIM(subcategory)) LIKE $3
+                  OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+                )
+              `,
+              fact.category,
+              subcategoryLower,
+              `%${subcategoryLower}%`
+            );
+          })();
           
           // Filter to only keep candidates where the subcategory is similar enough
           // (e.g., "Retreat RSVP" matches "Retreat", but "Retreat" doesn't match "Ski Trip")
@@ -518,28 +583,59 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
             hasTemporalIdentity: false,
           });
           
-          // Look for existing facts with similar subcategory (even without temporal matching)
-          const candidates = await tx.$queryRawUnsafe<Array<Candidate>>(
-            `
-            SELECT id,
-                   content,
-                   "sourceText",
-                   entities,
-                   "dateStr",
-                   "timeRef",
-                   subcategory
-            FROM "Fact"
-            WHERE category = $1
-              AND (
-                LOWER(TRIM(subcategory)) = $2
-                OR LOWER(TRIM(subcategory)) LIKE $3
-                OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
-              )
-            `,
-            fact.category,
-            subcategoryLower,
-            `%${subcategoryLower}%`
-          );
+          // Look for existing facts with similar subcategory (even without temporal matching),
+          // scoped to the same space (or global facts with no spaceId)
+          const candidates = await (async () => {
+            if (spaceId) {
+              return tx.$queryRawUnsafe<Array<Candidate>>(
+                `
+                SELECT id,
+                       content,
+                       "sourceText",
+                       entities,
+                       "dateStr",
+                       "timeRef",
+                       subcategory
+                FROM "Fact"
+                WHERE category = $1
+                  AND "spaceId" = $4
+                  AND (
+                    LOWER(TRIM(subcategory)) = $2
+                    OR LOWER(TRIM(subcategory)) LIKE $3
+                    OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+                  )
+                `,
+                fact.category,
+                subcategoryLower,
+                `%${subcategoryLower}%`,
+                spaceId
+              );
+            }
+
+            // Global/legacy facts (no space) should only dedupe with other global facts
+            return tx.$queryRawUnsafe<Array<Candidate>>(
+              `
+              SELECT id,
+                     content,
+                     "sourceText",
+                     entities,
+                     "dateStr",
+                     "timeRef",
+                     subcategory
+              FROM "Fact"
+              WHERE category = $1
+                AND "spaceId" IS NULL
+                AND (
+                  LOWER(TRIM(subcategory)) = $2
+                  OR LOWER(TRIM(subcategory)) LIKE $3
+                  OR $2 LIKE CONCAT('%', LOWER(TRIM(subcategory)), '%')
+                )
+              `,
+              fact.category,
+              subcategoryLower,
+              `%${subcategoryLower}%`
+            );
+          })();
           
           const filteredCandidates = candidates.filter(candidate => {
             const candidateSub = (candidate.subcategory || '').toLowerCase().trim();

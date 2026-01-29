@@ -12,6 +12,8 @@ export interface KnowledgeUploadInput {
   message: string
   userName: string | null
   isAdmin: boolean
+  // Optional: space to associate this knowledge with (for multi-space users)
+  spaceId?: string | null
 }
 
 /**
@@ -84,7 +86,7 @@ Respond with JSON: { "shouldUpload": boolean, "title": string, "reasoning": stri
  * Handle knowledge upload action (admin only)
  */
 export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promise<ActionResult> {
-  const { phone, message, userName, isAdmin } = input
+  const { phone, message, userName, isAdmin, spaceId } = input
 
   // Only admins can upload knowledge
   if (!isAdmin) {
@@ -120,7 +122,8 @@ export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promis
     const uploadName = analysis.title || `SMS from ${userName || 'Admin'} - ${new Date().toISOString()}`
     const { id: uploadId } = await textExplorerRepository.createUpload({
       name: uploadName,
-      rawText: message
+      rawText: message,
+      spaceId: spaceId || undefined
     })
 
     console.log(`[KnowledgeUpload] Created upload ${uploadId}`)
@@ -133,7 +136,8 @@ export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promis
     // Save facts to database
     await textExplorerRepository.createFacts({
       uploadId,
-      facts: processResult.facts
+      facts: processResult.facts,
+      spaceId: spaceId || undefined
     })
 
     const factSummary = processResult.facts.length > 0

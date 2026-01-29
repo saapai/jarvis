@@ -365,7 +365,9 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         phone,
         message,
         userName: user.name,
-        isAdmin
+        isAdmin,
+        // Attach current active space if any so uploads are space-scoped
+        spaceId: activeSpaceId
       })
       console.log(`[KnowledgeUpload] Result: ${actionResult.response.substring(0, 50)}...`)
       break

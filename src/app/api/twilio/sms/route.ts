@@ -524,9 +524,12 @@ async function handleSystemCommand(user: any, message: string, activeSpaceId?: s
 
     if (isAdmin) {
       return `🤖 admin commands:
-📢 "announce [message]" - send to everyone
-📊 "poll [question]" - ask everyone
+📅 events: "move meeting to 7pm" or "ski retreat is jan 16-19"
+📢 announcements: "announce [message]" - send to everyone
+📊 polls: "poll [question]" - ask everyone
+📝 knowledge: text me info to add to your space
 💬 ask me questions about the org
+📎 file uploads: use tryenclave.com
 text SPACES to see your spaces
 text STOP to unsubscribe`
     }

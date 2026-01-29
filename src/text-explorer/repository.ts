@@ -407,6 +407,11 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
     // Use interactive transaction with increased timeout (60s) for async upserts
     // Note: LLM merge and embedding generation happen inside transaction but timeout is increased
     await prisma.$transaction(async (tx) => {
+      // Ensure the associated upload exists to avoid FK violations
+      // In some edge cases (replication lag, prior failures), the upload row might be missing.
+      // We upsert once per batch using the provided uploadId.
+      let uploadEnsured = false;
+
       for (const { fact, calendarDates } of factsWithCalendarDates) {
         // Compute temporal identity from week + ISO date for card identity
         const factWeek = extractWeekNumber(fact.dateStr, fact.timeRef);
@@ -838,6 +843,30 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
         } else {
           // Insert new fact (include calendarDates)
           const embedding = factEmbedding ?? Array.from({ length: VECTOR_DIMENSION }, () => 0);
+          
+          // Ensure upload exists before inserting facts to satisfy FK constraint
+          if (!uploadEnsured) {
+            try {
+              await tx.upload.upsert({
+                where: { id: uploadId },
+                update: {},
+                create: {
+                  id: uploadId,
+                  name: 'Recovered upload',
+                  rawText: '',
+                  spaceId: spaceId || null,
+                },
+              });
+            } catch (error) {
+              console.error('[TextExplorer Facts] Failed to ensure upload exists for facts batch', {
+                uploadId,
+                error,
+              });
+              // If we cannot ensure upload exists, skip inserting this fact to avoid crashing the whole batch
+              continue;
+            }
+            uploadEnsured = true;
+          }
           
           if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
             await tx.$executeRawUnsafe(

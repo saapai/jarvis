@@ -207,8 +207,6 @@ text HELP anytime to see all commands`
   // Log message regardless of send status (for admin visibility)
   await messageRepo.logMessage(normalizedPhone, 'outbound', message, {
     action: 'admin_onboarding',
-    spaceId: space.id,
-    spaceName: space.name,
     sent: result.ok,
     error: result.error || null,
     twilioSid: result.sid || null

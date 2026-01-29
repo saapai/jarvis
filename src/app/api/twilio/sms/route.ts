@@ -62,7 +62,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   let activeSpaceId: string | null = null
   
   if (normalizedPhone === normalizedTestPhone) {
-    // Auto-route test phone to Amia's space
+    // Auto-route test phone to Amia's space (without forcing onboarding each time)
     const prisma = await (await import('@/lib/prisma')).getPrisma()
     // Try multiple possible slug variations
     let amiaSpace = await prisma.space.findUnique({
@@ -104,27 +104,18 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         })
         
         if (!existingMember) {
-          // Add user as admin to Amia's space (without name to trigger onboarding)
+          // Add user as admin to Amia's space
           await prisma.spaceMember.create({
             data: {
               spaceId: amiaSpace.id,
               userId: existingUser.id,
-              role: 'admin',
-              name: null // No name = triggers onboarding
+              role: 'admin'
             }
           })
-          console.log(`[AutoBypass] Added test user to Amia's space as admin (test mode - no name)`)
-        } else {
-          // For test mode: always reset name to trigger onboarding flow
-          // This ensures fresh onboarding experience every time for testing
-          await prisma.spaceMember.update({
-            where: { id: existingMember.id },
-            data: { name: null }
-          })
-          console.log(`[AutoBypass] Reset test user name to trigger onboarding flow (test mode)`)
+          console.log(`[AutoBypass] Added test user to Amia's space as admin`)
         }
       } else {
-        // Create user and add to Amia's space (without name to trigger onboarding)
+        // Create user and add to Amia's space
         const newUser = await prisma.user.create({
           data: { phoneNumber: normalizedPhone }
         })
@@ -132,11 +123,10 @@ async function handleMessage(phone: string, message: string): Promise<string> {
           data: {
             spaceId: amiaSpace.id,
             userId: newUser.id,
-            role: 'admin',
-            name: null // No name = triggers onboarding
+            role: 'admin'
           }
         })
-        console.log(`[AutoBypass] Created test user and added to Amia's space as admin (test mode - no name)`)
+        console.log(`[AutoBypass] Created test user and added to Amia's space as admin`)
       }
     } else {
       console.log(`[AutoBypass] WARNING: Amia's space not found! Test phone will use default routing.`)
@@ -162,7 +152,6 @@ async function handleMessage(phone: string, message: string): Promise<string> {
 
   if (activeSpaceId) {
     // Multi-space mode: get member from space
-    // For test phone, reload to get fresh data after reset
     const spaceMember = await spaceContext.getSpaceMember(activeSpaceId, phone)
     if (spaceMember) {
       isSpaceMember = true
@@ -175,12 +164,6 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         pending_poll: null,
         last_response: null,
         last_notes: null
-      }
-      // For test phone, ensure needs_name is true (force onboarding)
-      if (normalizedPhone === normalizedTestPhone) {
-        user.needs_name = true
-        user.name = null
-        console.log(`[AutoBypass] Forcing needs_name=true for test phone`)
       }
     }
   }
@@ -238,12 +221,6 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         last_notes: null
       }
       isSpaceMember = true
-      // For test phone, ensure needs_name is true (force onboarding)
-      if (normalizedPhone === normalizedTestPhone) {
-        user.needs_name = true
-        user.name = null
-        console.log(`[AutoBypass] Forcing needs_name=true for test phone (second path)`)
-      }
       console.log(`[AutoBypass] Found space member for test phone`)
     }
   }

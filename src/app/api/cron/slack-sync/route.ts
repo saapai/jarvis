@@ -1,90 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchChannelMessages, detectAnnouncementsChannel } from '@/lib/slack';
+import { detectDeadline } from '@/lib/slackDeadline';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
 import { getPrisma } from '@/lib/prisma';
 import { ExtractedFact } from '@/text-explorer/types';
-import { getOpenAI } from '@/lib/openai';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * Detect deadlines in Slack messages and parse them into scheduled announcements
- * Returns null if no deadline is detected
- */
-async function detectDeadline(
-  messageText: string,
-  messageTs: string
-): Promise<{ scheduledFor: Date; content: string } | null> {
-  try {
-    const openai = getOpenAI();
-    
-    const prompt = `Analyze this Slack message and detect if it contains a deadline or reminder time.
-
-Message: "${messageText}"
-
-Look for:
-- Deadlines like "EOD Thursday", "end of Thursday", "by Thursday", "due Thursday"
-- Reminder times like "remind everyone on Thursday", "send reminder Thursday"
-- Time references that indicate when something should be done
-
-If you find a deadline/reminder time:
-1. Determine the exact date and time (default to 5pm local time for "EOD" or end of day)
-2. Extract the key content/action that should be sent (e.g., the RSVP link or reminder message)
-
-Today's date context: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-
-Return JSON:
-{
-  "hasDeadline": boolean,
-  "scheduledFor": "YYYY-MM-DDTHH:mm:ss" (ISO datetime string, or null if no deadline),
-  "content": "Message to send at the deadline (include any links or important info)" or null
-}
-
-Examples:
-- "rsvp for retreat by EOD thurs" -> hasDeadline: true, scheduledFor: next Thursday at 5pm, content: "rsvp reminder: [link]"
-- "fill out form by end of Thursday" -> hasDeadline: true, scheduledFor: next Thursday at 5pm
-- "meeting is Friday" -> hasDeadline: false (not a deadline, just a date)
-
-Return ONLY valid JSON:`;
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a deadline detector. Return only valid JSON.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2,
-      max_tokens: 300,
-    });
-
-    const result = JSON.parse(response.choices[0]?.message?.content || '{}');
-    
-    if (result.hasDeadline && result.scheduledFor) {
-      const scheduledFor = new Date(result.scheduledFor);
-      
-      // Validate the date is in the future
-      if (scheduledFor > new Date()) {
-        return {
-          scheduledFor,
-          content: result.content || messageText,
-        };
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('[Slack Sync Cron] Deadline detection error:', error);
-    return null;
-  }
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -182,43 +104,42 @@ export async function GET(req: NextRequest) {
           });
         }
 
-        // Detect deadlines and create scheduled announcements
         const deadline = await detectDeadline(messageText, message.ts);
         if (deadline) {
-          // Find the fact ID if facts were created
-          let factId: string | undefined;
-          if (processResult.facts.length > 0) {
-            // Get the most recent fact for this upload
-            const fact = await prisma.fact.findFirst({
-              where: { uploadId },
-              orderBy: { createdAt: 'desc' },
-              select: { id: true },
+          const existing = await prisma.scheduledAnnouncement.findFirst({
+            where: { sourceMessageTs: message.ts },
+          });
+          if (!existing) {
+            let factId: string | undefined;
+            if (processResult.facts.length > 0) {
+              const fact = await prisma.fact.findFirst({
+                where: { uploadId },
+                orderBy: { createdAt: 'desc' },
+                select: { id: true },
+              });
+              factId = fact?.id;
+            }
+
+            const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
+            const links = messageText.match(urlPattern) || [];
+            const contentWithLinks = links.length > 0
+              ? `${deadline.content}\n\n${links.join('\n')}`
+              : deadline.content;
+
+            await prisma.scheduledAnnouncement.create({
+              data: {
+                content: contentWithLinks,
+                scheduledFor: deadline.scheduledFor,
+                sourceFactId: factId,
+                sourceMessageTs: message.ts,
+              },
             });
-            factId = fact?.id;
+            scheduledCount++;
+            console.log('[Slack Sync Cron] Created scheduled announcement', {
+              scheduledFor: deadline.scheduledFor.toISOString(),
+              messageTs: message.ts,
+            });
           }
-          
-          // Extract links from message for the announcement content
-          const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
-          const links = messageText.match(urlPattern) || [];
-          const contentWithLinks = links.length > 0
-            ? `${deadline.content}\n\n${links.join('\n')}`
-            : deadline.content;
-          
-          const scheduled = await prisma.scheduledAnnouncement.create({
-            data: {
-              content: contentWithLinks,
-              scheduledFor: deadline.scheduledFor,
-              sourceFactId: factId,
-              sourceMessageTs: message.ts,
-            },
-          });
-          
-          scheduledCount++;
-          console.log('[Slack Sync Cron] Created scheduled announcement', {
-            id: scheduled.id,
-            scheduledFor: deadline.scheduledFor.toISOString(),
-            messageTs: message.ts,
-          });
         }
 
         if (!latestTs || parseFloat(message.ts) > parseFloat(latestTs)) {

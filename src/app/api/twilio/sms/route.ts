@@ -54,94 +54,15 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleMessage(phone: string, message: string): Promise<string> {
-  // 0. Auto-bypass for test phone number - route to Amia's space
-  const TEST_PHONE = '3853687238'
-  const normalizedTestPhone = normalizePhone(TEST_PHONE)
-  const normalizedPhone = normalizePhone(phone)
-  
-  let activeSpaceId: string | null = null
-  
-  if (normalizedPhone === normalizedTestPhone) {
-    // Auto-route test phone to Amia's space (without forcing onboarding each time)
-    const prisma = await (await import('@/lib/prisma')).getPrisma()
-    // Try multiple possible slug variations
-    let amiaSpace = await prisma.space.findUnique({
-      where: { slug: 'amias-space' }
-    })
-    if (!amiaSpace) {
-      amiaSpace = await prisma.space.findUnique({
-        where: { slug: 'amia-space' }
-      })
-    }
-    if (!amiaSpace) {
-      // Try finding by name containing "amia"
-      amiaSpace = await prisma.space.findFirst({
-        where: {
-          name: { contains: 'amia', mode: 'insensitive' }
-        }
-      })
-    }
-    
-    if (amiaSpace) {
-      activeSpaceId = amiaSpace.id
-      await spaceContext.setActiveSpaceId(phone, amiaSpace.id)
-      console.log(`[AutoBypass] Routing test phone ${phone} to Amia's space: ${amiaSpace.name} (${amiaSpace.id})`)
-      
-      // Ensure user exists in Amia's space
-      const existingUser = await prisma.user.findUnique({
-        where: { phoneNumber: normalizedPhone }
-      })
-      
-      if (existingUser) {
-        // Check if user is already a member
-        const existingMember = await prisma.spaceMember.findUnique({
-          where: {
-            spaceId_userId: {
-              spaceId: amiaSpace.id,
-              userId: existingUser.id
-            }
-          }
-        })
-        
-        if (!existingMember) {
-          // Add user as admin to Amia's space
-          await prisma.spaceMember.create({
-            data: {
-              spaceId: amiaSpace.id,
-              userId: existingUser.id,
-              role: 'admin'
-            }
-          })
-          console.log(`[AutoBypass] Added test user to Amia's space as admin`)
-        }
-      } else {
-        // Create user and add to Amia's space
-        const newUser = await prisma.user.create({
-          data: { phoneNumber: normalizedPhone }
-        })
-        await prisma.spaceMember.create({
-          data: {
-            spaceId: amiaSpace.id,
-            userId: newUser.id,
-            role: 'admin'
-          }
-        })
-        console.log(`[AutoBypass] Created test user and added to Amia's space as admin`)
-      }
-    } else {
-      console.log(`[AutoBypass] WARNING: Amia's space not found! Test phone will use default routing.`)
-    }
-  } else {
-    // 0. Check for space commands (JOIN, SPACES)
-    const spaceCommandResponse = await handleSpaceCommand(phone, message)
-    if (spaceCommandResponse) {
-      await messageRepo.logMessage(phone, 'outbound', spaceCommandResponse, { action: 'space_command' })
-      return spaceCommandResponse
-    }
-
-    // 1. Get active space for this user
-    activeSpaceId = await spaceContext.getActiveSpaceId(phone)
+  // 0. Check for space commands (JOIN, SPACES)
+  const spaceCommandResponse = await handleSpaceCommand(phone, message)
+  if (spaceCommandResponse) {
+    await messageRepo.logMessage(phone, 'outbound', spaceCommandResponse, { action: 'space_command' })
+    return spaceCommandResponse
   }
+
+  // 1. Get active space for this user
+  let activeSpaceId: string | null = await spaceContext.getActiveSpaceId(phone)
 
   // 1b. Log inbound message (with space context)
   await messageRepo.logMessage(phone, 'inbound', message, null, activeSpaceId)

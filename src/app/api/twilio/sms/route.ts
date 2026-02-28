@@ -109,14 +109,14 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   if (!user && activeSpaceId) {
     const prisma = await (await import('@/lib/prisma')).getPrisma()
     let prismaUser = await prisma.user.findUnique({
-      where: { phoneNumber: normalizedPhone }
+      where: { phoneNumber: normalizePhone(phone) }
     })
-    
+
     if (!prismaUser) {
       prismaUser = await prisma.user.create({
-        data: { phoneNumber: normalizedPhone }
+        data: { phoneNumber: normalizePhone(phone) }
       })
-      console.log(`[AutoBypass] Created Prisma user for test phone`)
+      console.log(`[SMS] Created Prisma user for phone ${phone}`)
     }
     
     // Get space member

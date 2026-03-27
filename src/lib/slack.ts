@@ -255,6 +255,18 @@ export async function listAllChannels(): Promise<ChannelInfo[]> {
   }
 }
 
+export async function resolveSlackUserName(userId: string): Promise<string | null> {
+  const client = getSlackClient();
+  try {
+    const result = await client.users.info({ user: userId });
+    const profile = result.user?.profile;
+    return profile?.display_name || result.user?.real_name || null;
+  } catch (error) {
+    console.error('[Slack] Error resolving user name:', error);
+    return null;
+  }
+}
+
 export async function detectAnnouncementsChannel(): Promise<string | null> {
   const { getOpenAI } = await import('@/lib/openai');
   

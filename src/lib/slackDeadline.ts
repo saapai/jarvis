@@ -13,7 +13,8 @@ export interface DeadlineResult {
  */
 export async function detectDeadline(
   messageText: string,
-  messageTs: string
+  messageTs: string,
+  senderName?: string
 ): Promise<DeadlineResult | null> {
   try {
     const openai = getOpenAI()
@@ -27,11 +28,19 @@ export async function detectDeadline(
       minute: '2-digit',
     })
 
+    // Strip URLs from message text before sending to LLM to prevent truncated URLs in output
+    const textForLLM = messageText.replace(/https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi, '[link]')
+
+    const senderInstruction = senderName
+      ? `\nIMPORTANT: This message was posted by ${senderName}. Replace any first-person references ("I", "me", "my", "I'll", "I'm") with "${senderName}" or "${senderName}'s" as appropriate.`
+      : ''
+
     const prompt = `Analyze this Slack message and detect if it contains a deadline or reminder time.
 
-Message: "${messageText}"
+Message: "${textForLLM}"
 
 CRITICAL: This message was SENT at: ${messageSentStr}
+${senderInstruction}
 
 Resolve ALL relative time expressions relative to WHEN THE MESSAGE WAS SENT, not relative to today:
 - "tmr", "tomorrow" → the day after the message was sent (one specific date)
@@ -50,11 +59,13 @@ If you find a deadline/reminder:
 2. Default to 5pm local for "EOD" or end of day.
 3. Extract the key content/action to send (e.g. RSVP link or reminder text).
 
+IMPORTANT: Do NOT include any URLs or links in the "content" field. URLs will be appended separately. If the message references a link, describe the action (e.g. "Fill out the form" or "RSVP") without including the URL.
+
 Return JSON:
 {
   "hasDeadline": boolean,
   "scheduledFor": "YYYY-MM-DDTHH:mm:ss" (ISO datetime for that ONE specific occurrence, or null),
-  "content": "Message to send at the deadline" or null
+  "content": "Message to send at the deadline (NO URLs)" or null
 }
 
 Examples (message sent Tue Jan 21, 2025 10am):
@@ -70,13 +81,13 @@ Return ONLY valid JSON:`
         {
           role: 'system',
           content:
-            'You resolve relative time in messages to one absolute date based on when the message was sent. Return only valid JSON.',
+            'You resolve relative time in messages to one absolute date based on when the message was sent. Return only valid JSON. Never include URLs in the content field.',
         },
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
       temperature: 0.2,
-      max_tokens: 300,
+      max_tokens: 500,
     })
 
     const result = JSON.parse(response.choices[0]?.message?.content || '{}')

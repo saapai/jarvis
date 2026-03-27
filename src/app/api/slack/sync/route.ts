@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchChannelMessages, detectAnnouncementsChannel, listAllChannels } from '@/lib/slack';
+import { fetchChannelMessages, detectAnnouncementsChannel, listAllChannels, resolveSlackUserName } from '@/lib/slack';
 import { detectDeadline } from '@/lib/slackDeadline';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
@@ -144,7 +144,8 @@ export async function POST(req: NextRequest) {
         }
 
         // Detect deadlines and create scheduled announcements (relative time resolved from message sent date)
-        const deadline = await detectDeadline(messageText, message.ts);
+        const senderName = message.user ? await resolveSlackUserName(message.user) : null;
+        const deadline = await detectDeadline(messageText, message.ts, senderName ?? undefined);
         if (deadline) {
           const prisma = await getPrisma();
           const existing = await prisma.scheduledAnnouncement.findFirst({
@@ -161,11 +162,13 @@ export async function POST(req: NextRequest) {
             factId = fact?.id;
           }
 
+          // Strip any URLs the LLM may have included in content, then append full URLs from original message
           const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
+          const cleanContent = deadline.content.replace(urlPattern, '').replace(/\s{2,}/g, ' ').trim();
           const links = messageText.match(urlPattern) || [];
           const contentWithLinks = links.length > 0
-            ? `${deadline.content}\n\n${links.join('\n')}`
-            : deadline.content;
+            ? `${cleanContent}\n\n${links.join('\n')}`
+            : cleanContent;
 
           const scheduled = await prisma.scheduledAnnouncement.create({
             data: {

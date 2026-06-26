@@ -1,7 +1,27 @@
+import Link from 'next/link'
 import { getPrisma } from '@/lib/prisma'
 
 interface AnnouncementsPageProps {
   params: Promise<{ slug: string }>
+}
+
+function Toggle({ slug }: { slug: string }) {
+  return (
+    <div className="inline-flex rounded-lg border border-[var(--card-border)] p-0.5 bg-[var(--card-bg)]">
+      <Link
+        href={`/spaces/${slug}/announcements`}
+        className="px-3 py-1 text-sm rounded-md bg-[rgba(59,124,150,0.25)] text-[var(--highlight-blue)] border border-[var(--highlight-blue)]/40"
+      >
+        History
+      </Link>
+      <Link
+        href={`/spaces/${slug}/announcements/queued`}
+        className="px-3 py-1 text-sm rounded-md text-[var(--text-meta)] hover:text-[var(--text-on-dark)] transition-colors"
+      >
+        Queued
+      </Link>
+    </div>
+  )
 }
 
 async function getSpaceId(slug: string) {
@@ -92,11 +112,14 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-[var(--text-on-dark)]">Announcements & Polls</h2>
-        <p className="text-sm text-[var(--text-meta)]">
-          History of messages sent to all members
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--text-on-dark)]">Announcements & Polls</h2>
+          <p className="text-sm text-[var(--text-meta)]">
+            History of messages sent to all members
+          </p>
+        </div>
+        <Toggle slug={slug} />
       </div>
 
       {allItems.length === 0 ? (

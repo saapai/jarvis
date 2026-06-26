@@ -324,19 +324,21 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   }
   
   console.log(`[ActionRouter] Action complete, applying personality...`)
-  
+
   // 8. Apply personality to response (using LLM for context-aware personality)
-  // Convert history to string format for personality engine
+  // Skip LLM personality for draft actions — the LLM can alter displayed draft
+  // content, making the user see a different version than what's stored.
+  const isDraftAction = classification.action === 'draft_write' || classification.action === 'draft_send'
   const historyString = history.length > 0
     ? history.map(turn => `${turn.role === 'user' ? 'User' : 'Jarvis'}: ${turn.content}`).join('\n')
     : undefined
-  
+
   const finalResponse = await applyPersonalityAsync({
     baseResponse: actionResult.response,
     userMessage: message,
     userName: user.name,
-    useLLM: true, // LLM-based personality for better context understanding
-    conversationHistory: historyString // Pass conversation history for context
+    useLLM: !isDraftAction,
+    conversationHistory: historyString
   })
   
   // 9. Log outbound message with draft content if applicable

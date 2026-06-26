@@ -736,15 +736,37 @@ async function resolveDraftContent(params: ResolveDraftContentParams): Promise<s
     return extractContent(message, draftType)
   }
   
-  // Build conversation context with both user and bot messages
-  const history = (recentMessages || [])
-    .slice(-6) // Last 6 messages (3 exchanges)
-    .map(m => ({
-      role: m.direction === 'inbound' ? 'User' : 'Bot',
-      text: m.text
-    }))
-  
+  // Build annotated history: label each message with its type so the LLM knows
+  // what was a broadcast vs. a draft interaction vs. a user message
+  const history = (recentMessages || []).slice(-8).map(m => {
+    let label = m.direction === 'inbound' ? 'User' : 'Bot'
+    let text = (m.text || '').substring(0, 300)
+    try {
+      const meta = typeof m.meta === 'string' ? JSON.parse(m.meta as string) : m.meta
+      const action = (meta as any)?.action
+      if (action === 'announcement' || action === 'scheduled_announcement') {
+        label = '[PREVIOUSLY SENT ANNOUNCEMENT]'
+      } else if (action === 'poll') {
+        label = '[PREVIOUSLY SENT POLL]'
+      } else if (action === 'draft_write' || action === 'draft_send') {
+        label = `Bot (draft ${action === 'draft_send' ? 'sent' : 'edit'})`
+        if ((meta as any)?.draftContent) {
+          text = `[draft content: "${(meta as any).draftContent.substring(0, 200)}"] ${text.substring(0, 100)}`
+        }
+      }
+    } catch {}
+    return { label, text }
+  })
+
+  const historyText = history.length > 0
+    ? history.map(h => `${h.label}: ${h.text}`).join('\n')
+    : '(no history)'
+
   const systemPrompt = `You are extracting the exact message content that should be sent as a ${draftType}.
+
+CONVERSATION CONTEXT:
+Messages labeled [PREVIOUSLY SENT ANNOUNCEMENT] or [PREVIOUSLY SENT POLL] are broadcasts already sent to all members. Do NOT include their content in the new draft unless the user explicitly asks to reuse them.
+Messages labeled "Bot (draft edit)" show previous draft interactions - use these to understand what draft is being worked on.
 
 CRITICAL RULES:
 1. VERBATIM CONTENT: When the user says "send out [type] saying X" or "send out [type] that X", X is EXACTLY what to send. Do NOT paraphrase.
@@ -757,39 +779,33 @@ CRITICAL RULES:
    - "actually X" → content is "X"
    - "make it say X" → content is "X"
    - "change it to X" → content is "X"
+6. REMOVE REQUESTS: If the user asks to remove/delete specific text from the draft, output the draft WITHOUT that text. Do NOT keep removed content.
+7. ONLY include content the user explicitly wants. Do NOT merge content from old announcements or conversation history into the draft.
+8. When the user says "update" an existing announcement, they want to create a NEW corrected announcement, not combine old ones.
 
-Examples:
-- "send out an announcement saying soccer is tomorrow" → "soccer is tomorrow"
-- "wait say it's next week" → "it's next week"
-- "no just say jarvis is king" → "jarvis is king"
-- "send out a poll asking if jarvis is lit" → "is jarvis lit"
+${previousContent ? `The current draft is:\n"${previousContent}"\n\nThe user wants to EDIT this draft. Apply their requested changes and return the FULL updated draft.` : ''}
 
 Return ONLY the exact text to send. No quotes, no explanations.`
-  
-  const historyText = history.length > 0 
-    ? history.map(h => `${h.role}: ${h.text}`).join('\n')
-    : '(no history)'
-  
+
   const userPrompt = `Recent conversation:
 ${historyText}
 
 Current user message: "${message}"
-${previousContent ? `Previous draft: "${previousContent}"` : ''}
 
-Extract the exact text that should be sent:`
-  
+Extract/edit the text to send:`
+
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-    
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.1, // Lower temperature for more literal extraction
-      max_tokens: 120
+      temperature: 0.1,
+      max_tokens: 500
     })
     
     const content = completion.choices[0].message.content?.trim() || ''

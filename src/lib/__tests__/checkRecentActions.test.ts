@@ -1,5 +1,5 @@
 /**
- * Tests for checkRecentActions and findRecentScheduledAnnouncement
+ * Tests for checkRecentActions and findRecentAnnouncement
  * in content.ts — ensures users can converse about received announcements
  */
 
@@ -29,7 +29,8 @@ function makeMessage(
   direction: 'inbound' | 'outbound',
   text: string,
   action?: string,
-  minutesAgo = 0
+  minutesAgo = 0,
+  draftContent?: string
 ): {
   direction: 'inbound' | 'outbound'
   text: string
@@ -40,7 +41,7 @@ function makeMessage(
     direction,
     text,
     createdAt: new Date(Date.now() - minutesAgo * 60000),
-    meta: action ? { action } : null,
+    meta: action ? { action, ...(draftContent ? { draftContent } : {}) } : null,
   }
 }
 
@@ -133,7 +134,7 @@ describe('checkRecentActions with scheduled_announcement', () => {
     expect(result.response).toContain('feedback form')
   })
 
-  it('does NOT trigger for unrelated messages when no scheduled_announcement exists', async () => {
+  it('does NOT trigger for unrelated messages when no announcement exists', async () => {
     mockCreate.mockResolvedValueOnce({
       choices: [{ message: { content: JSON.stringify({ categories: ['facts'], reasoning: 'general question' }) } }],
     })
@@ -153,7 +154,7 @@ describe('checkRecentActions with scheduled_announcement', () => {
     expect(result.response).not.toContain('announcement that was sent')
   })
 
-  it('ignores scheduled_announcement that is more than 5 messages back', async () => {
+  it('ignores announcement that is more than 5 messages back', async () => {
     mockCreate.mockResolvedValueOnce({
       choices: [{ message: { content: JSON.stringify({ categories: ['facts'], reasoning: 'general question' }) } }],
     })
@@ -266,5 +267,151 @@ describe('checkRecentActions with scheduled_announcement', () => {
     })
 
     expect(result.response).toContain('safety training')
+  })
+})
+
+describe('checkRecentActions with SMS-sent announcements (action: announcement)', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('recognizes follow-ups to announcements sent via SMS (action: "announcement")', async () => {
+    const recentMessages = [
+      makeMessage('outbound', 'happy friday\n- rsvp for alumni reunions is open\n- links to rsvp: https://luma.com/abc', 'announcement', 5),
+      makeMessage('inbound', 'what dat mean', undefined, 0),
+    ]
+
+    const result = await handleContentQuery({
+      phone: '+1234567890',
+      message: 'what dat mean',
+      userName: 'Test User',
+      recentMessages,
+    })
+
+    expect(result.response).toContain('alumni reunions')
+  })
+
+  it('handles informal follow-up "what dat mean" about multi-item announcement', async () => {
+    const weeklyAnnouncement = "here's what's going on this week\n- janak is buying laptop file systems for $1K each and looking for non-developers interested. all PII is anonymized.\n- there's a $250 referral bonus for anyone who refers someone interested."
+    const recentMessages = [
+      makeMessage('outbound', weeklyAnnouncement, 'announcement', 5),
+      makeMessage('inbound', 'what dat mean', undefined, 0),
+    ]
+
+    const result = await handleContentQuery({
+      phone: '+1234567890',
+      message: 'what dat mean',
+      userName: 'Test User',
+      recentMessages,
+    })
+
+    // Should reference the announcement content, not random facts
+    expect(result.response).toContain('janak')
+  })
+
+  it('handles conversational correction "no about janak\'s thing"', async () => {
+    const weeklyAnnouncement = "here's what's going on this week\n- janak is buying laptop file systems for $1K each\n- there's a $250 referral bonus"
+    const recentMessages = [
+      makeMessage('outbound', weeklyAnnouncement, 'announcement', 10),
+      makeMessage('inbound', 'what dat mean', undefined, 5),
+      makeMessage('outbound', 'sounds like you\'re asking about the venue address.', 'content_query', 4),
+      makeMessage('inbound', "no about janak's thing", undefined, 0),
+    ]
+
+    const result = await handleContentQuery({
+      phone: '+1234567890',
+      message: "no about janak's thing",
+      userName: 'Test User',
+      recentMessages,
+    })
+
+    // Should find the announcement and reference janak's content
+    expect(result.response).toContain('janak')
+  })
+
+  it('handles "send me the reunion rsvp links" when links are in announcement', async () => {
+    const recentMessages = [
+      makeMessage('outbound', 'happy friday\n- rsvp for alumni reunions is open\n- links to rsvp: new york - https://luma.com/dxrht7tj, los angeles - https://luma.com/uswl36v8, san francisco - https://luma.com/vo4dfr0l', 'announcement', 30),
+      makeMessage('inbound', 'send me the reunion rsvp links', undefined, 0),
+    ]
+
+    const result = await handleContentQuery({
+      phone: '+1234567890',
+      message: 'send me the reunion rsvp links',
+      userName: 'Test User',
+      recentMessages,
+    })
+
+    // Should find the announcement and include the links
+    expect(result.response).toContain('reunion')
+    expect(result.response).toContain('luma.com')
+  })
+
+  it('handles draft_send with draftContent in meta', async () => {
+    const recentMessages = [
+      makeMessage('outbound', 'sent to 15 people!', 'draft_send', 5, 'Team offsite moved to March 15. New location TBD.'),
+      makeMessage('inbound', 'what did I just send', undefined, 0),
+    ]
+
+    const result = await handleContentQuery({
+      phone: '+1234567890',
+      message: 'what did I just send',
+      userName: 'Test User',
+      recentMessages,
+    })
+
+    expect(result.response).toContain('Team offsite')
+    expect(result.response).toContain('March 15')
+  })
+})
+
+describe('checkRecentActions does NOT false-positive', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('does NOT treat standalone questions as follow-ups to old chat messages', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ categories: ['facts'], reasoning: 'general question' }) } }],
+    })
+
+    const recentMessages = [
+      makeMessage('outbound', 'hey whats up!', 'chat', 10),
+      makeMessage('inbound', 'when is the next meeting', undefined, 0),
+    ]
+
+    const result = await handleContentQuery({
+      phone: '+1234567890',
+      message: 'when is the next meeting',
+      userName: 'Test User',
+      recentMessages,
+    })
+
+    // Should NOT contain chat content as "announcement"
+    expect(result.response).not.toContain('hey whats up')
+  })
+
+  it('does NOT match follow-up when user words are all stop words', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ categories: ['upcoming'], reasoning: 'event query' }) } }],
+    })
+
+    const recentMessages = [
+      makeMessage('outbound', 'Pizza party this Friday at 5pm!', 'announcement', 30),
+      makeMessage('inbound', 'ok thanks', undefined, 25),
+      makeMessage('outbound', 'np!', 'chat', 24),
+      makeMessage('inbound', 'when is the next meeting', undefined, 0),
+    ]
+
+    // "when is the next meeting" has no words matching "Pizza party this Friday at 5pm!"
+    // and is not a short confused reply, so should NOT be treated as follow-up
+    const result = await handleContentQuery({
+      phone: '+1234567890',
+      message: 'when is the next meeting',
+      userName: 'Test User',
+      recentMessages,
+    })
+
+    expect(result.response).not.toContain('Pizza party')
   })
 })

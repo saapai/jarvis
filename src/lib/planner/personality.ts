@@ -288,6 +288,8 @@ CRITICAL RULES:
 - Match user energy: ${config.matchUserEnergy ? 'mirror their tone' : 'stay consistent'}
 - Never use the same catchphrase twice in a row
 - Keep it natural and varied
+- NEVER drop, shorten, or paraphrase URLs/links from the base response — include them EXACTLY as-is
+- If the base response answers a follow-up question about an announcement, keep the relevant information intact
 
 Transform the base response into your voice:`
 
@@ -308,11 +310,13 @@ Transform the base response into your voice:`
       })
     }
     
+    // Use higher max_tokens when base response contains URLs to avoid truncation
+    const hasUrls = /https?:\/\//.test(baseResponse)
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
       temperature: 0.7,
-      max_tokens: 150
+      max_tokens: hasUrls ? 400 : 200
     })
     
     return response.choices[0].message.content || baseResponse

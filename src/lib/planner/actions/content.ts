@@ -1164,7 +1164,13 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
 }
 
 /**
- * Check if the query is asking about recent actions
+ * Check if the query is asking about or following up on recent actions.
+ * Uses a combination of pattern matching and context analysis to detect:
+ * 1. Explicit questions about sent messages ("what did you send")
+ * 2. Follow-up questions about recent announcements ("what dat mean", "huh", "tell me more")
+ * 3. Conversational corrections referencing announcements ("no about janak's thing")
+ *
+ * Returns the announcement content as context string, or null if not a follow-up.
  */
 function checkRecentActions(
   message: string,
@@ -1177,22 +1183,46 @@ function checkRecentActions(
 ): string | null {
   if (!recentMessages || recentMessages.length === 0) return null
 
-  const lower = message.toLowerCase()
+  const lower = message.toLowerCase().trim()
   const isAskingAboutSent = /\b(what did|what have) (you|i) (just )?(send|sent|say|said|announce|do|did)\b/i.test(lower)
   const isAskingAboutAnnouncement = /\bwhat (was|is) (that|the) (announcement|message|poll|text|reminder)\b/i.test(lower)
-  const isFollowUpQuestion = /\b(what|who|where|when|how|tell me more|more info|details|about what|huh|what'?s? (this|that))\b/i.test(lower)
 
-  // Check for a recent scheduled_announcement in history — if found and user is
-  // asking a follow-up, return the full announcement content so the bot can converse
-  // about it with full context.
-  const recentScheduledAnnouncement = findRecentScheduledAnnouncement(recentMessages)
+  // Broad follow-up detection: short/vague messages that are likely referencing
+  // the most recent outbound message rather than being standalone queries.
+  const isFollowUpQuestion =
+    // Explicit follow-up phrases
+    /\b(tell me more|more info|details|about what|explain|elaborate)\b/i.test(lower) ||
+    // Short confused replies (under 30 chars and contains a question-like word)
+    (lower.length < 30 && /\b(what|huh|wut|wat|wdym|meaning|mean|means|why|how)\b/i.test(lower)) ||
+    // "what's this/that" style
+    /\bwhat'?s?\s+(this|that|it)\b/i.test(lower) ||
+    // Conversational corrections ("no about X", "no I meant X", "not that, about X")
+    /^(no|nah|nope|not that)[,.]?\s+(about|i meant|i mean|i'm asking|the|tell me about)\b/i.test(lower) ||
+    // Reference to specific content in a recent announcement ("about janak", "the laptop thing", "reunion links")
+    false // placeholder - specific content matching happens below
 
-  if (recentScheduledAnnouncement) {
+  // Find a recent announcement in conversation history
+  const recentAnnouncement = findRecentAnnouncement(recentMessages)
+
+  if (recentAnnouncement) {
+    // Check if the user's message references specific content from the announcement
+    // e.g., announcement mentions "janak" and user says "no about janak's thing"
+    const announcementLower = recentAnnouncement.toLowerCase()
+    const userWords = lower.split(/\s+/).filter(w => w.length > 2)
+    const referencesAnnouncementContent = userWords.some(word => {
+      // Skip very common words
+      const stopWords = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why',
+        'can', 'does', 'will', 'about', 'with', 'that', 'this', 'not', 'tell', 'send', 'more',
+        'dat', 'mean', 'means', 'meaning', 'thing', 'stuff', 'info', 'yes', 'yeah', 'nah', 'nope']
+      if (stopWords.includes(word)) return false
+      return announcementLower.includes(word)
+    })
+
     if (isAskingAboutSent || isAskingAboutAnnouncement) {
-      return `here's the announcement that was sent: "${recentScheduledAnnouncement}"`
+      return `here's the announcement that was sent: "${recentAnnouncement}"`
     }
-    if (isFollowUpQuestion) {
-      return `the recent announcement said: "${recentScheduledAnnouncement}". to answer your question: this is context from a scheduled slack announcement.`
+    if (isFollowUpQuestion || referencesAnnouncementContent) {
+      return `the user is asking a follow-up about this recent announcement: "${recentAnnouncement}". answer their question ("${message}") using the announcement content.`
     }
   }
 
@@ -1226,10 +1256,11 @@ function checkRecentActions(
 }
 
 /**
- * Find the most recent scheduled_announcement in conversation history.
+ * Find the most recent announcement in conversation history.
+ * Matches all announcement action types: scheduled_announcement, announcement, draft_send.
  * Returns the full text content if found within the last 5 outbound messages.
  */
-function findRecentScheduledAnnouncement(
+function findRecentAnnouncement(
   recentMessages: Array<{
     direction: 'inbound' | 'outbound'
     text: string
@@ -1237,14 +1268,24 @@ function findRecentScheduledAnnouncement(
     meta?: { action?: string; draftContent?: string } | null
   }>
 ): string | null {
+  const announcementActions = ['scheduled_announcement', 'announcement', 'poll']
   for (let i = recentMessages.length - 1; i >= Math.max(0, recentMessages.length - 5); i--) {
     const msg = recentMessages[i]
     if (
       msg.direction === 'outbound' &&
-      msg.meta?.action === 'scheduled_announcement' &&
+      msg.meta?.action &&
+      announcementActions.includes(msg.meta.action) &&
       msg.text?.trim()
     ) {
       return msg.text.trim()
+    }
+    // draft_send stores content in meta.draftContent
+    if (
+      msg.direction === 'outbound' &&
+      msg.meta?.action === 'draft_send' &&
+      msg.meta?.draftContent?.trim()
+    ) {
+      return msg.meta.draftContent.trim()
     }
   }
   return null

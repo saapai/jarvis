@@ -136,7 +136,8 @@ export async function deleteOldMessages(daysOld: number = 30): Promise<number> {
 }
 
 /**
- * Get recent announcements and polls that were sent
+ * Get recent announcements and polls that were sent.
+ * Searches for all announcement action types: draft_send, announcement, scheduled_announcement, poll.
  * @param spaceId - Optional space ID to filter actions
  */
 export async function getPastActions(limit: number = 20, spaceId?: string | null): Promise<Array<{
@@ -147,19 +148,24 @@ export async function getPastActions(limit: number = 20, spaceId?: string | null
 }>> {
   const prisma = await getPrisma()
 
-  const where: { direction: string; meta: { contains: string }; spaceId?: string | null } = {
+  // Search for all announcement-related action types
+  const baseWhere: { direction: string; spaceId?: string | null } = {
     direction: 'outbound',
-    meta: {
-      contains: 'draft_send'
-    }
   }
   if (spaceId !== undefined) {
-    where.spaceId = spaceId
+    baseWhere.spaceId = spaceId
   }
 
-  // Find outbound messages with draft_send action
   const messages = await prisma.message.findMany({
-    where,
+    where: {
+      ...baseWhere,
+      OR: [
+        { meta: { contains: 'draft_send' } },
+        { meta: { contains: '"announcement"' } },
+        { meta: { contains: 'scheduled_announcement' } },
+        { meta: { contains: '"poll"' } },
+      ]
+    },
     orderBy: { createdAt: 'desc' },
     take: limit
   })
@@ -171,20 +177,40 @@ export async function getPastActions(limit: number = 20, spaceId?: string | null
     sentBy: string
   }> = []
 
+  // Deduplicate by content + approximate time (same announcement sent to multiple users)
+  const seen = new Set<string>()
+
   for (const message of messages) {
     const meta = message.meta ? JSON.parse(message.meta) : null
-    
-    if (meta?.action === 'draft_send' && meta?.draftContent) {
-      // Determine type from content (polls end with ?)
-      const isPoll = meta.draftContent.includes('?') || message.text.includes('📊')
-      
-      actions.push({
-        type: isPoll ? 'poll' : 'announcement',
-        content: meta.draftContent,
-        sentAt: message.createdAt,
-        sentBy: message.phoneNumber
-      })
+    if (!meta?.action) continue
+
+    let content: string | null = null
+    let isPoll = false
+
+    if (meta.action === 'draft_send' && meta.draftContent) {
+      content = meta.draftContent
+      isPoll = meta.draftContent.includes('?') || message.text.includes('📊')
+    } else if (meta.action === 'announcement' || meta.action === 'scheduled_announcement') {
+      content = message.text
+      isPoll = false
+    } else if (meta.action === 'poll') {
+      content = message.text
+      isPoll = true
     }
+
+    if (!content) continue
+
+    // Deduplicate: same content within 5 minutes is the same broadcast
+    const dedupeKey = `${content.substring(0, 80)}_${Math.floor(message.createdAt.getTime() / 300000)}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+
+    actions.push({
+      type: isPoll ? 'poll' : 'announcement',
+      content,
+      sentAt: message.createdAt,
+      sentBy: meta.senderPhone || message.phoneNumber
+    })
   }
 
   return actions

@@ -162,10 +162,10 @@ export async function POST(req: NextRequest) {
             factId = fact?.id;
           }
 
-          // Strip any URLs the LLM may have included in content, then append full URLs from original message
+          // Strip any URLs the LLM may have included in content, then append deduplicated URLs from original message
           const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
           const cleanContent = deadline.content.replace(urlPattern, '').replace(/\s{2,}/g, ' ').trim();
-          const links = messageText.match(urlPattern) || [];
+          const links = [...new Set(messageText.match(urlPattern) || [])];
           const contentWithLinks = links.length > 0
             ? `${cleanContent}\n\n${links.join('\n')}`
             : cleanContent;

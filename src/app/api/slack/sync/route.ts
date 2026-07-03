@@ -151,11 +151,6 @@ export async function POST(req: NextRequest) {
         const senderName = message.user ? await resolveSlackUserName(message.user) : null;
         const deadline = await detectDeadline(messageText, message.ts, senderName ?? undefined);
         if (deadline) {
-          const prisma = await getPrisma();
-          const existing = await prisma.scheduledAnnouncement.findFirst({
-            where: { sourceMessageTs: message.ts },
-          });
-          if (!existing) {
           let factId: string | undefined;
           if (processResult.facts.length > 0) {
             const fact = await prisma.fact.findFirst({
@@ -174,8 +169,11 @@ export async function POST(req: NextRequest) {
             ? `${cleanContent}\n\n${links.join('\n')}`
             : cleanContent;
 
-          const scheduled = await prisma.scheduledAnnouncement.create({
-            data: {
+          // Use upsert to atomically prevent duplicates (sourceMessageTs is unique)
+          const scheduled = await prisma.scheduledAnnouncement.upsert({
+            where: { sourceMessageTs: message.ts },
+            update: {}, // Don't update if already exists
+            create: {
               content: contentWithLinks,
               scheduledFor: deadline.scheduledFor,
               sourceFactId: factId,
@@ -183,12 +181,15 @@ export async function POST(req: NextRequest) {
               spaceId: defaultSpaceId,
             },
           });
-          
-          console.log('[Slack Sync] Created scheduled announcement', {
-            id: scheduled.id,
-            scheduledFor: deadline.scheduledFor.toISOString(),
-            messageTs: message.ts,
-          });
+
+          if (scheduled.createdAt.getTime() > Date.now() - 5000) {
+            console.log('[Slack Sync] Created scheduled announcement', {
+              id: scheduled.id,
+              scheduledFor: deadline.scheduledFor.toISOString(),
+              messageTs: message.ts,
+            });
+          } else {
+            console.log('[Slack Sync] Announcement already exists for message', { messageTs: message.ts });
           }
         }
 

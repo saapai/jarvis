@@ -265,7 +265,7 @@ model ScheduledAnnouncement {
   sent            Boolean   @default(false)
   sentAt          DateTime?
   sourceFactId    String? // Optional link to Fact that created this
-  sourceMessageTs String? // Slack message timestamp
+  sourceMessageTs String?   @unique // Slack message timestamp — unique to prevent duplicate announcements
   createdAt       DateTime  @default(now())
 
   // Space scope

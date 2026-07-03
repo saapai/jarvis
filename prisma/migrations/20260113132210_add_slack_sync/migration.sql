@@ -1,0 +1,2 @@
+-- This migration was already applied by 20260109030000_add_slack_sync
+-- No additional changes needed

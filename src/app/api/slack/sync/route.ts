@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
     let syncedCount = 0;
     let latestTs: string | undefined;
 
+    // Find default space for space-scoped announcements
+    const defaultSpace = await prisma.space.findFirst();
+    const defaultSpaceId = defaultSpace?.id || null;
+
     for (const message of messages) {
       // Skip system messages and empty messages
       if (!message.text || message.text.trim().length === 0) {
@@ -176,6 +180,7 @@ export async function POST(req: NextRequest) {
               scheduledFor: deadline.scheduledFor,
               sourceFactId: factId,
               sourceMessageTs: message.ts,
+              spaceId: defaultSpaceId,
             },
           });
           

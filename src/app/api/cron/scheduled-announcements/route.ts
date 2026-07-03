@@ -8,6 +8,7 @@ import { getPrisma } from '@/lib/prisma'
 import { sendSms } from '@/lib/twilio'
 import * as memberRepo from '@/lib/repositories/memberRepository'
 import * as messageRepo from '@/lib/repositories/messageRepository'
+import * as spaceContext from '@/lib/spaceContext'
 import { normalizePhone, toE164 } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -37,22 +38,42 @@ async function sendScheduledAnnouncements(): Promise<{ sent: number; failed: num
   
   for (const announcement of scheduled) {
     try {
-      const users = await memberRepo.getOptedInMembers()
-      
-      console.log(`[ScheduledAnnouncements] Sending scheduled announcement "${announcement.content.substring(0, 50)}..." to ${users.length} users`)
-      
+      // Get recipients: space members if space-scoped, otherwise legacy Airtable members
+      let users: { phone: string }[] = []
+      const spaceId = announcement.spaceId
+
+      if (spaceId) {
+        const members = await spaceContext.getSpaceMembers(spaceId)
+        users = members.map(m => ({ phone: m.phoneNumber }))
+      } else {
+        // Try to find the default/only space first (most orgs have one space)
+        const prisma = await getPrisma()
+        const defaultSpace = await prisma.space.findFirst()
+        if (defaultSpace) {
+          const members = await spaceContext.getSpaceMembers(defaultSpace.id)
+          users = members.map(m => ({ phone: m.phoneNumber }))
+        }
+        // Fallback to legacy Airtable if no space found
+        if (users.length === 0) {
+          const legacyUsers = await memberRepo.getOptedInMembers()
+          users = legacyUsers.map(u => ({ phone: u.phone || '' }))
+        }
+      }
+
+      console.log(`[ScheduledAnnouncements] Sending scheduled announcement "${announcement.content.substring(0, 50)}..." to ${users.length} users${spaceId ? ` (space: ${spaceId})` : ''}`)
+
       let successCount = 0
-      
+
       for (const user of users) {
         const userPhone = user.phone ? normalizePhone(user.phone) : ''
         if (userPhone.length < 10) continue
-        
+
         const result = await sendSms(toE164(userPhone), announcement.content)
         if (result.ok) {
-          // Log message for this recipient
+          // Log message for this recipient with space context
           await messageRepo.logMessage(userPhone, 'outbound', announcement.content, {
             action: 'scheduled_announcement',
-          })
+          }, spaceId)
           successCount++
         } else {
           console.error(`[ScheduledAnnouncements] Failed to send to ${userPhone}:`, result.error)

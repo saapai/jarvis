@@ -58,6 +58,10 @@ export async function GET(req: NextRequest) {
     let scheduledCount = 0;
     let latestTs: string | undefined;
 
+    // Find default space for space-scoped announcements
+    const defaultSpace = await prisma.space.findFirst();
+    const defaultSpaceId = defaultSpace?.id || null;
+
     for (const message of messages) {
       if (!message.text || message.text.trim().length === 0) {
         continue;
@@ -135,6 +139,7 @@ export async function GET(req: NextRequest) {
                 scheduledFor: deadline.scheduledFor,
                 sourceFactId: factId,
                 sourceMessageTs: message.ts,
+                spaceId: defaultSpaceId,
               },
             });
             scheduledCount++;

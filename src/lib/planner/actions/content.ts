@@ -1207,21 +1207,32 @@ function checkRecentActions(
   if (recentAnnouncement) {
     // Check if the user's message references specific content from the announcement
     // e.g., announcement mentions "janak" and user says "no about janak's thing"
+    // Only match distinctive words (5+ chars, not common verbs/adjectives) to avoid
+    // false positives on casual conversational replies like "I'd rather listen to you"
     const announcementLower = recentAnnouncement.toLowerCase()
-    const userWords = lower.split(/\s+/).filter(w => w.length > 2)
+    const userWords = lower.split(/\s+/).filter(w => w.length > 4) // 5+ chars only
+    const commonWords = new Set([
+      'the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why',
+      'can', 'does', 'will', 'about', 'with', 'that', 'this', 'not', 'tell', 'send',
+      'more', 'mean', 'means', 'meaning', 'thing', 'stuff', 'info', 'yes', 'yeah',
+      'nope', 'there', 'their', 'would', 'could', 'should', 'think', 'going', 'doing',
+      'being', 'every', 'never', 'always', 'really', 'right', 'still', 'rather',
+      'listen', 'people', 'looking', 'getting', 'coming', 'saying', 'making',
+      'stupid', 'great', 'other', 'today', 'tomorrow', 'tonight',
+    ])
     const referencesAnnouncementContent = userWords.some(word => {
-      // Skip very common words
-      const stopWords = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why',
-        'can', 'does', 'will', 'about', 'with', 'that', 'this', 'not', 'tell', 'send', 'more',
-        'dat', 'mean', 'means', 'meaning', 'thing', 'stuff', 'info', 'yes', 'yeah', 'nah', 'nope']
-      if (stopWords.includes(word)) return false
+      if (commonWords.has(word)) return false
       return announcementLower.includes(word)
     })
+
+    // Only treat as follow-up if user is actually asking/requesting, not just reacting
+    const looksLikeReaction = /^(lol|lmao|haha|wow|nice|cool|ok|damn|true|facts|bet|fr|yikes)/i.test(lower) ||
+      /^(i('d| would| rather| don'?t| can'?t| think| love| hate| feel|'m|'ll))\b/i.test(lower)
 
     if (isAskingAboutSent || isAskingAboutAnnouncement) {
       return `here's the announcement that was sent: "${recentAnnouncement}"`
     }
-    if (isFollowUpQuestion || referencesAnnouncementContent) {
+    if (isFollowUpQuestion || (referencesAnnouncementContent && !looksLikeReaction)) {
       return `the user is asking a follow-up about this recent announcement: "${recentAnnouncement}". answer their question ("${message}") using the announcement content.`
     }
   }

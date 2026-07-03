@@ -28,27 +28,15 @@ interface PatternMatch {
  */
 function patternMatch(message: string, context: ClassificationContext): PatternMatch | null {
   const lower = message.toLowerCase().trim()
-  const { activeDraft, pendingExcuseRequest } = context
-  
-  // If user has pending excuse request, any message is a poll_response (providing the excuse)
-  if (pendingExcuseRequest) {
-    return { action: 'poll_response', confidence: 0.95 }
-  }
-  
-  // ONLY match explicit send commands when draft is ready AND not waiting for mandatory confirmation
-  if (activeDraft && activeDraft.status === 'ready' && !activeDraft.pendingMandatory) {
-    if (/^(send|send it|go|yes|yep)$/i.test(lower)) {
+  const { activeDraft } = context
+
+  // ONLY match explicit send commands when draft is ready
+  if (activeDraft && activeDraft.status === 'ready') {
+    if (/^(send|send it|go|yes|yep|do it|ship it)$/i.test(lower)) {
       return { action: 'draft_send', confidence: 0.95 }
     }
   }
-  
-  // If draft is waiting for mandatory confirmation, "yes" should be draft_write, not draft_send
-  if (activeDraft && activeDraft.pendingMandatory) {
-    if (/^(yes|y|yep|yeah|mandatory|required|no|n|nope|nah)$/i.test(lower)) {
-      return { action: 'draft_write', confidence: 0.95 }
-    }
-  }
-  
+
   // Everything else goes to LLM for context-aware classification
   return null
 }
@@ -61,8 +49,8 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
  * Build the classification prompt with weighted history
  */
 function buildClassificationPrompt(context: ClassificationContext): string {
-  const { currentMessage, history, activeDraft, isAdmin, userName, hasActivePoll, pendingExcuseRequest } = context
-  
+  const { currentMessage, history, activeDraft, isAdmin, userName } = context
+
   // Build weighted history context
   let historyContext = ''
   if (history.length > 0) {
@@ -72,36 +60,26 @@ function buildClassificationPrompt(context: ClassificationContext): string {
       historyContext += `[weight ${turn.weight.toFixed(1)}] ${roleLabel}: ${turn.content}\n`
     }
   }
-  
+
   // Build draft context
   let draftContext = ''
   if (activeDraft) {
     draftContext = `\n\nActive draft:\n- Type: ${activeDraft.type}\n- Status: ${activeDraft.status}\n- Content: "${activeDraft.content || '(empty)'}"\n`
-    if (activeDraft.pendingMandatory) {
-      draftContext += `- ⚠️ WAITING FOR MANDATORY CONFIRMATION: Bot asked "should they explain if they say no? (yes/no)"\n`
-      draftContext += `  → If user says "yes" or "no", this is draft_write (confirming mandatory status), NOT draft_send\n`
-    }
   }
-  
-  const pollContext = `\n\nActive poll: ${hasActivePoll ? 'yes' : 'no'}`
-  const excuseContext = pendingExcuseRequest 
-    ? `\n\n⚠️ PENDING EXCUSE REQUEST: User previously responded "No" to a mandatory poll without providing an excuse. Bot asked for an explanation.\n` +
-      `  → The current message should be classified as poll_response (providing the excuse), NOT chat\n`
-    : ''
 
   const prompt = `You are classifying the intent of an SMS message to Jarvis, a sassy AI assistant for an organization.
 
 User info:
 - Name: ${userName || 'Unknown'}
 - Is admin: ${isAdmin}
-${historyContext}${draftContext}${pollContext}${excuseContext}
+${historyContext}${draftContext}
 
 Current message: "${currentMessage}"
 
 Classify this message into ONE of these actions:
 
-1. **draft_write** - Creating or editing an announcement/poll draft
-   - Initial requests: "send out an announcement saying X", "create a poll asking Y"
+1. **draft_write** - Creating or editing an announcement draft
+   - Initial requests: "send out an announcement saying X", "make an announcement that X"
    - Edits to existing drafts: "wait say X instead", "no make it say Y", "actually change it to Z"
    - Follow-ups providing content when bot asked for it
    - Key: Look for content to send or modifications to existing drafts
@@ -109,31 +87,29 @@ Classify this message into ONE of these actions:
 2. **draft_send** - ONLY explicit send confirmations when draft is ready
    - Must have active draft AND explicit confirmation: "send", "yes", "go", "send it", "do it"
    - NOT for: "send out an announcement" (that's draft_write)
+   - NEVER classify as draft_send if there is NO active draft
 
-3. **poll_response** - Responding to an active poll
-   - Must have active poll AND response like: "yes", "no", "maybe" (with optional notes)
-   - INCLUDES changes to previous responses: "jk yes", "actually no", "wait I can come"
-   - Any message containing yes/no/maybe OR expressing ability to attend when poll is active
-
-4. **content_query** - Questions about organization content
+3. **content_query** - Questions about organization content
    - "when is X", "what's happening", "where is Y", "who is Z"
 
-5. **capability_query** - Questions about Jarvis itself
+4. **capability_query** - Questions about Jarvis itself
    - "what can you do", "help", "how do you work"
 
-6. **knowledge_upload** - Admin sharing factual information to add to knowledge base
+5. **knowledge_upload** - Admin sharing factual information to add to knowledge base
    - Examples: "ski retreat is jan 16-19 in utah", "meeting moved to thursday at 7pm"
    - Must be declarative information, not questions or commands
    - ONLY classify as this if user is admin (check context)
 
-7. **event_update** - Admin updating existing event details
+6. **event_update** - Admin updating existing event details
    - Examples: "change ski retreat to jan 20-22", "move chapter meeting to 7pm"
    - Explicit modifications to existing events
    - ONLY classify as this if user is admin and referencing an existing event
 
-8. **chat** - Everything else
+7. **chat** - Everything else
    - Casual conversation, banter, greetings, insults
+   - Follow-up questions like "did everyone get it", "did that send", "?????"
    - Cancellations: "nevermind", "cancel"
+   - Confusion, question marks, or reactions to bot messages
 
 CONTEXT UNDERSTANDING:
 - Pay attention to conversation history - if user is editing a draft, recent messages show what they're referring to
@@ -142,13 +118,15 @@ CONTEXT UNDERSTANDING:
 - "Tell me about", "give me info about", "what's the deal with" = content_query (asking for information)
 - Only classify as draft_write if user is clearly providing content to send or editing existing draft content
 - If draft exists but message is a question, it's content_query, NOT draft_write
+- IMPORTANT: Follow-up questions about whether an announcement was sent (e.g. "did everyone get it", "did that work", "did it send") are CHAT, not draft_send
+- IMPORTANT: If there is NO active draft, "send" or similar words should be classified as chat, NOT draft_send
 - Use the weighted history (higher weight = more recent/relevant)
 
 Respond with JSON only:
 {
-  "action": "draft_write" | "draft_send" | "poll_response" | "content_query" | "capability_query" | "knowledge_upload" | "event_update" | "chat",
+  "action": "draft_write" | "draft_send" | "content_query" | "capability_query" | "knowledge_upload" | "event_update" | "chat",
   "confidence": 0.0-1.0,
-  "subtype": "announcement" | "poll" | null,
+  "subtype": "announcement" | null,
   "reasoning": "brief explanation including context used"
 }`
 
@@ -277,11 +255,11 @@ export function isShortResponse(message: string): boolean {
 
 
 /**
- * Extract poll/announcement content from message
+ * Extract announcement content from message (fallback when LLM unavailable)
  */
-export function extractContent(message: string, type: DraftType): string {
+export function extractContent(message: string, _type?: DraftType): string {
   let content = message.trim()
-  
+
   // Handle edit signals first (wait, no, actually, etc.)
   const editPatterns = [
     /^(wait|no|nah|nvm),?\s+(just\s+)?say\s+/i,
@@ -291,28 +269,16 @@ export function extractContent(message: string, type: DraftType): string {
     /^change\s+it\s+to\s+/i,
     /^(it\s+should\s+say|it\s+should\s+be)\s+/i
   ]
-  
+
   for (const pattern of editPatterns) {
     content = content.replace(pattern, '')
   }
-  
-  if (type === 'announcement') {
-    // Remove command prefixes - look for "saying" or "that" to preserve verbatim content
-    content = content.replace(/^announce(ment)?\s+(saying|that)\s+/i, '')
-    content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+(saying|that)\s+/i, '')
-    content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+/i, '')
-    content = content.replace(/^(tell|notify|let)\s+(everyone|people|all|the group|everybody)\s*(about|that)?\s*/i, '')
-  } else if (type === 'poll') {
-    // Remove command prefixes
-    content = content.replace(/^poll\s+(asking|saying)?\s*/i, '')
-    content = content.replace(/^(send|make|create|start)(\s+out)?\s+(a\s+)?poll\s+(asking|saying)?\s*/i, '')
-    content = content.replace(/^(ask|asking)\s+(everyone|people|all|the group|everybody)\s*(if|whether|about)?\s*/i, '')
-    
-    // Ensure ends with question mark
-    if (!content.endsWith('?')) {
-      content += '?'
-    }
-  }
-  
+
+  // Remove command prefixes
+  content = content.replace(/^announce(ment)?\s+(saying|that)\s+/i, '')
+  content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+(saying|that)\s+/i, '')
+  content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+/i, '')
+  content = content.replace(/^(tell|notify|let)\s+(everyone|people|all|the group|everybody)\s*(about|that)?\s*/i, '')
+
   return content.trim()
 }

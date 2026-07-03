@@ -449,7 +449,7 @@ export const TEMPLATES = {
   
   // Capability queries  
   capabilities: (_isAdmin: boolean) =>
-    `i can:\n📢 send announcements ("announce [message]")\n📊 create polls ("poll [question]")\n💬 answer questions about the org\n\njust text me what you need or tell me what to send`,
+    `i can:\n📢 send announcements ("announce [message]")\n💬 answer questions about the org\n\njust text me what you need or tell me what to send`,
   
   // Default fallback
   confused: () =>
@@ -486,16 +486,19 @@ export function getQuickResponse(input: string): string | null {
     'idk': ['same tbh', 'fair enough', 'mood'],
     'nvm': ['ok', 'sure', 'k'],
     'mb': ['all good', 'np', 'you\'re fine'],
-    'my bad': ['all good', 'np', 'you\'re fine'],
-    '?': ['use your words', 'what', '🤨'],
-    '??': ['???', 'huh', 'speak'],
-    '???': ['bro what', 'use words pls', '🤨']
+    'my bad': ['all good', 'np', 'you\'re fine']
   }
-  
+
   const responses = quickResponses[lower]
   if (responses) {
     return responses[Math.floor(Math.random() * responses.length)]
   }
-  
+
+  // Handle any number of question marks (?, ??, ???, ?????, etc.)
+  if (/^\?+$/.test(lower)) {
+    const qmResponses = ['what\'s up?', 'you good?', 'need something?', 'what do you need?']
+    return qmResponses[Math.floor(Math.random() * qmResponses.length)]
+  }
+
   return null
 }

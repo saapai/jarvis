@@ -7,17 +7,16 @@
 // ACTIONS
 // ============================================
 
-export type ActionType = 
-  | 'draft_write'      // Create or edit announcement/poll draft
+export type ActionType =
+  | 'draft_write'      // Create or edit announcement draft
   | 'draft_send'       // Send out an existing draft
-  | 'poll_response'    // Reply to an active poll
   | 'content_query'    // Questions about org content (events, meetings, etc.)
   | 'capability_query' // Questions about Jarvis/Enclave capabilities
   | 'knowledge_upload' // Add information to knowledge base (admin only)
   | 'event_update'     // Update event details (admin only)
   | 'chat'             // Banter, insults, random conversation
 
-export type DraftType = 'announcement' | 'poll'
+export type DraftType = 'announcement'
 
 export type DraftStatus = 'idle' | 'drafting' | 'ready' | 'sent'
 
@@ -28,9 +27,10 @@ export interface Draft {
   createdAt: number
   updatedAt: number
   pendingLink?: boolean        // Waiting for user to provide a link
-  pendingMandatory?: boolean   // Waiting for user to confirm if poll is mandatory
   links?: string[]             // Extracted links from the draft
-  requiresExcuse?: boolean     // For polls: require notes if answering "No"
+  // Legacy fields kept for DB compatibility
+  pendingMandatory?: boolean
+  requiresExcuse?: boolean
 }
 
 // ============================================
@@ -57,7 +57,7 @@ export interface WeightedTurn extends ConversationTurn {
 export interface ClassificationResult {
   action: ActionType
   confidence: number  // 0.0 - 1.0
-  subtype?: DraftType // For draft_write: announcement or poll
+  subtype?: DraftType // For draft_write
   reasoning?: string  // Why this classification was chosen
 }
 
@@ -67,8 +67,6 @@ export interface ClassificationContext {
   activeDraft: Draft | null
   isAdmin: boolean
   userName: string | null
-  hasActivePoll?: boolean
-  pendingExcuseRequest?: boolean  // User has "No" response without notes for mandatory poll
 }
 
 // ============================================

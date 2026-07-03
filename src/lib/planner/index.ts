@@ -28,8 +28,7 @@ import {
   handleContentQuery,
   handleCapabilityQuery,
   handleChat,
-  handleEmptyMessage,
-  handlePollResponse
+  handleEmptyMessage
 } from './actions'
 
 // ============================================
@@ -46,8 +45,6 @@ export interface PlannerInput {
   searchContent?: (query: string) => Promise<{ title: string; body: string; score: number }[]>
   // Required for sending drafts
   sendAnnouncement?: (content: string, senderPhone: string) => Promise<number>
-  sendPoll?: (question: string, senderPhone: string) => Promise<number>
-  hasActivePoll?: boolean
 }
 
 export interface PlannerResult {
@@ -67,21 +64,20 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
     user,
     conversationHistoryJson,
     searchContent,
-    sendAnnouncement,
-    sendPoll
+    sendAnnouncement
   } = input
-  
+
   // Load conversation history from Airtable if provided
   if (conversationHistoryJson) {
     loadStateFromAirtable(phone, conversationHistoryJson)
   }
-  
+
   // Handle empty messages
   if (!message || message.trim().length === 0) {
     const result = handleEmptyMessage(user.name)
     addToHistory(phone, 'user', message)
     addToHistory(phone, 'assistant', result.response, result.action)
-    
+
     return {
       response: result.response,
       action: result.action,
@@ -89,40 +85,30 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
       classification: { action: 'chat', confidence: 1.0 }
     }
   }
-  
+
   // Add user message to history
   addToHistory(phone, 'user', message)
-  
+
   // Build classification context
   const weightedHistory = getWeightedHistory(phone)
   const activeDraft = getDraft(phone)
-  
+
   const classificationContext = {
     currentMessage: message,
     history: weightedHistory,
     activeDraft,
     isAdmin: user.isAdmin,
-    userName: user.name,
-    hasActivePoll: input.hasActivePoll ?? false
+    userName: user.name
   }
-  
+
   // Classify intent
   const classification = await classifyIntent(classificationContext)
-  
+
   console.log(`[Planner] Classified "${message}" as ${classification.action} (confidence: ${classification.confidence})`)
-  
-  // Build planner context
-  const plannerContext: PlannerContext = {
-    user,
-    currentMessage: message,
-    history: weightedHistory,
-    activeDraft,
-    timestamp: Date.now()
-  }
-  
+
   // Execute appropriate action handler
   let result: ActionResult
-  
+
   switch (classification.action) {
     case 'draft_write':
       result = await handleDraftWrite({
@@ -133,9 +119,9 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
         classification
       })
       break
-    
+
     case 'draft_send':
-      if (!sendAnnouncement || !sendPoll) {
+      if (!sendAnnouncement) {
         result = {
           action: 'draft_send',
           response: "send functions not configured. contact admin"
@@ -146,12 +132,11 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
           message,
           userName: user.name,
           isAdmin: user.isAdmin,
-          sendAnnouncement,
-          sendPoll
+          sendAnnouncement
         })
       }
       break
-    
+
     case 'content_query':
       result = await handleContentQuery({
         phone,
@@ -161,14 +146,6 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
       })
       break
 
-    case 'poll_response':
-      result = await handlePollResponse({
-        phone,
-        message,
-        userName: user.name
-      })
-      break
-    
     case 'capability_query':
       result = await handleCapabilityQuery({
         phone,
@@ -177,10 +154,10 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
         isAdmin: user.isAdmin
       })
       break
-    
+
     case 'chat':
     default:
-      result = handleChat({
+      result = await handleChat({
         phone,
         message,
         userName: user.name,
@@ -188,10 +165,10 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
       })
       break
   }
-  
+
   // Add assistant response to history
   addToHistory(phone, 'assistant', result.response, result.action)
-  
+
   // Return result with updated history
   return {
     response: result.response,
@@ -210,4 +187,3 @@ export * from './history'
 export * from './classifier'
 export * from './personality'
 export * from './actions'
-

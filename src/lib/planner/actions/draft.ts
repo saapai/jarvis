@@ -1,6 +1,6 @@
 /**
  * Draft Action Handler
- * Handles creating and editing announcement/poll drafts
+ * Handles creating and editing announcement drafts
  */
 
 import {
@@ -12,121 +12,11 @@ import {
 } from '../types'
 import * as draftRepo from '@/lib/repositories/draftRepository'
 import { extractContent } from '../classifier'
-import { applyPersonality, TEMPLATES, removeEmoji } from '../personality'
+import { TEMPLATES } from '../personality'
 
 // ============================================
 // LINK DETECTION (LLM-BASED)
 // ============================================
-
-/**
- * Use LLM to format poll question properly
- */
-async function formatPollQuestion(rawQuestion: string): Promise<string> {
-  if (!process.env.OPENAI_API_KEY) {
-    return rawQuestion
-  }
-
-  try {
-    const OpenAI = (await import('openai')).default
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    const systemPrompt = `You are formatting poll questions for an SMS bot.
-
-Take the user's raw input and turn it into a clear, grammatically correct yes/no question.
-
-Rules:
-- Keep it concise (under 100 characters if possible)
-- Make it a proper question (starts with "Are you", "Will you", "Can you", etc.)
-- Fix grammar and punctuation
-- Preserve key details (time, date, location)
-- Don't add extra information not in the original
-
-Examples:
-Input: "if people are coming to active meeting at 8pm at ash's at 610 levering apt 201"
-Output: "Are you coming to active meeting at 8pm at Ash's (610 Levering Apt 201)?"
-
-Input: "who's going to the game tomorrow"
-Output: "Are you going to the game tomorrow?"
-
-Return ONLY the formatted question, nothing else.`
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Format this poll question: "${rawQuestion}"` }
-      ],
-      temperature: 0.2,
-      max_tokens: 80
-    })
-
-    const formatted = response.choices[0].message.content?.trim() || rawQuestion
-    return formatted
-  } catch (error) {
-    console.error('[PollFormat] LLM formatting failed:', error)
-    return rawQuestion
-  }
-}
-
-/**
- * Use LLM to detect if a poll should require an excuse for "No"
- */
-async function detectMandatoryPoll(message: string): Promise<{
-  isMandatory: boolean
-  reasoning: string
-}> {
-  if (!process.env.OPENAI_API_KEY) {
-    return { isMandatory: false, reasoning: 'No API key' }
-  }
-
-  try {
-    const OpenAI = (await import('openai')).default
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    const systemPrompt = `You are analyzing whether a poll/event is mandatory or requires attendance.
-
-Indicators that something is MANDATORY:
-- Uses words like "mandatory", "required", "must attend"
-- Active meetings, required meetings
-- Chapter meetings, official events
-- Penalties mentioned for not attending
-- "Everyone needs to be there"
-
-NOT mandatory:
-- Optional events
-- Social gatherings  
-- Study sessions
-- Open invites
-- "If you're interested"
-
-Respond with JSON: { "isMandatory": boolean, "reasoning": string }`
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Is this poll about a mandatory event? "${message}"` }
-      ],
-      temperature: 0.1,
-      max_tokens: 100,
-      response_format: { type: 'json_object' }
-    })
-
-    const content = response.choices[0].message.content
-    if (content) {
-      const parsed = JSON.parse(content)
-      console.log(`[MandatoryDetection] isMandatory=${parsed.isMandatory}, reasoning=${parsed.reasoning}`)
-      return {
-        isMandatory: parsed.isMandatory || false,
-        reasoning: parsed.reasoning || 'LLM analysis'
-      }
-    }
-  } catch (error) {
-    console.error('[MandatoryDetection] LLM failed:', error)
-  }
-
-  return { isMandatory: false, reasoning: 'Fallback' }
-}
 
 /**
  * Use LLM to detect if user is declining to provide a link
@@ -303,13 +193,13 @@ export interface DraftActionInput {
  * Handle draft write/edit action
  */
 export async function handleDraftWrite(input: DraftActionInput): Promise<ActionResult> {
-  const { phone, message, userName, classification, recentMessages } = input
+  const { phone, message, recentMessages } = input
   
-  const draftType = classification.subtype || 'announcement'
+  const draftType: DraftType = 'announcement'
   const existingDraft = await draftRepo.getActiveDraft(phone)
-  
+
   console.log(`[DraftWrite] Type: ${draftType}, Existing draft: ${existingDraft ? 'yes' : 'no'}`)
-  
+
   // Case 1: No existing draft - determine if we have content or need to ask
   if (!existingDraft) {
     const content = await resolveDraftContent({
@@ -318,111 +208,58 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       recentMessages
     })
     console.log(`[DraftWrite] Extracted content: "${content}"`)
-    
+
     // If message was just a command without content, ask for it
-    if (content.length < 5 || isJustCommand(message, draftType)) {
+    if (content.length < 5 || isJustCommand(message)) {
       console.log(`[DraftWrite] No content provided, asking for content...`)
       // Create empty draft in DB
       await draftRepo.createDraft(phone, draftType, '')
       const newDraft = createEmptyDraft(draftType)
-      
+
       return {
         action: 'draft_write',
-        response: applyPersonality({
-          baseResponse: TEMPLATES.askForContent(draftType),
-          userMessage: message,
-          userName
-        }),
+        response: TEMPLATES.askForContent(draftType),
         newDraft
       }
     }
-    
+
     // We have content - format it properly
-    let formattedContent = formatContent(content, draftType)
-    
-    // For POLLS: format as proper question using LLM
-    if (draftType === 'poll') {
-      formattedContent = await formatPollQuestion(formattedContent)
-      console.log(`[DraftWrite] Formatted poll question: "${formattedContent}"`)
-    }
-    
+    const formattedContent = formatContent(content)
+
     console.log(`[DraftWrite] Creating draft with content: "${formattedContent}"`)
-    
-    // For ANNOUNCEMENTS ONLY: check for links
-    let linkAnalysis: { hasLinks: boolean; links: string[]; needsLink: boolean; reasoning: string }
-    if (draftType === 'announcement') {
-      linkAnalysis = await detectLinks(formattedContent)
-      
-      // If it needs a link but doesn't have one, mark as pending
-      if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
-        console.log(`[DraftWrite] Announcement needs a link but doesn't have one - setting pendingLink`)
-        await draftRepo.createDraft(phone, draftType, formattedContent, {
-          type: draftType
-        })
-        
-        const newDraft: Draft = {
-          type: draftType,
-          content: formattedContent,
-          status: 'drafting',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          pendingLink: true
-        }
-        
-        return {
-          action: 'draft_write',
-          response: applyPersonality({
-            baseResponse: `got it, but this looks like it needs a link (RSVP, form, etc.). send me the link and i'll add it to the ${draftType}`,
-            userMessage: message,
-            userName
-          }),
-          newDraft
-        }
-      }
-    } else {
-      // Polls don't need link detection
-      linkAnalysis = { hasLinks: false, links: [], needsLink: false, reasoning: 'Poll - skip link detection' }
-    }
-    
-    // For polls, ask if it should be mandatory (requires excuse for "No")
-    if (draftType === 'poll') {
-      console.log(`[DraftWrite] Poll created, asking about mandatory status...`)
-      
-      // Save draft as "drafting" until mandatory status is confirmed
+
+    // Check for links
+    const linkAnalysis = await detectLinks(formattedContent)
+
+    // If it needs a link but doesn't have one, mark as pending
+    if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
+      console.log(`[DraftWrite] Announcement needs a link but doesn't have one - setting pendingLink`)
       await draftRepo.createDraft(phone, draftType, formattedContent, {
-        type: draftType,
-        requiresExcuse: false,  // Will be updated after confirmation
-        pendingMandatory: true
+        type: draftType
       })
-      
+
       const newDraft: Draft = {
         type: draftType,
         content: formattedContent,
         status: 'drafting',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        links: linkAnalysis.links,
-        requiresExcuse: false,
-        pendingMandatory: true
+        pendingLink: true
       }
-      
+
       return {
         action: 'draft_write',
-        response: applyPersonality({
-          baseResponse: `📝 here's the poll:\n\n"${formattedContent}"\n\nshould people need to give an excuse if they say no? (yes/no)`,
-          userMessage: message,
-          userName
-        }),
+        response: `got it, but this looks like it needs a link (RSVP, form, etc.). send me the link and i'll add it to the announcement`,
         newDraft
       }
     }
-    
-    // For announcements, draft is ready immediately
+
+    // Draft is ready immediately
     await draftRepo.createDraft(phone, draftType, formattedContent, {
       type: draftType,
       requiresExcuse: false
     })
-    
+
     const newDraft: Draft = {
       type: draftType,
       content: formattedContent,
@@ -432,81 +269,23 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       links: linkAnalysis.links,
       requiresExcuse: false
     }
-    
+
     return {
       action: 'draft_write',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.draftCreated(draftType, newDraft.content),
-        userMessage: message,
-        userName
-      }),
+      response: TEMPLATES.draftCreated(draftType, newDraft.content),
       newDraft
     }
   }
-  
-  // Case 2a: Existing poll draft waiting for mandatory confirmation
-  if (existingDraft.pendingMandatory && existingDraft.type === 'poll') {
-    console.log(`[DraftWrite] Poll waiting for mandatory confirmation: "${message}"`)
-    
-    // Parse yes/no response
-    const lowerMsg = message.toLowerCase().trim()
-    const requiresExcuse = /\b(yes|y|yep|yeah|mandatory|required)\b/i.test(lowerMsg)
-    
-    console.log(`[DraftWrite] Mandatory confirmation: requiresExcuse=${requiresExcuse}`)
-    
-    // Update draft with mandatory status and mark as ready
-    // Merge with existing structured payload to preserve other fields
-    const currentPayload = existingDraft.type === 'poll' ? {
-      type: 'poll' as const,
-      requiresExcuse: existingDraft.requiresExcuse || false,
-      links: existingDraft.links || [],
-      pendingMandatory: false
-    } : {
-      type: 'poll' as const,
-      requiresExcuse: false,
-      links: [],
-      pendingMandatory: false
-    }
-    
-    await draftRepo.updateDraftByPhone(phone, { 
-      draftText: existingDraft.content,
-      structuredPayload: {
-        ...currentPayload,
-        requiresExcuse,
-        pendingMandatory: false
-      }
-    })
-    
-    const updatedDraft: Draft = {
-      ...existingDraft,
-      status: 'ready',
-      requiresExcuse,
-      pendingMandatory: false,
-      updatedAt: Date.now()
-    }
-    
-    const excuseNote = requiresExcuse ? ' (mandatory - excuses required for "no")' : ''
-    
-    return {
-      action: 'draft_write',
-      response: applyPersonality({
-        baseResponse: `got it! here's the poll:\n\n"${existingDraft.content}"${excuseNote}\n\nsay "send" when ready`,
-        userMessage: message,
-        userName
-      }),
-      newDraft: updatedDraft
-    }
-  }
-  
-  // Case 2b: Existing draft waiting for a link
+
+  // Case 2a: Existing draft waiting for a link
   if (existingDraft.pendingLink) {
     // Use LLM to detect if user is declining to provide a link
     const declineCheck = await detectLinkDecline(message)
-    
+
     if (declineCheck.isDeclining) {
       // User doesn't want to add a link - mark draft as ready
       console.log(`[DraftWrite] User declined to add link: ${declineCheck.reasoning}`)
-      await draftRepo.updateDraftByPhone(phone, { 
+      await draftRepo.updateDraftByPhone(phone, {
         draftText: existingDraft.content,
         structuredPayload: {
           type: existingDraft.type,
@@ -514,7 +293,7 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
           requiresExcuse: false
         }
       })
-      
+
       const updatedDraft: Draft = {
         ...existingDraft,
         status: 'ready',
@@ -522,25 +301,21 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
         pendingLink: false,
         links: []
       }
-      
+
       return {
         action: 'draft_write',
-        response: applyPersonality({
-          baseResponse: `got it! here's the ${existingDraft.type}:\n\n"${existingDraft.content}"\n\nsay "send" when ready`,
-          userMessage: message,
-          userName
-        }),
+        response: `got it! here's the ${existingDraft.type}:\n\n"${existingDraft.content}"\n\nsay "send" when ready`,
         newDraft: updatedDraft
       }
     }
-    
+
     const linkAnalysis = await detectLinks(message)
-    
+
     if (linkAnalysis.hasLinks && linkAnalysis.links.length > 0) {
       // Add link to the draft content
       const updatedContent = `${existingDraft.content}\n\n${linkAnalysis.links.join('\n')}`
       await draftRepo.updateDraftByPhone(phone, { draftText: updatedContent })
-      
+
       const updatedDraft: Draft = {
         ...existingDraft,
         content: updatedContent,
@@ -549,30 +324,22 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
         pendingLink: false,
         links: linkAnalysis.links
       }
-      
+
       return {
         action: 'draft_write',
-        response: applyPersonality({
-          baseResponse: `perfect! here's the ${existingDraft.type} with the link:\n\n"${updatedContent}"\n\nsay "send" when ready`,
-          userMessage: message,
-          userName
-        }),
+        response: `perfect! here's the ${existingDraft.type} with the link:\n\n"${updatedContent}"\n\nsay "send" when ready`,
         newDraft: updatedDraft
       }
     } else {
       // Didn't send a link - prompt again
       return {
         action: 'draft_write',
-        response: applyPersonality({
-          baseResponse: "didn't catch a link there. send me the URL for this " + existingDraft.type,
-          userMessage: message,
-          userName
-        })
+        response: "didn't catch a link there. send me the URL for this " + existingDraft.type
       }
     }
   }
-  
-  // Case 2c: Existing draft in 'drafting' state (waiting for content)
+
+  // Case 2b: Existing draft in 'drafting' state (waiting for content)
   if (existingDraft.status === 'drafting' && !existingDraft.content) {
     const content = formatContent(
       await resolveDraftContent({
@@ -580,17 +347,16 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
         draftType: existingDraft.type,
         previousContent: existingDraft.content || undefined,
         recentMessages
-      }),
-      existingDraft.type
+      })
     )
-    
+
     // Check for links in the new content
     const linkAnalysis = await detectLinks(content)
-    
+
     if (linkAnalysis.needsLink && !linkAnalysis.hasLinks) {
       // Update draft but mark as pending link
       await draftRepo.updateDraftByPhone(phone, { draftText: content })
-      
+
       const updatedDraft: Draft = {
         ...existingDraft,
         content,
@@ -598,21 +364,17 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
         updatedAt: Date.now(),
         pendingLink: true
       }
-      
+
       return {
         action: 'draft_write',
-        response: applyPersonality({
-          baseResponse: `got it, but this looks like it needs a link. send me the link and i'll add it`,
-          userMessage: message,
-          userName
-        }),
+        response: `got it, but this looks like it needs a link. send me the link and i'll add it`,
         newDraft: updatedDraft
       }
     }
-    
+
     // Update draft in DB
     await draftRepo.updateDraftByPhone(phone, { draftText: content })
-    
+
     const updatedDraft: Draft = {
       ...existingDraft,
       content,
@@ -620,19 +382,15 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       updatedAt: Date.now(),
       links: linkAnalysis.links
     }
-    
+
     return {
       action: 'draft_write',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.draftCreated(existingDraft.type, content),
-        userMessage: message,
-        userName
-      }),
+      response: TEMPLATES.draftCreated(existingDraft.type, content),
       newDraft: updatedDraft
     }
   }
-  
-  // Case 2d: Existing draft in 'ready' state - user is editing
+
+  // Case 2c: Existing draft in 'ready' state - user is editing
   if (existingDraft.status === 'ready') {
     // Use LLM-based resolution with full context
     const editedContent = await resolveDraftContent({
@@ -641,35 +399,27 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       previousContent: existingDraft.content,
       recentMessages
     })
-    
+
     // Update draft in DB
     await draftRepo.updateDraftByPhone(phone, { draftText: editedContent })
-    
+
     const updatedDraft: Draft = {
       ...existingDraft,
       content: editedContent,
       updatedAt: Date.now()
     }
-    
+
     return {
       action: 'draft_write',
-      response: applyPersonality({
-        baseResponse: TEMPLATES.draftUpdated(editedContent),
-        userMessage: message,
-        userName
-      }),
+      response: TEMPLATES.draftUpdated(editedContent),
       newDraft: updatedDraft
     }
   }
-  
+
   // Fallback
   return {
     action: 'draft_write',
-    response: applyPersonality({
-      baseResponse: TEMPLATES.confused(),
-      userMessage: message,
-      userName
-    })
+    response: TEMPLATES.confused()
   }
 }
 
@@ -680,32 +430,16 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
 /**
  * Check if message is just a command without content
  */
-function isJustCommand(message: string, type: DraftType): boolean {
+function isJustCommand(message: string): boolean {
   const lower = message.toLowerCase().trim()
-  
-  if (type === 'announcement') {
-    return /^(announce|announcement|make an announcement|send an announcement|create an announcement)$/i.test(lower)
-  } else {
-    return /^(poll|make a poll|send a poll|create a poll|start a poll)$/i.test(lower)
-  }
+  return /^(announce|announcement|make an announcement|send an announcement|create an announcement)$/i.test(lower)
 }
 
 /**
- * Format content based on type
+ * Format content for sending
  */
-function formatContent(content: string, type: DraftType): string {
-  let formatted = content.trim()
-  
-  if (type === 'poll') {
-    // Ensure poll ends with question mark (but avoid double ??)
-    if (!formatted.endsWith('?')) {
-      formatted += '?'
-    }
-    // Remove double question marks
-    formatted = formatted.replace(/\?\?+/g, '?')
-  }
-  
-  return formatted
+function formatContent(content: string): string {
+  return content.trim()
 }
 
 // ============================================
@@ -733,7 +467,7 @@ async function resolveDraftContent(params: ResolveDraftContentParams): Promise<s
   
   // Fallback to simple extractor if no API key
   if (!process.env.OPENAI_API_KEY) {
-    return extractContent(message, draftType)
+    return extractContent(message, 'announcement')
   }
   
   // Build annotated history: label each message with its type so the LLM knows
@@ -746,8 +480,6 @@ async function resolveDraftContent(params: ResolveDraftContentParams): Promise<s
       const action = (meta as any)?.action
       if (action === 'announcement' || action === 'scheduled_announcement') {
         label = '[PREVIOUSLY SENT ANNOUNCEMENT]'
-      } else if (action === 'poll') {
-        label = '[PREVIOUSLY SENT POLL]'
       } else if (action === 'draft_write' || action === 'draft_send') {
         label = `Bot (draft ${action === 'draft_send' ? 'sent' : 'edit'})`
         if ((meta as any)?.draftContent) {
@@ -765,7 +497,7 @@ async function resolveDraftContent(params: ResolveDraftContentParams): Promise<s
   const systemPrompt = `You are extracting the exact message content that should be sent as a ${draftType}.
 
 CONVERSATION CONTEXT:
-Messages labeled [PREVIOUSLY SENT ANNOUNCEMENT] or [PREVIOUSLY SENT POLL] are broadcasts already sent to all members. Do NOT include their content in the new draft unless the user explicitly asks to reuse them.
+Messages labeled [PREVIOUSLY SENT ANNOUNCEMENT] are broadcasts already sent to all members. Do NOT include their content in the new draft unless the user explicitly asks to reuse them.
 Messages labeled "Bot (draft edit)" show previous draft interactions - use these to understand what draft is being worked on.
 
 CRITICAL RULES:
@@ -811,12 +543,12 @@ Extract/edit the text to send:`
     const content = completion.choices[0].message.content?.trim() || ''
     console.log(`[DraftWrite] LLM extracted: "${content}"`)
     
-    if (!content) return extractContent(message, draftType)
-    
-    return formatContent(content, draftType)
+    if (!content) return extractContent(message, 'announcement')
+
+    return formatContent(content)
   } catch (error) {
     console.error('[DraftWrite] LLM extraction failed, falling back:', error)
-    return extractContent(message, draftType)
+    return extractContent(message, 'announcement')
   }
 }
 

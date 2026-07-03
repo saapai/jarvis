@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateTwilioSignature, toTwiml, sendSms } from '@/lib/twilio'
-import { normalizePhone, toE164, ensurePollFieldsExist } from '@/lib/db'
+import { normalizePhone, toE164 } from '@/lib/db'
 import { classifyIntent } from '@/lib/planner/classifier'
 import { applyPersonalityAsync } from '@/lib/planner/personality'
 import { buildWeightedHistoryFromMessages } from '@/lib/planner/history'
@@ -8,7 +8,6 @@ import * as actions from '@/lib/planner/actions'
 import * as messageRepo from '@/lib/repositories/messageRepository'
 import * as draftRepo from '@/lib/repositories/draftRepository'
 import * as convRepo from '@/lib/repositories/conversationRepository'
-import * as pollRepo from '@/lib/repositories/pollRepository'
 import * as memberRepo from '@/lib/repositories/memberRepository'
 import * as eventRepo from '@/lib/repositories/eventRepository'
 import * as spaceContext from '@/lib/spaceContext'
@@ -174,18 +173,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   const history = buildWeightedHistoryFromMessages(recentMessages)
   const convState = await convRepo.getConversationState(phone, activeSpaceId)
   const activeDraft = await draftRepo.getActiveDraft(phone, activeSpaceId)
-  const activePoll = await pollRepo.getActivePoll(activeSpaceId)
-  
-  // Check if user has pending excuse request (No response without notes for mandatory poll)
-  let pendingExcuseRequest = false
-  if (activePoll && activePoll.requiresReasonForNo) {
-    const existingResponse = await pollRepo.getPollResponse(activePoll.id, phone)
-    if (existingResponse && existingResponse.response === 'No' && !existingResponse.notes) {
-      pendingExcuseRequest = true
-      console.log(`[Classification] User has pending excuse request for poll ${activePoll.id}`)
-    }
-  }
-  
+
   // 6. Classify intent using LLM
   // Check admin status (space-scoped or global)
   const isAdmin = activeSpaceId
@@ -197,20 +185,30 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     history,
     activeDraft,
     isAdmin,
-    userName: user.name,
-    hasActivePoll: Boolean(activePoll),
-    pendingExcuseRequest
+    userName: user.name
   }
-  
+
   const classification = await classifyIntent(context)
   console.log(`[Classification] ${classification.action} (${classification.confidence.toFixed(2)}) - ${classification.reasoning}`)
   console.log(`[ActionRouter] Routing to ${classification.action} handler...`)
-  
+
   // 7. Route to appropriate handler
   let actionResult: ActionResult
-  
+
+  // Phone number restriction: only authorized number can send announcements
+  const authorizedSender = process.env.AUTHORIZED_SENDER_PHONE || ''
+  const isSenderAuthorized = authorizedSender ? normalizePhone(phone) === normalizePhone(authorizedSender) : isAdmin
+
   switch (classification.action) {
     case 'draft_write':
+      if (!isSenderAuthorized) {
+        console.log(`[DraftWrite] Unauthorized phone ${phone} - only ${AUTHORIZED_SENDER} can send announcements`)
+        actionResult = {
+          action: 'chat',
+          response: "only the admin can send announcements. if you need something sent out, let them know"
+        }
+        break
+      }
       console.log(`[DraftWrite] Creating/editing draft...`)
       actionResult = await actions.handleDraftWrite({
         phone,
@@ -228,6 +226,14 @@ async function handleMessage(phone: string, message: string): Promise<string> {
       break
 
     case 'draft_send':
+      if (!isSenderAuthorized) {
+        console.log(`[DraftSend] Unauthorized phone ${phone}`)
+        actionResult = {
+          action: 'chat',
+          response: "only the admin can send announcements. if you need something sent out, let them know"
+        }
+        break
+      }
       console.log(`[DraftSend] Attempting to send draft...`)
       if (activeDraft) {
         console.log(`[DraftSend] Active draft: type=${activeDraft.type}, content="${activeDraft.content}"`)
@@ -238,12 +244,11 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         userName: user.name,
         isAdmin,
         sendAnnouncement: (content: string, sender: string) => sendAnnouncementToAll(content, sender, activeSpaceId),
-        sendPoll: (question: string, sender: string, requiresExcuse?: boolean) => sendPollToAll(question, sender, requiresExcuse ?? false, activeSpaceId),
         spaceId: activeSpaceId
       })
       console.log(`[DraftSend] Result: ${actionResult.response.substring(0, 50)}...`)
       break
-    
+
     case 'content_query':
       console.log(`[ContentQuery] Querying content for: "${message}"`)
       actionResult = await actions.handleContentQuery({
@@ -256,17 +261,6 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         searchPastActions: () => searchPastAnnouncements(activeSpaceId)
       })
       console.log(`[ContentQuery] Result: ${actionResult.response.substring(0, 50)}...`)
-      break
-
-    case 'poll_response':
-      console.log(`[PollResponse] Recording poll response...`)
-      actionResult = await actions.handlePollResponse({
-        phone,
-        message,
-        userName: user.name,
-        spaceId: activeSpaceId
-      })
-      console.log(`[PollResponse] Result: ${actionResult.response.substring(0, 50)}...`)
       break
 
     case 'capability_query':
@@ -317,7 +311,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         phone,
         message,
         userName: user.name,
-        isAdmin
+        isAdmin,
+        recentMessages
       })
       console.log(`[Chat] Result: ${actionResult.response.substring(0, 50)}...`)
       break
@@ -326,20 +321,25 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   console.log(`[ActionRouter] Action complete, applying personality...`)
 
   // 8. Apply personality to response (using LLM for context-aware personality)
-  // Skip LLM personality for draft actions — the LLM can alter displayed draft
-  // content, making the user see a different version than what's stored.
-  const isDraftAction = classification.action === 'draft_write' || classification.action === 'draft_send'
+  // Skip LLM personality for:
+  // - draft actions: LLM can alter displayed draft content
+  // - chat actions: chat handler already generates contextual LLM response
+  const skipPersonalityLLM = classification.action === 'draft_write'
+    || classification.action === 'draft_send'
+    || classification.action === 'chat'
   const historyString = history.length > 0
     ? history.map(turn => `${turn.role === 'user' ? 'User' : 'Jarvis'}: ${turn.content}`).join('\n')
     : undefined
 
-  const finalResponse = await applyPersonalityAsync({
-    baseResponse: actionResult.response,
-    userMessage: message,
-    userName: user.name,
-    useLLM: !isDraftAction,
-    conversationHistory: historyString
-  })
+  const finalResponse = skipPersonalityLLM
+    ? actionResult.response
+    : await applyPersonalityAsync({
+        baseResponse: actionResult.response,
+        userMessage: message,
+        userName: user.name,
+        useLLM: true,
+        conversationHistory: historyString
+      })
   
   // 9. Log outbound message with draft content if applicable
   const metadata: any = {
@@ -449,7 +449,6 @@ async function handleSystemCommand(user: any, message: string, activeSpaceId?: s
       return `🤖 admin commands:
 📅 events: "move meeting to 7pm" or "ski retreat is jan 16-19"
 📢 announcements: "announce [message]" - send to everyone
-📊 polls: "poll [question]" - ask everyone
 📝 knowledge: text me info to add to your space
 💬 ask me questions about the org
 📎 file uploads: use tryenclave.com
@@ -457,8 +456,6 @@ text SPACES to see your spaces
 text STOP to unsubscribe`
     }
     return `🤖 jarvis help:
-• reply to polls with yes/no/maybe
-• add notes like "yes but running late"
 • ask questions about events and schedules
 • text SPACES to see your spaces
 • text STOP to unsubscribe`
@@ -583,7 +580,6 @@ async function handleOnboarding(phone: string, message: string, user: any, activ
       return `hey ${extractedName}! 👋 you're set up as an admin.
 
 📢 "announce [message]" - send to all
-📊 "poll [question]" - ask everyone
 💬 ask me anything about the org`
     }
     return `hey ${extractedName}! 👋 you're all set. you'll get announcements and polls from the team.`
@@ -644,88 +640,6 @@ async function sendAnnouncementToAll(content: string, senderPhone: string, space
 }
 
 // ============================================
-// POLL SENDING
-// ============================================
-
-async function sendPollToAll(question: string, senderPhone: string, requiresExcuse: boolean = false, spaceId?: string | null): Promise<number> {
-  // Create poll in database with progressive ID (space-scoped)
-  const poll = await pollRepo.createPoll(question, senderPhone, requiresExcuse, spaceId)
-
-  console.log(`[Poll] Created poll ${poll.pollIdentifier} in Postgres: "${question}"${spaceId ? ` (space: ${spaceId})` : ''}`)
-
-  // Create Airtable fields for this poll using Metadata API (only for legacy/global polls or spaces with Airtable config)
-  if (poll.pollIdentifier && !spaceId) {
-    console.log(`[Poll] Creating Airtable fields for poll ${poll.pollIdentifier}`)
-    const fieldsCreated = await ensurePollFieldsExist(poll.pollIdentifier, question)
-
-    if (fieldsCreated) {
-      console.log(`[Poll] ✓ Airtable fields created successfully`)
-    } else {
-      console.warn(`[Poll] ⚠ Airtable field creation failed - responses stored in Postgres only`)
-    }
-  }
-
-  let users: { id?: string; phone: string; name?: string | null }[] = []
-
-  if (spaceId) {
-    // Multi-space mode: get space members
-    const members = await spaceContext.getSpaceMembers(spaceId)
-    users = members.map(m => ({ phone: m.phoneNumber, name: m.name }))
-  } else {
-    // Legacy mode: get all opted-in members from Airtable
-    users = await memberRepo.getOptedInMembers()
-  }
-
-  let sent = 0
-
-  console.log(`[Poll] Sending poll "${question}" to ${users.length} users (requiresExcuse: ${requiresExcuse})`)
-
-  const excuseNote = requiresExcuse ? ' (if no explain why)' : ''
-  const pollMessage = `📊 ${question}\n\nreply yes/no/maybe${excuseNote}`
-
-  // Get poll field names for Airtable (only for legacy mode)
-  const pollFields = {
-    questionField: `POLL_Q_${poll.pollIdentifier}`,
-    responseField: `POLL_R_${poll.pollIdentifier}`,
-    notesField: `POLL_N_${poll.pollIdentifier}`
-  }
-
-  for (const user of users) {
-    const userPhoneNormalized = user.phone ? normalizePhone(user.phone) : ''
-
-    // Skip invalid phones only
-    if (!userPhoneNormalized || userPhoneNormalized.length < 10) continue
-
-    // Pre-populate poll fields in Airtable for this user (legacy mode only)
-    if (!spaceId && user.id) {
-      try {
-        await memberRepo.updateMember(user.id, {
-          [pollFields.questionField]: question,
-          [pollFields.responseField]: '',
-          [pollFields.notesField]: ''
-        })
-      } catch (err) {
-        console.warn(`[Poll] Could not pre-populate Airtable for user ${user.id} (fields may not exist yet)`)
-      }
-    }
-
-    const result = await sendSms(toE164(userPhoneNormalized), pollMessage)
-    if (result.ok) {
-      // Log message for this recipient
-      await messageRepo.logMessage(userPhoneNormalized, 'outbound', pollMessage, {
-        action: 'poll',
-        pollId: poll.pollIdentifier,
-        senderPhone: normalizePhone(senderPhone)
-      }, spaceId)
-      sent++
-    }
-  }
-
-  console.log(`[Poll] Complete: sent=${sent}`)
-  return sent
-}
-
-// ============================================
 // KNOWLEDGE SEARCH
 // ============================================
 // CONTENT SEARCH HELPERS
@@ -768,16 +682,11 @@ async function searchPastAnnouncements(spaceId?: string | null): Promise<Array<{
 export async function GET(request: NextRequest) {
   try {
     const users = await memberRepo.getOptedInMembers()
-    const activePoll = await pollRepo.getActivePoll()
-    
+
     return NextResponse.json({
       status: 'running',
       version: '2.0-planner',
-      members: users.length,
-      activePoll: activePoll ? {
-        question: activePoll.questionText,
-        createdAt: activePoll.createdAt
-      } : null
+      members: users.length
     })
   } catch (error) {
     return NextResponse.json({

@@ -33,7 +33,7 @@ function createContext(
   }
 }
 
-function createDraft(type: 'announcement' | 'poll', status: 'drafting' | 'ready', content = ''): Draft {
+function createDraft(type: 'announcement', status: 'drafting' | 'ready', content = ''): Draft {
   return {
     type,
     content,
@@ -114,76 +114,6 @@ describe('Admin Announcement Classification', () => {
 })
 
 // ============================================
-// ADMIN POLL TESTS
-// ============================================
-
-describe('Admin Poll Classification', () => {
-  test('explicit "poll X" command', async () => {
-    const result = await classifyIntent(createContext(
-      'poll who is coming tonight?',
-      { isAdmin: true }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-    expect(result.confidence).toBeGreaterThanOrEqual(0.9)
-  })
-  
-  test('"make a poll" without content', async () => {
-    const result = await classifyIntent(createContext(
-      'make a poll',
-      { isAdmin: true }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-  })
-  
-  test('"create a poll" without content', async () => {
-    const result = await classifyIntent(createContext(
-      'create a poll',
-      { isAdmin: true }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-  })
-  
-  test('"ask everyone if X"', async () => {
-    const result = await classifyIntent(createContext(
-      'ask everyone if they can make it to active',
-      { isAdmin: true }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-  })
-  
-  test('"who\'s coming to X"', async () => {
-    const result = await classifyIntent(createContext(
-      "who's coming to the meeting tonight",
-      { isAdmin: true }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-  })
-  
-  test('"who is free for X"', async () => {
-    const result = await classifyIntent(createContext(
-      'who is free for dinner tomorrow',
-      { isAdmin: true }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-  })
-  
-  test('regular user can create polls', async () => {
-    const result = await classifyIntent(createContext(
-      'poll who is coming',
-      { isAdmin: false }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-  })
-})
-
-// ============================================
 // SEND COMMAND TESTS
 // ============================================
 
@@ -200,7 +130,7 @@ describe('Send Command Classification', () => {
   test('"send it" with ready draft', async () => {
     const result = await classifyIntent(createContext(
       'send it',
-      { isAdmin: true, activeDraft: createDraft('poll', 'ready', 'test question?') }
+      { isAdmin: true, activeDraft: createDraft('announcement', 'ready', 'test message') }
     ))
     expect(result.action).toBe('draft_send')
   })
@@ -431,21 +361,6 @@ describe('Context-Based Classification', () => {
     expect(result.subtype).toBe('announcement')
   })
   
-  test('content after "what is your poll question" is draft input', async () => {
-    const result = await classifyIntent(createContext(
-      'are you coming to active tonight',
-      {
-        isAdmin: true,
-        activeDraft: createDraft('poll', 'drafting'),
-        history: [
-          { role: 'assistant', content: "what's your poll question?", weight: 1.0 }
-        ]
-      }
-    ))
-    expect(result.action).toBe('draft_write')
-    expect(result.subtype).toBe('poll')
-  })
-  
   test('question after bot asked for content should NOT be draft input', async () => {
     const result = await classifyIntent(createContext(
       'when is the meeting?',  // This is a question, not draft content
@@ -515,22 +430,6 @@ describe('Utility Functions', () => {
       .toBe('about dinner')
     expect(extractContent('tell everyone about the party', 'announcement'))
       .toBe('the party')
-  })
-  
-  test('extractContent removes command prefixes for polls', () => {
-    expect(extractContent('poll who is coming', 'poll'))
-      .toBe('who is coming?')
-    expect(extractContent('make a poll about dinner', 'poll'))
-      .toBe('about dinner?')
-    expect(extractContent('ask everyone if they can make it', 'poll'))
-      .toBe('they can make it?')
-  })
-  
-  test('extractContent adds question mark to polls', () => {
-    expect(extractContent('are you coming tonight', 'poll'))
-      .toBe('are you coming tonight?')
-    expect(extractContent('coming tonight?', 'poll'))
-      .toBe('coming tonight?')  // Already has ?
   })
 })
 

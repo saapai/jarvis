@@ -32,9 +32,20 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
 
   // ONLY match explicit send commands when draft is ready
   if (activeDraft && activeDraft.status === 'ready') {
-    if (/^(send|send it|go|yes|yep|do it|ship it)$/i.test(lower)) {
+    // Ambiguous acks ("ok", "k", "sure") stay on the LLM path, which sees history
+    if (/^(send|send it|send it out|go|go ahead|yes|yea|yeah|yep|yup|do it|ship|ship it|yes send it|send now|blast it|lets go|let's go)[.!]*$/i.test(lower)) {
       return { action: 'draft_send', confidence: 0.95 }
     }
+  }
+
+  // Explicit announce command with content — unambiguous regardless of context
+  if (!activeDraft && /^announce(ment)?\s+\S/i.test(lower)) {
+    return { action: 'draft_write', confidence: 0.95, subtype: 'announcement' }
+  }
+
+  // Unmistakable capability queries
+  if (/^(help|commands|what can you do\??|who are you\??|how do you work\??|what is (jarvis|enclave)\??|are you a bot\??)$/i.test(lower)) {
+    return { action: 'capability_query', confidence: 0.95 }
   }
 
   // Everything else goes to LLM for context-aware classification
@@ -194,11 +205,18 @@ async function callLLMClassifier(prompt: string): Promise<ClassificationResult> 
  * LLM-first approach for better context understanding
  */
 export async function classifyIntent(context: ClassificationContext): Promise<ClassificationResult> {
-  const { currentMessage } = context
-  
+  const { currentMessage, activeDraft } = context
+
+  // Easter eggs are handled by the chat action — route them there directly so a
+  // "content_query" classification can't swallow them
+  const { checkForEasterEgg } = await import('./actions/capability')
+  if (checkForEasterEgg(currentMessage)) {
+    return { action: 'chat', confidence: 0.95, reasoning: 'Easter egg trigger' }
+  }
+
   // Only use pattern matching for super obvious cases (explicit send commands)
   const patternResult = patternMatch(currentMessage, context)
-  
+
   if (patternResult && patternResult.confidence >= 0.95) {
     return {
       action: patternResult.action,
@@ -207,11 +225,21 @@ export async function classifyIntent(context: ClassificationContext): Promise<Cl
       reasoning: 'Explicit command match'
     }
   }
-  
+
   // Use LLM for all other cases (context-aware classification)
   const prompt = buildClassificationPrompt(context)
   const llmResult = await callLLMClassifier(prompt)
-  
+
+  // Deterministic guardrail: the prompt forbids draft_send with no active draft,
+  // but the LLM occasionally returns it anyway (e.g. for a bare "yes")
+  if (llmResult.action === 'draft_send' && !activeDraft) {
+    return {
+      action: 'chat',
+      confidence: llmResult.confidence,
+      reasoning: 'Downgraded draft_send: no active draft'
+    }
+  }
+
   return llmResult
 }
 
@@ -278,6 +306,7 @@ export function extractContent(message: string, _type?: DraftType): string {
   content = content.replace(/^announce(ment)?\s+(saying|that)\s+/i, '')
   content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+(saying|that)\s+/i, '')
   content = content.replace(/^(send|make|create)(\s+out)?\s+(an?\s+)?announcement\s+/i, '')
+  content = content.replace(/^announce(ment)?\s+/i, '')
   content = content.replace(/^(tell|notify|let)\s+(everyone|people|all|the group|everybody)\s*(about|that)?\s*/i, '')
 
   return content.trim()

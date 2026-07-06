@@ -49,8 +49,7 @@ async function simulateConversation(
       user,
       conversationHistoryJson: historyJson,
       // Mock functions for sending
-      sendAnnouncement: async () => 10,
-      sendPoll: async () => 10
+      sendAnnouncement: async () => 10
     }
     
     const result = await plan(input)
@@ -93,9 +92,9 @@ describe('Announcement Creation Flow', () => {
       'send'
     ])
     
-    // Step 1: Draft created directly
+    // Step 1: Draft created directly (LLM extraction may recapitalize)
     expect(results[0].action).toBe('draft_write')
-    expect(results[0].response).toContain('meeting tonight at 7pm')
+    expect(results[0].response.toLowerCase()).toContain('meeting tonight at 7pm')
     
     // Step 2: Sent
     expect(results[1].action).toBe('draft_send')
@@ -137,70 +136,13 @@ describe('Announcement Creation Flow', () => {
 })
 
 // ============================================
-// POLL FLOW TESTS
-// ============================================
-
-describe('Poll Creation Flow', () => {
-  test('Full flow: command → question → send', async () => {
-    const results = await simulateConversation(createAdminUser(), [
-      'make a poll',
-      'are you coming to active tonight',
-      'send'
-    ])
-    
-    // Step 1: Bot asks for question
-    expect(results[0].action).toBe('draft_write')
-    
-    // Step 2: Question accepted with ? added
-    expect(results[1].action).toBe('draft_write')
-    expect(results[1].response).toContain('?')
-    
-    // Step 3: Sent
-    expect(results[2].action).toBe('draft_send')
-  })
-  
-  test('Direct poll with content', async () => {
-    const results = await simulateConversation(createAdminUser(), [
-      'poll who is coming tonight',
-      'ship it'
-    ])
-    
-    expect(results[0].action).toBe('draft_write')
-    expect(results[0].response).toContain('coming tonight')
-    expect(results[1].action).toBe('draft_send')
-  })
-  
-  test('Natural language poll - "who\'s coming"', async () => {
-    const results = await simulateConversation(createAdminUser(), [
-      "who's coming to the party",
-      'yes'
-    ])
-    
-    expect(results[0].action).toBe('draft_write')
-    expect(results[0].classification.subtype).toBe('poll')
-    expect(results[1].action).toBe('draft_send')
-  })
-  
-  test('Natural language poll - "ask everyone if"', async () => {
-    const results = await simulateConversation(createAdminUser(), [
-      'ask everyone if they can make it to dinner',
-      'go'
-    ])
-    
-    expect(results[0].action).toBe('draft_write')
-    expect(results[0].classification.subtype).toBe('poll')
-    expect(results[1].action).toBe('draft_send')
-  })
-})
-
-// ============================================
 // MIXED INTENT TESTS
 // ============================================
 
 describe('Mixed Intent Conversations', () => {
   test('Help during draft flow', async () => {
     const results = await simulateConversation(createAdminUser(), [
-      'make a poll',
+      'make an announcement',
       'help'
     ])
     
@@ -399,7 +341,7 @@ describe('Conversation Continuity', () => {
     
     expect(results[0].action).toBe('draft_write')
     expect(results[1].action).toBe('draft_write')
-    expect(results[1].response).toContain('dinner')
+    expect(results[1].response.toLowerCase()).toContain('dinner')
     expect(results[2].action).toBe('draft_send')
   })
 })
@@ -409,34 +351,14 @@ describe('Conversation Continuity', () => {
 // ============================================
 
 describe('Admin vs Non-Admin Behavior', () => {
-  test('Admin can create polls', async () => {
-    const results = await simulateConversation(createAdminUser(), [
-      'poll who is coming',
-      'send'
-    ])
-    
-    expect(results[0].action).toBe('draft_write')
-    expect(results[1].action).toBe('draft_send')
-  })
-  
-  test('Regular user can create polls', async () => {
-    const results = await simulateConversation(createRegularUser(), [
-      'poll who is coming',
-      'send'
-    ])
-    
-    expect(results[0].action).toBe('draft_write')
-    expect(results[1].action).toBe('draft_send')
-  })
-  
   test('Both can ask for help', async () => {
     const adminResults = await simulateConversation(createAdminUser(), ['help'])
     const userResults = await simulateConversation(createRegularUser(), ['help'])
-    
+
     expect(adminResults[0].action).toBe('capability_query')
     expect(userResults[0].action).toBe('capability_query')
-    
-    // Everyone should see announcement/poll capabilities
+
+    // Everyone should see announcement capabilities
     expect(adminResults[0].response.toLowerCase()).toMatch(/announce/)
     expect(userResults[0].response.toLowerCase()).toMatch(/announce/)
   })

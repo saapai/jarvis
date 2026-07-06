@@ -1,18 +1,18 @@
 # 🤖 Jarvis SMS (Enclave v2.0)
 
-SMS-powered organizational assistant with LLM-based intent classification, weighted conversation history, and normalized poll tracking.
+SMS-powered organizational assistant with LLM-based intent classification and weighted conversation history.
+
+> Note: the poll system was removed — poll tables/`PollMeta`/`PollResponse` remain in the schema for historical data only.
 
 ## Features
 
 - **SMS Announcements** - Broadcast messages to all subscribers with draft/edit/send workflow
-- **Polls** - Create polls with yes/no/maybe responses, tracked in normalized database tables
 - **Text Explorer** - Upload documents and extract structured facts with AI
 - **Slack Integration** - Automatically sync messages from Slack announcements channel to knowledge base
 - **Smart Q&A** - Users can text questions and get answers from the knowledge base (semantic search via pgvector + OpenAI embeddings)
 - **LLM Routing** - OpenAI-powered intent classification with conversation context
 - **Personality Engine** - Jarvis's sassy personality applied to all responses
 - **Conversation History** - Weighted message history for better context understanding
-- **Poll Replies Captured** - Active poll responses are parsed and persisted automatically
 - **API Guardrails** - Text Explorer endpoints are rate-limited per IP
 
 ## Architecture

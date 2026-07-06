@@ -5,21 +5,24 @@ import type { ContentResult } from '@/lib/planner/actions/content'
 
 const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
 
-export async function searchFacts(query: string, limit = 10): Promise<ContentResult[]> {
+// Below this cosine similarity a vector match is noise — rely on keyword results instead
+const MIN_SIMILARITY = 0.3
+
+export async function searchFacts(query: string, limit = 10, spaceId?: string | null): Promise<ContentResult[]> {
   const prisma = await getPrisma()
   let results: ContentResult[] = []
 
   try {
     const embedding = await embedText(query)
     if (embedding.length > 0) {
-      results = await searchByVector(prisma, embedding, limit * 2) // Get more results from vector search
+      results = await searchByVector(prisma, embedding, limit * 2, spaceId) // Get more results from vector search
     }
   } catch (error) {
     console.error('Semantic search error:', error)
   }
 
   // Always also do keyword search to catch things vector search might miss (like recurring events)
-  const keywordResults = await searchByKeywords(prisma, query, limit * 2)
+  const keywordResults = await searchByKeywords(prisma, query, limit * 2, spaceId)
   
   // Merge results, prioritizing vector results but including keyword results
   const resultMap = new Map<string, ContentResult>()
@@ -48,47 +51,51 @@ export async function searchFacts(query: string, limit = 10): Promise<ContentRes
   return merged.length > 0 ? merged : keywordResults.slice(0, limit)
 }
 
-async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, embedding: number[], limit: number): Promise<ContentResult[]> {
+async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, embedding: number[], limit: number, spaceId?: string | null): Promise<ContentResult[]> {
   // Format embedding array for PostgreSQL pgvector
   // pgvector expects the format: '[1,2,3]'::vector
   const vectorArray = `'[${embedding.join(',')}]'::vector`
-  
+
   // Ensure limit is a safe integer
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)))
 
-  // Use $queryRawUnsafe with properly formatted vector literal
-  // The vector needs to be quoted as a string and cast to vector type
-  // Include ALL facts, prioritizing those with embeddings but also including recurring events
-  // Include sourceText to preserve URLs/links
-  const rows = await prisma.$queryRawUnsafe<
-    Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; score: number }>
-  >(`
-    SELECT content, subcategory, category, "timeRef", "dateStr", "sourceText",
-      CASE 
-        WHEN embedding IS NOT NULL THEN 1 - (embedding <=> ${vectorArray})
-        ELSE 0.5
-      END AS score
-    FROM "Fact"
-    ORDER BY 
-      CASE 
-        WHEN embedding IS NOT NULL THEN embedding <=> ${vectorArray}
-        ELSE 999999
-      END,
-      "createdAt" DESC
-    LIMIT ${safeLimit}
-  `)
+  // Facts without embeddings are covered by keyword search; only rank real vectors here.
+  // spaceId NULL rows are legacy/global facts visible to every space.
+  const spaceFilter = spaceId
+    ? `AND ("spaceId" = $1 OR "spaceId" IS NULL)`
+    : ''
 
-  return rows.map((row) => ({
-    title: row.subcategory || row.category,
-    body: buildBody(row.content, row.timeRef, row.subcategory, row.dateStr),
-    score: row.score ?? 0,
-    dateStr: row.dateStr || null,
-    timeRef: row.timeRef || null,
-    sourceText: row.sourceText || null
-  }))
+  const sql = `
+    SELECT content, subcategory, category, "timeRef", "dateStr", "sourceText",
+      1 - (embedding <=> ${vectorArray}) AS score
+    FROM "Fact"
+    WHERE embedding IS NOT NULL
+    ${spaceFilter}
+    ORDER BY embedding <=> ${vectorArray}, "createdAt" DESC
+    LIMIT ${safeLimit}
+  `
+
+  const rows = await (spaceId
+    ? prisma.$queryRawUnsafe<
+        Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; score: number }>
+      >(sql, spaceId)
+    : prisma.$queryRawUnsafe<
+        Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; score: number }>
+      >(sql))
+
+  return rows
+    .filter((row) => Number.isFinite(row.score) && row.score >= MIN_SIMILARITY)
+    .map((row) => ({
+      title: row.subcategory || row.category,
+      body: buildBody(row.content, row.timeRef, row.subcategory, row.dateStr),
+      score: row.score ?? 0,
+      dateStr: row.dateStr || null,
+      timeRef: row.timeRef || null,
+      sourceText: row.sourceText || null
+    }))
 }
 
-async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, query: string, limit: number): Promise<ContentResult[]> {
+async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, query: string, limit: number, spaceId?: string | null): Promise<ContentResult[]> {
   const keywords = query
     .toLowerCase()
     .replace(/[?!.,]/g, '')
@@ -118,14 +125,18 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
 
   const facts = await prisma.fact.findMany({
     where: {
-      OR: [
-        ...expandedKeywords.map((kw) => ({ content: { contains: kw, mode: 'insensitive' as const } })),
-        ...expandedKeywords.map((kw) => ({ sourceText: { contains: kw, mode: 'insensitive' as const } })),
-        ...expandedKeywords.map((kw) => ({ subcategory: { contains: kw, mode: 'insensitive' as const } })),
-        ...expandedKeywords.map((kw) => ({ entities: { contains: kw, mode: 'insensitive' as const } })),
-        // Also search in timeRef for recurring events
-        ...expandedKeywords.map((kw) => ({ timeRef: { contains: kw, mode: 'insensitive' as const } })),
-      ]
+      // spaceId NULL rows are legacy/global facts visible to every space
+      ...(spaceId ? { OR: [{ spaceId }, { spaceId: null }] } : {}),
+      AND: {
+        OR: [
+          ...expandedKeywords.map((kw) => ({ content: { contains: kw, mode: 'insensitive' as const } })),
+          ...expandedKeywords.map((kw) => ({ sourceText: { contains: kw, mode: 'insensitive' as const } })),
+          ...expandedKeywords.map((kw) => ({ subcategory: { contains: kw, mode: 'insensitive' as const } })),
+          ...expandedKeywords.map((kw) => ({ entities: { contains: kw, mode: 'insensitive' as const } })),
+          // Also search in timeRef for recurring events
+          ...expandedKeywords.map((kw) => ({ timeRef: { contains: kw, mode: 'insensitive' as const } })),
+        ]
+      }
     },
     orderBy: [
       // Prioritize exact matches in subcategory

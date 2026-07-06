@@ -165,8 +165,10 @@ export async function handleEventUpdate(input: EventUpdateInput): Promise<Action
   // If there's a pending confirmation, check if this is a confirmation
   if (pendingConfirmation) {
     const lowerMsg = message.toLowerCase().trim()
-    
-    if (lowerMsg === 'yes' || lowerMsg === 'y' || lowerMsg === 'confirm') {
+    const isConfirmation = /^(yes|y|yea|yeah|yep|yup|ya|sure|confirm|confirmed|ok|okay|k|go|go ahead|do it|sounds good|lets do it|let's do it)[.!]*$/.test(lowerMsg)
+    const isRejection = /^(no|n|nah|nope|cancel|nvm|nevermind|never mind|stop|forget it|scratch that|dont|don't)[.!]*$/.test(lowerMsg)
+
+    if (isConfirmation) {
       // Apply the update
       try {
         const updatedEvent = await eventRepo.updateEvent(
@@ -202,7 +204,7 @@ export async function handleEventUpdate(input: EventUpdateInput): Promise<Action
           })
         }
       }
-    } else if (lowerMsg === 'no' || lowerMsg === 'n' || lowerMsg === 'cancel') {
+    } else if (isRejection) {
       return {
         action: 'event_update',
         response: applyPersonality({

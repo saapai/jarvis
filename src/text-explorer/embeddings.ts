@@ -20,10 +20,16 @@ export async function embedText(text: string): Promise<number[]> {
     if (Array.isArray(embedding) && embedding.length === VECTOR_DIMENSION) {
       return embedding
     }
-    return zeroVector()
+    console.error('Embedding generation returned unexpected shape', {
+      length: Array.isArray(embedding) ? embedding.length : null
+    })
+    return []
   } catch (error) {
     console.error('Embedding generation failed:', error)
-    return zeroVector()
+    // Return empty so callers store NULL instead of a zero vector —
+    // a stored zero vector passes the dimension check and produces NaN
+    // cosine distances in pgvector queries.
+    return []
   }
 }
 

@@ -40,8 +40,7 @@ async function testMessage(
     message,
     user,
     conversationHistoryJson: prevHistory || null,
-    sendAnnouncement: async () => 15,
-    sendPoll: async () => 15
+    sendAnnouncement: async () => 15
   })
   
   return {
@@ -68,27 +67,6 @@ describe('Scenario: Natural Language Announcements', () => {
     const result = await testMessage(adminUser, input)
     expect(result.action).toBe('draft_write')
     expect(result.classification.subtype).toBe('announcement')
-  })
-})
-
-// ============================================
-// SCENARIO: Natural Language Polls
-// ============================================
-
-describe('Scenario: Natural Language Polls', () => {
-  const pollTestCases = [
-    'poll who is coming tonight',
-    "who's coming to active",
-    'ask everyone if they can make it',
-    'who is free for dinner tomorrow',
-    'create a poll about the retreat date',
-    'who can attend the meeting',
-  ]
-  
-  test.each(pollTestCases)('"%s" → poll draft', async (input) => {
-    const result = await testMessage(adminUser, input)
-    expect(result.action).toBe('draft_write')
-    expect(result.classification.subtype).toBe('poll')
   })
 })
 
@@ -163,8 +141,7 @@ describe('Scenario: Send Commands', () => {
       phone: adminUser.phone,
       message: input,
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     
     expect(result.action).toBe('draft_send')
@@ -177,8 +154,7 @@ describe('Scenario: Send Commands', () => {
       phone: regularUser.phone,
       message: 'send',
       user: regularUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     
     expect(result.action).toBe('draft_send')
@@ -288,8 +264,7 @@ describe('Scenario: Cancel Commands', () => {
       phone: adminUser.phone,
       message: input,
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     
     expect(result.action).toBe('chat')
@@ -317,8 +292,7 @@ describe('Scenario: Edit Commands', () => {
       phone: adminUser.phone,
       message: edit,
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     
     expect(result.action).toBe('draft_write')
@@ -329,22 +303,20 @@ describe('Scenario: Edit Commands', () => {
 })
 
 // ============================================
-// SCENARIO: Non-Admin Announcement/Poll Support
+// SCENARIO: Non-Admin Announcement Support
 // ============================================
 
-describe('Scenario: Non-Admin Announcement/Poll Support', () => {
+describe('Scenario: Non-Admin Announcement Support', () => {
   const adminCommands = [
     'announce meeting tonight',
-    'poll who is coming',
     'make an announcement',
-    'create a poll',
     'tell everyone about dinner',
   ]
-  
+
   test.each(adminCommands)('non-admin: "%s" → can draft', async (input) => {
     const result = await testMessage(regularUser, input)
     expect(result.action).toBe('draft_write')
-    expect(['announcement', 'poll']).toContain(result.classification.subtype)
+    expect(result.classification.subtype).toBe('announcement')
     expect(result.response.toLowerCase()).not.toMatch(/admin|cannot|not allowed|permission/)
   })
 })
@@ -459,8 +431,7 @@ describe('Scenario: Complex Flows', () => {
       phone: adminUser.phone,
       message: 'announce meeting at 7',
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     expect(result.action).toBe('draft_write')
     
@@ -469,8 +440,7 @@ describe('Scenario: Complex Flows', () => {
       phone: adminUser.phone,
       message: 'change it to 8pm',
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     expect(result.action).toBe('draft_write')
     expect(result.response).toContain('8pm')
@@ -480,54 +450,49 @@ describe('Scenario: Complex Flows', () => {
       phone: adminUser.phone,
       message: 'send',
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     expect(result.action).toBe('draft_send')
   })
   
-  test('Start announcement → Cancel → Start poll → Send', async () => {
+  test('Start announcement → Cancel → Start new announcement → Send', async () => {
     clearHistory(adminUser.phone)
     clearDraft(adminUser.phone)
-    
+
     // Start announcement
     let result = await plan({
       phone: adminUser.phone,
       message: 'announce dinner at 7',
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     expect(result.action).toBe('draft_write')
-    
+
     // Cancel
     result = await plan({
       phone: adminUser.phone,
       message: 'cancel',
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     expect(result.action).toBe('chat')
-    
-    // Start poll
+
+    // Start new announcement
     result = await plan({
       phone: adminUser.phone,
-      message: 'poll who is coming',
+      message: 'announce meeting moved to 9',
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     expect(result.action).toBe('draft_write')
-    expect(result.classification.subtype).toBe('poll')
-    
-    // Send poll
+    expect(result.classification.subtype).toBe('announcement')
+
+    // Send announcement
     result = await plan({
       phone: adminUser.phone,
       message: 'send',
       user: adminUser,
-      sendAnnouncement: async () => 15,
-      sendPoll: async () => 15
+      sendAnnouncement: async () => 15
     })
     expect(result.action).toBe('draft_send')
   })

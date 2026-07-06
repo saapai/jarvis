@@ -3,7 +3,6 @@
  * 1. "did everyone get it" / "?????" should NOT trigger re-send
  * 2. Only phone 3853687238 can send announcements
  * 3. After sending, saying "send" again should clarify, not re-send
- * 4. Poll response action removed
  */
 
 import { classifyIntent } from '../classifier'
@@ -33,12 +32,11 @@ function createContext(
     })) as WeightedTurn[],
     activeDraft: options.activeDraft || null,
     isAdmin: options.isAdmin ?? false,
-    userName: options.userName ?? null,
-    hasActivePoll: options.hasActivePoll ?? false
+    userName: options.userName ?? null
   }
 }
 
-function createDraft(type: 'announcement' | 'poll', status: 'drafting' | 'ready', content = ''): Draft {
+function createDraft(type: 'announcement', status: 'drafting' | 'ready', content = ''): Draft {
   return {
     type,
     content,
@@ -161,32 +159,7 @@ describe('Pattern matcher with no active draft', () => {
 })
 
 // ============================================
-// 4. POLL RESPONSE ACTION REMOVED
-// ============================================
-
-describe('Poll response action removed', () => {
-  test('"yes" without active draft should be chat, not poll_response', async () => {
-    const context = createContext('yes', {
-      activeDraft: null,
-    })
-
-    const result = await classifyIntent(context)
-    // Should NOT be poll_response since we removed it
-    expect(result.action).not.toBe('poll_response')
-  })
-
-  test('"no" without context should be chat', async () => {
-    const context = createContext('no', {
-      activeDraft: null,
-    })
-
-    const result = await classifyIntent(context)
-    expect(result.action).not.toBe('poll_response')
-  })
-})
-
-// ============================================
-// 5. SEND HANDLER DUPLICATE PROTECTION
+// 4. SEND HANDLER DUPLICATE PROTECTION
 // ============================================
 
 // Note: handleDraftSend duplicate protection is tested via integration
@@ -214,7 +187,7 @@ describe('Send handler - pattern matcher prevents re-send', () => {
 })
 
 // ============================================
-// 6. UNAUTHORIZED SENDER (tested at route level)
+// 5. UNAUTHORIZED SENDER (tested at route level)
 // ============================================
 
 describe('Phone number authorization', () => {

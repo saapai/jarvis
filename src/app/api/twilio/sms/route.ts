@@ -53,6 +53,11 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleMessage(phone: string, message: string): Promise<string> {
+  // 0a. Nothing to work with (media-only MMS, whitespace) — don't run classification on it
+  if (!message || message.trim().length === 0) {
+    return "i got a blank message — text me words and i'll do my thing"
+  }
+
   // 0. Check for space commands (JOIN, SPACES)
   const spaceCommandResponse = await handleSpaceCommand(phone, message)
   if (spaceCommandResponse) {
@@ -157,6 +162,13 @@ async function handleMessage(phone: string, message: string): Promise<string> {
     return systemResponse
   }
 
+  // 3b. Opted-out users only get system commands (START/STOP/HELP are handled above)
+  if (user.opted_out) {
+    const optedOutResponse = "you're unsubscribed rn, so i'm staying quiet. text START to rejoin."
+    await messageRepo.logMessage(phone, 'outbound', optedOutResponse, { action: 'opted_out_guard' }, activeSpaceId)
+    return optedOutResponse
+  }
+
   // 4. Handle onboarding (name collection)
   if (user.needs_name) {
     console.log(`[Onboarding] User needs name - name: ${user.name}, needs_name: ${user.needs_name}`)
@@ -202,7 +214,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   switch (classification.action) {
     case 'draft_write':
       if (!isSenderAuthorized) {
-        console.log(`[DraftWrite] Unauthorized phone ${phone} - only ${AUTHORIZED_SENDER} can send announcements`)
+        console.log(`[DraftWrite] Unauthorized phone ${phone} - only ${authorizedSender || 'admins'} can send announcements`)
         actionResult = {
           action: 'chat',
           response: "only the admin can send announcements. if you need something sent out, let them know"
@@ -255,7 +267,7 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         phone,
         message,
         userName: user.name,
-        searchContent: searchFactsDatabase,
+        searchContent: (query: string) => searchFactsDatabase(query, activeSpaceId),
         searchEvents: () => searchEventsDatabase(activeSpaceId),
         recentMessages,
         searchPastActions: () => searchPastAnnouncements(activeSpaceId)
@@ -312,7 +324,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         message,
         userName: user.name,
         isAdmin,
-        recentMessages
+        recentMessages,
+        searchContent: (query: string) => searchFactsDatabase(query, activeSpaceId)
       })
       console.log(`[Chat] Result: ${actionResult.response.substring(0, 50)}...`)
       break
@@ -324,9 +337,12 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   // Skip LLM personality for:
   // - draft actions: LLM can alter displayed draft content
   // - chat actions: chat handler already generates contextual LLM response
+  // - content queries: the formatter LLM already answers in jarvis's voice; re-wrapping
+  //   glued sass prefixes onto the answer and could mangle links
   const skipPersonalityLLM = classification.action === 'draft_write'
     || classification.action === 'draft_send'
     || classification.action === 'chat'
+    || classification.action === 'content_query'
   const historyString = history.length > 0
     ? history.map(turn => `${turn.role === 'user' ? 'User' : 'Jarvis'}: ${turn.content}`).join('\n')
     : undefined
@@ -582,7 +598,7 @@ async function handleOnboarding(phone: string, message: string, user: any, activ
 📢 "announce [message]" - send to all
 💬 ask me anything about the org`
     }
-    return `hey ${extractedName}! 👋 you're all set. you'll get announcements and polls from the team.`
+    return `hey ${extractedName}! 👋 you're all set. you'll get announcements and updates from the team.`
   }
 
   // If name extraction failed, ask again with a hint
@@ -647,8 +663,8 @@ async function sendAnnouncementToAll(content: string, senderPhone: string, space
 
 import type { ContentResult, EventResult } from '@/lib/planner/actions/content'
 
-async function searchFactsDatabase(query: string): Promise<ContentResult[]> {
-  return routeContentSearch(query)
+async function searchFactsDatabase(query: string, spaceId?: string | null): Promise<ContentResult[]> {
+  return routeContentSearch(query, spaceId)
 }
 
 async function searchEventsDatabase(spaceId?: string | null): Promise<EventResult[]> {

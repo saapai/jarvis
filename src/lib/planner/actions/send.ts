@@ -88,7 +88,7 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
 
     return {
       action: 'draft_send',
-      response: `failed to send. try again? error: ${error}`
+      response: "hmm, that didn't go out — something broke on my end. your draft is still saved, just say \"send\" to retry"
     }
   }
 }

@@ -21,6 +21,7 @@ import {
 } from './history'
 
 import { classifyIntent } from './classifier'
+import * as draftRepo from '@/lib/repositories/draftRepository'
 
 import {
   handleDraftWrite,
@@ -91,7 +92,9 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
 
   // Build classification context
   const weightedHistory = getWeightedHistory(phone)
-  const activeDraft = getDraft(phone)
+  // Drafts live in the DB — the in-memory store is empty on serverless, and the
+  // classifier misroutes follow-ups ("send it", edits) when it can't see the draft
+  const activeDraft = (await draftRepo.getActiveDraft(phone)) ?? getDraft(phone)
 
   const classificationContext = {
     currentMessage: message,
@@ -142,7 +145,14 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
         phone,
         message,
         userName: user.name,
-        searchContent
+        searchContent,
+        // History lets follow-up detection ground answers in recent announcements
+        recentMessages: weightedHistory.map(turn => ({
+          direction: turn.role === 'user' ? ('inbound' as const) : ('outbound' as const),
+          text: turn.content,
+          createdAt: new Date(turn.timestamp),
+          meta: turn.action ? { action: turn.action } : null
+        }))
       })
       break
 
@@ -161,7 +171,16 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
         phone,
         message,
         userName: user.name,
-        isAdmin: user.isAdmin
+        isAdmin: user.isAdmin,
+        searchContent,
+        // Feed the in-memory history so chat replies are context-aware (the SMS
+        // route passes DB-backed recentMessages; this is the plan() equivalent)
+        recentMessages: weightedHistory.map(turn => ({
+          direction: turn.role === 'user' ? ('inbound' as const) : ('outbound' as const),
+          text: turn.content,
+          createdAt: new Date(turn.timestamp),
+          meta: turn.action ? { action: turn.action } : null
+        }))
       })
       break
   }

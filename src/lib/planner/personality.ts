@@ -417,43 +417,80 @@ export async function applyPersonalityAsync(input: PersonalityInput): Promise<st
 // RESPONSE TEMPLATES
 // ============================================
 
+// Vary phrasing so repeat flows don't feel like a form letter
+const pick = (options: string[]) => options[Math.floor(Math.random() * options.length)]
+
 export const TEMPLATES = {
   // Draft operations
-  draftCreated: (type: string, content: string) => 
-    `📝 here's the ${type}:\n\n"${content}"\n\nreply "send" to blast it out or tell me to change it`,
-  
+  draftCreated: (type: string, content: string) =>
+    pick([
+      `📝 here's the ${type}:\n\n"${content}"\n\nreply "send" to blast it out or tell me to change it`,
+      `ok drafted:\n\n"${content}"\n\nsay "send" when you're ready, or tell me what to fix`,
+      `here's what i've got:\n\n"${content}"\n\n"send" ships it to everyone. or keep tweaking`,
+      `📝 draft's ready:\n\n"${content}"\n\nhit me with "send" or tell me what to change`
+    ]),
+
   draftUpdated: (content: string) =>
-    `updated:\n\n"${content}"\n\nlooks good? say "send" or keep editing`,
-  
+    pick([
+      `updated:\n\n"${content}"\n\nlooks good? say "send" or keep editing`,
+      `fixed it:\n\n"${content}"\n\n"send" when you're happy, or keep going`,
+      `new version:\n\n"${content}"\n\nsay "send" to ship it or keep editing`
+    ]),
+
   draftSent: (count: number) =>
-    `done. sent to ${count} people`,
-  
+    pick([
+      `done. sent to ${count} people`,
+      `sent to ${count} people. they can pretend they didn't see it now`,
+      `boom — ${count} people just got that`,
+      `off it goes. ${count} people notified`
+    ]),
+
   draftCancelled: () =>
-    `scrapped. let me know if you wanna start over`,
-  
+    pick([
+      `scrapped. let me know if you wanna start over`,
+      `cancelled. it never happened`,
+      `scrapped it. the group chat will never know`
+    ]),
+
   askForContent: (type: string) =>
-    type === 'poll' 
+    type === 'poll'
       ? `what do you wanna ask everyone?`
-      : `what do you wanna announce?`,
-  
+      : pick([
+          `what do you wanna announce?`,
+          `ok, what's the announcement?`,
+          `what do you want to say? i'll draft it up`
+        ]),
+
   // Errors
   noDraft: () =>
-    `you don't have anything drafted rn. wanna make an announcement or poll?`,
-  
+    pick([
+      `you don't have anything drafted rn. wanna make an announcement?`,
+      `there's nothing drafted to send. start with "announce [message]"`,
+      `no draft here. tell me what to announce and i'll write it up`
+    ]),
+
   notAdmin: () =>
-    `everyone can send announcements and polls now. what do you want to say?`,
-  
+    `everyone can send announcements now. what do you want to say?`,
+
   // Content queries
   noResults: () =>
-    `idk what you're asking about tbh. try being more specific?`,
-  
-  // Capability queries  
+    pick([
+      `idk what you're asking about tbh. try being more specific?`,
+      `nothing in my notes on that. got more details?`,
+      `drawing a blank on that one. try rephrasing?`
+    ]),
+
+  // Capability queries
   capabilities: (_isAdmin: boolean) =>
     `i can:\n📢 send announcements ("announce [message]")\n💬 answer questions about the org\n\njust text me what you need or tell me what to send`,
-  
+
   // Default fallback
   confused: () =>
-    `not sure what you mean. need help with something?`
+    pick([
+      `not sure what you mean. need help with something?`,
+      `you lost me. what do you need?`,
+      `gonna need more than that. what's up?`
+    ])
 }
 
 // ============================================
@@ -486,7 +523,21 @@ export function getQuickResponse(input: string): string | null {
     'idk': ['same tbh', 'fair enough', 'mood'],
     'nvm': ['ok', 'sure', 'k'],
     'mb': ['all good', 'np', 'you\'re fine'],
-    'my bad': ['all good', 'np', 'you\'re fine']
+    'my bad': ['all good', 'np', 'you\'re fine'],
+    'hi': ['hey, what\'s up?', 'yo. need something?', 'hey hey 👋'],
+    'hello': ['hey, what\'s up?', 'hello hello. what do you need?', 'yo 👋'],
+    'hey': ['what\'s up?', 'yo. need something?', 'hey 👋'],
+    'yo': ['yo. what\'s good?', 'sup', 'yo 👋'],
+    'sup': ['not much, running the org. you?', 'sup. need something?', 'chillin. what do you need?'],
+    'thanks': ['np 🙏', 'you\'re welcome', 'anytime'],
+    'thank you': ['np 🙏', 'you\'re welcome', 'anytime'],
+    'ty': ['np', 'you got it', 'anytime'],
+    'bye': ['later 👋', 'bye. text me if you need anything', 'peace ✌️'],
+    'goodbye': ['later 👋', 'bye bye', 'peace ✌️'],
+    'later': ['later ✌️', 'peace', 'catch you later'],
+    'peace': ['peace ✌️', 'later', 'stay safe out there'],
+    'gn': ['night 🌙', 'sleep tight', 'later'],
+    'cya': ['cya ✌️', 'later', 'peace']
   }
 
   const responses = quickResponses[lower]

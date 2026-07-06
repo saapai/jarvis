@@ -15,7 +15,7 @@ function detectSource(query: string): Source {
  * Route a content query to the appropriate data source.
  * Currently stubs calendar/docs/slack and defaults to facts.
  */
-export async function routeContentSearch(query: string): Promise<ContentResult[]> {
+export async function routeContentSearch(query: string, spaceId?: string | null): Promise<ContentResult[]> {
   const source = detectSource(query)
 
   // Future integrations can branch here
@@ -24,10 +24,10 @@ export async function routeContentSearch(query: string): Promise<ContentResult[]
     case 'docs':
     case 'slack':
       // Stub: fall through to facts search until integrations are available
-      return searchFacts(query)
+      return searchFacts(query, 10, spaceId)
     case 'facts':
     default:
-      return searchFacts(query)
+      return searchFacts(query, 10, spaceId)
   }
 }
 

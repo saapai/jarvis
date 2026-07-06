@@ -4,6 +4,7 @@ import { getOrCreateUser } from '@/lib/auth/user'
 import { getPrisma } from '@/lib/prisma'
 import { getSpaceId } from '@/lib/spaces'
 import { processUpload, llmClient, textExplorerRepository } from '@/text-explorer'
+import { searchFacts } from '@/text-explorer/search'
 
 export const dynamic = 'force-dynamic'
 // Note: Removed 'edge' runtime to support OpenAI streaming
@@ -95,10 +96,23 @@ export async function POST(
       }
     }
 
-    // Get facts from this space for context
+    // Retrieve context: semantic search for facts relevant to the question (same
+    // retrieval as the SMS pipeline), topped up with recent facts for awareness
+    let semanticContext = ''
+    try {
+      const relevant = await searchFacts(message, 12, spaceId)
+      if (relevant.length > 0) {
+        semanticContext = relevant
+          .map(r => `- ${r.title}: ${r.body}${r.timeRef ? ` (${r.timeRef})` : ''}`)
+          .join('\n')
+      }
+    } catch (error) {
+      console.error('Semantic search failed, falling back to recent facts:', error)
+    }
+
     const facts = await prisma.fact.findMany({
       where: { spaceId },
-      take: 50,
+      take: semanticContext ? 15 : 50,
       orderBy: { createdAt: 'desc' },
       select: {
         content: true,
@@ -111,16 +125,20 @@ export async function POST(
     })
 
     // Build context from facts
-    const context = facts.map(f => {
+    const recentContext = facts.map(f => {
       const entities = typeof f.entities === 'string' ? JSON.parse(f.entities) : f.entities
       return `- ${f.subcategory || f.category}: ${f.content}${f.dateStr ? ` (${f.dateStr})` : ''}${entities.length > 0 ? ` [${entities.join(', ')}]` : ''}`
     }).join('\n')
+
+    const context = semanticContext
+      ? `Most relevant to this question:\n${semanticContext}\n\nRecently added:\n${recentContext}`
+      : recentContext
 
     const systemPrompt = `You are Jarvis, a helpful assistant for this space. You have access to the following information:
 
 ${context || 'No information available yet. You can help users upload documents to build the knowledge base.'}
 
-Answer questions based on this information. Be concise, helpful, and friendly. If you don't know something, say so.${classification === 'information' || classification?.includes('information') ? ' The user just provided information - acknowledge that you\'ve saved it.' : ''}`
+Answer questions based ONLY on this information. Be concise, helpful, and friendly. If the information above doesn't cover the question, say you don't know — never invent dates, times, links, or details.${classification === 'information' || classification?.includes('information') ? ' The user just provided information - acknowledge that you\'ve saved it.' : ''}`
 
     // Create streaming response
     const stream = await openai.chat.completions.create({

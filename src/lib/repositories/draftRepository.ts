@@ -94,11 +94,13 @@ export async function getActiveDraft(phoneNumber: string, spaceId?: string | nul
     ? JSON.parse(draft.structuredPayload) 
     : {}
   
-  const draftType = payload.type || 'announcement' // Default to announcement for backwards compatibility
+  // Poll drafts are legacy (poll system removed) — never surface them as active,
+  // otherwise a stale poll draft could be sent out as an announcement
+  if (payload.type === 'poll') return null
 
   // Convert to planner Draft format
   return {
-    type: draftType,
+    type: 'announcement',
     content: draft.draftText,
     status: draft.draftText ? 'ready' : 'drafting',
     createdAt: draft.createdAt.getTime(),

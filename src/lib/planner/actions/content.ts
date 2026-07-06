@@ -739,7 +739,14 @@ async function filterAndFormatResultsWithLLM(
       return resultText
     }).join('\n\n')
 
-    const systemPrompt = `You are a helpful assistant that answers questions using the provided search results organized by category.
+    const systemPrompt = `You are Jarvis, the org's assistant, answering a member's question over SMS using the provided search results.
+
+VOICE — apply to every reply:
+- lowercase, casual, tight. reads like a sharp friend texting back, not a customer-service bot
+- lead with the answer in the first line. supporting details after, only if they earn their place
+- ABSOLUTELY NO MARKDOWN: no **bold**, no headers, no bullet-point asterisks — SMS renders them as literal symbols. plain text, simple dashes for lists
+- URLs must be passed through EXACTLY as they appear, on their own line or after a dash
+- a dash of dry wit is welcome when it fits ("rsvp now or wander around lost, your call") but never at the cost of clarity
 
 PRIMARY MATCHES:
 - There are ${primaryResultsCount} results that directly mention the main topic words from the user's question (${topicWords.join(', ') || 'none'}).
@@ -858,7 +865,7 @@ FORMATTING RULES:
 - Even if information is incomplete (e.g., "TBD", no date), still provide what IS available
 - DO NOT say "no information available" or "I don't have that information" when ${filteredResults.length} results are provided
 - Use the Category metadata to understand time directionality and filter appropriately
-- Extract and present the information from these results to answer the question\n\nProvide a clear, complete answer based on the results above:` }
+- Extract and present the information from these results to answer the question\n\nAnswer in jarvis's voice: lowercase, casual, short, plain text (no markdown), answer first:` }
       ],
       temperature: 0.3,
       max_tokens: 400
@@ -905,16 +912,23 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   console.log(`[ContentQuery] Processing query: "${message}"`)
   
   // Check if asking about recent actions first (highest priority)
-  const recentActionResponse = checkRecentActions(message, recentMessages)
-  if (recentActionResponse) {
-    console.log(`[ContentQuery] Found recent action context`)
+  const recentAction = checkRecentActions(message, recentMessages)
+  if (recentAction?.kind === 'recap') {
+    console.log(`[ContentQuery] Recapping recent announcement`)
     return {
       action: 'content_query',
       response: applyPersonality({
-        baseResponse: recentActionResponse,
+        baseResponse: recentAction.text,
         userMessage: message,
         userName
       })
+    }
+  }
+  if (recentAction?.kind === 'followup') {
+    console.log(`[ContentQuery] Answering follow-up grounded in ${recentAction.announcements.length} recent announcement(s)`)
+    const followUpAnswer = await answerAnnouncementFollowUp(message, recentAction.announcements)
+    if (followUpAnswer) {
+      return { action: 'content_query', response: followUpAnswer }
     }
   }
   
@@ -1153,13 +1167,11 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults, categoriesForFiltering)
   console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
   
+  // The formatter LLM already writes in jarvis's voice — wrapping it in
+  // applyPersonality again glued sass prefixes onto formal text ("okay okay You need...")
   return {
     action: 'content_query',
-    response: applyPersonality({
-      baseResponse: formattedResponse,
-      userMessage: message,
-      userName
-    })
+    response: formattedResponse
   }
 }
 
@@ -1172,6 +1184,10 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
  *
  * Returns the announcement content as context string, or null if not a follow-up.
  */
+type RecentActionMatch =
+  | { kind: 'recap'; text: string }
+  | { kind: 'followup'; announcements: string[] }
+
 function checkRecentActions(
   message: string,
   recentMessages?: Array<{
@@ -1180,7 +1196,7 @@ function checkRecentActions(
     createdAt: Date
     meta?: { action?: string; draftContent?: string } | null
   }>
-): string | null {
+): RecentActionMatch | null {
   if (!recentMessages || recentMessages.length === 0) return null
 
   const lower = message.toLowerCase().trim()
@@ -1230,10 +1246,12 @@ function checkRecentActions(
       /^(i('d| would| rather| don'?t| can'?t| think| love| hate| feel|'m|'ll))\b/i.test(lower)
 
     if (isAskingAboutSent || isAskingAboutAnnouncement) {
-      return `here's the announcement that was sent: "${recentAnnouncement}"`
+      return { kind: 'recap', text: `here's the announcement that was sent: "${recentAnnouncement}"` }
     }
     if (isFollowUpQuestion || (referencesAnnouncementContent && !looksLikeReaction)) {
-      return `the user is asking a follow-up about this recent announcement: "${recentAnnouncement}". answer their question ("${message}") using the announcement content.`
+      // Gate on the 5-message window, but give the answerer deeper context —
+      // "the LA one" often refers to a broadcast a few messages further back
+      return { kind: 'followup', announcements: findRecentAnnouncements(recentMessages, 10) }
     }
   }
 
@@ -1250,16 +1268,16 @@ function checkRecentActions(
         if (prevMsg.direction === 'outbound' && prevMsg.text.includes('here\'s the')) {
           const match = prevMsg.text.match(/"([^"]+)"/);
           if (match && match[1]) {
-            return `i just sent out: "${match[1]}"`
+            return { kind: 'recap', text: `i just sent out: "${match[1]}"` }
           }
         }
 
         if (prevMsg.meta?.draftContent) {
-          return `i just sent out: "${prevMsg.meta.draftContent}"`
+          return { kind: 'recap', text: `i just sent out: "${prevMsg.meta.draftContent}"` }
         }
       }
 
-      return `i just sent out an announcement. check your messages`
+      return { kind: 'recap', text: `i just sent out an announcement. check your messages` }
     }
   }
 
@@ -1279,8 +1297,25 @@ function findRecentAnnouncement(
     meta?: { action?: string; draftContent?: string } | null
   }>
 ): string | null {
+  return findRecentAnnouncements(recentMessages)[0] ?? null
+}
+
+/**
+ * Collect up to 3 recent announcements, most recent first — a follow-up like
+ * "what's the link for the LA one?" often targets an older broadcast, not the latest.
+ */
+function findRecentAnnouncements(
+  recentMessages: Array<{
+    direction: 'inbound' | 'outbound'
+    text: string
+    createdAt: Date
+    meta?: { action?: string; draftContent?: string } | null
+  }>,
+  window = 5
+): string[] {
   const announcementActions = ['scheduled_announcement', 'announcement', 'poll']
-  for (let i = recentMessages.length - 1; i >= Math.max(0, recentMessages.length - 5); i--) {
+  const found: string[] = []
+  for (let i = recentMessages.length - 1; i >= Math.max(0, recentMessages.length - window) && found.length < 3; i--) {
     const msg = recentMessages[i]
     if (
       msg.direction === 'outbound' &&
@@ -1288,7 +1323,8 @@ function findRecentAnnouncement(
       announcementActions.includes(msg.meta.action) &&
       msg.text?.trim()
     ) {
-      return msg.text.trim()
+      found.push(msg.text.trim())
+      continue
     }
     // draft_send stores content in meta.draftContent
     if (
@@ -1296,10 +1332,56 @@ function findRecentAnnouncement(
       msg.meta?.action === 'draft_send' &&
       msg.meta?.draftContent?.trim()
     ) {
-      return msg.meta.draftContent.trim()
+      found.push(msg.meta.draftContent.trim())
     }
   }
-  return null
+  return found
+}
+
+/**
+ * Answer a follow-up question grounded in the recent announcements.
+ * Falls back to quoting the latest announcement when the LLM is unavailable.
+ */
+async function answerAnnouncementFollowUp(
+  message: string,
+  announcements: string[]
+): Promise<string | null> {
+  if (announcements.length === 0) return null
+
+  const fallback = `here's the announcement that was sent: "${announcements[0]}"`
+  if (!process.env.OPENAI_API_KEY) return fallback
+
+  try {
+    const { getOpenAI } = await import('@/lib/openai')
+    const openai = getOpenAI()
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are Jarvis, the org's assistant, texting over SMS. The user is asking a follow-up about announcements the org recently sent.
+
+RECENT ANNOUNCEMENTS (most recent first):
+${announcements.map((a, i) => `${i + 1}. "${a}"`).join('\n')}
+
+RULES:
+- answer their question using ONLY the announcement content above. figure out which announcement they mean from their wording
+- copy links, dates, names, and amounts EXACTLY as written — never invent or alter them
+- lowercase, casual, tight — like a sharp friend texting back. no markdown
+- if the announcements don't actually contain the answer, say so plainly and suggest asking an admin — do not guess`
+        },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.6,
+      max_tokens: 200
+    })
+
+    return response.choices[0].message.content || fallback
+  } catch (error) {
+    console.error('[ContentQuery] Follow-up answer failed, using fallback:', error)
+    return fallback
+  }
 }
 
 /**

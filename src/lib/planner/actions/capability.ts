@@ -34,7 +34,6 @@ async function classifyCapabilityQuery(message: string, isAdmin: boolean): Promi
 
 JARVIS CAN DO:
 - Send announcements to group members
-- Create and manage polls
 - Answer questions about the organization (events, meetings, schedules)
 - Provide help and explain capabilities
 - Have casual conversations with personality
@@ -102,10 +101,10 @@ export async function handleCapabilityQuery(input: CapabilityQueryInput): Promis
   // Handle impossible requests with humorous responses
   if (classification.queryType === 'impossible') {
     const impossibleResponses = [
-      `sorry bro i wish i was smart enough to ${classification.impossibleTask || 'do that'} for you. i can help with announcements, polls, and org questions though`,
-      `nah i can't ${classification.impossibleTask || 'do that'}. i'm just a bot for org stuff - announcements, polls, and questions about events`,
-      `lol i wish. i can't ${classification.impossibleTask || 'help with that'}. but i can send announcements and polls if you need`,
-      `${classification.impossibleTask || 'that'} is way beyond my capabilities. i just do org communication stuff - announcements, polls, and answering questions`
+      `sorry bro i wish i was smart enough to ${classification.impossibleTask || 'do that'} for you. i can help with announcements and org questions though`,
+      `nah i can't ${classification.impossibleTask || 'do that'}. i'm just a bot for org stuff - announcements and questions about events`,
+      `lol i wish. i can't ${classification.impossibleTask || 'help with that'}. but i can send announcements if you need`,
+      `${classification.impossibleTask || 'that'} is way beyond my capabilities. i just do org communication stuff - announcements and answering questions`
     ]
 
     return {
@@ -124,7 +123,7 @@ export async function handleCapabilityQuery(input: CapabilityQueryInput): Promis
       return {
         action: 'capability_query',
         response: applyPersonality({
-          baseResponse: "i'm jarvis, your org's sassy ai assistant. powered by enclave. i help with announcements, polls, and answering questions about what's going on",
+          baseResponse: "i'm jarvis, your org's sassy ai assistant. powered by enclave. i help with announcements and answering questions about what's going on",
           userMessage: message,
           userName
         })

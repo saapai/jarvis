@@ -408,7 +408,6 @@ describe('Onboarding Flow', () => {
 
       expect(text).toMatch(/admin/i)
       expect(text).toMatch(/announce/i)
-      expect(text).toMatch(/poll/i)
     })
 
     it('shows regular welcome for non-admin user', async () => {
@@ -489,7 +488,7 @@ describe('Onboarding Flow', () => {
 
       const text = await getResponseText(makeSmsRequest('HELP'))
 
-      expect(text).toMatch(/poll/i)
+      expect(text).toMatch(/questions/i)
       expect(text).not.toMatch(/admin command/i)
     })
 

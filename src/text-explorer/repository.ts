@@ -842,8 +842,6 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
           }
         } else {
           // Insert new fact (include calendarDates)
-          const embedding = factEmbedding ?? Array.from({ length: VECTOR_DIMENSION }, () => 0);
-          
           // Ensure upload exists before inserting facts to satisfy FK constraint
           if (!uploadEnsured) {
             try {

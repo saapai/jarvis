@@ -332,6 +332,18 @@ export async function makeFilePublic(fileId: string): Promise<string | null> {
   }
 }
 
+/**
+ * Returns all channels that should be synced for the digest.
+ * Matches channels with "general" or "announcements" in the name.
+ */
+export async function getSyncableChannels(): Promise<string[]> {
+  const channels = await listAllChannels();
+  const patterns = ['general', 'announcements'];
+  return channels
+    .filter(ch => patterns.some(p => ch.name.toLowerCase().includes(p)))
+    .map(ch => ch.name);
+}
+
 export async function detectAnnouncementsChannel(): Promise<string | null> {
   const { getOpenAI } = await import('@/lib/openai');
   

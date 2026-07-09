@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchChannelMessages, detectAnnouncementsChannel, listAllChannels, resolveSlackUserName, makeFilePublic } from '@/lib/slack';
+import { fetchChannelMessages, getSyncableChannels, listAllChannels, resolveSlackUserName, makeFilePublic } from '@/lib/slack';
 import { detectDeadline } from '@/lib/slackDeadline';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
@@ -19,17 +19,18 @@ export async function POST(req: NextRequest) {
     const forceFullSync = body.forceFullSync || false;
 
     let channelName: string | undefined = body.channelName;
-    
+
     if (!channelName) {
-      console.log('[Slack Sync] No channel specified, detecting announcements channel...');
-      const detected = await detectAnnouncementsChannel();
-      
-      if (detected) {
-        channelName = detected;
-        console.log('[Slack Sync] Detected channel:', channelName);
+      // No specific channel — sync all matching channels
+      console.log('[Slack Sync] No channel specified, syncing all general/announcements channels...');
+      const channelNames = await getSyncableChannels();
+      console.log('[Slack Sync] Syncable channels:', channelNames);
+      if (channelNames.length > 0) {
+        channelName = channelNames[0]; // Process first one via existing flow
+        // TODO: could loop all channels here, but cron already handles multi-channel
       } else {
         const fallback = process.env.SLACK_ANNOUNCEMENTS_CHANNEL || 'announcements';
-        console.log('[Slack Sync] Could not detect channel, using fallback:', fallback);
+        console.log('[Slack Sync] No syncable channels found, using fallback:', fallback);
         channelName = fallback;
       }
     }
@@ -171,9 +172,10 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Detect deadlines and create scheduled announcements (relative time resolved from message sent date)
-        const senderName = message.user ? await resolveSlackUserName(message.user) : null;
-        const deadline = await detectDeadline(fullText, message.ts, senderName ?? undefined);
+        // Only detect deadlines for announcement channels
+        const isAnnouncementChannel = channelName!.toLowerCase().includes('announcements');
+        const senderName = isAnnouncementChannel && message.user ? await resolveSlackUserName(message.user) : null;
+        const deadline = isAnnouncementChannel ? await detectDeadline(fullText, message.ts, senderName ?? undefined) : null;
         if (deadline) {
           let factId: string | undefined;
           if (processResult.facts.length > 0) {

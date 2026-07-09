@@ -105,8 +105,7 @@ async function syncChannel(channelName: string): Promise<ChannelSyncResult> {
         syncedCount += factsWithEmbeddings.length;
       }
 
-      // Only detect deadlines for announcement channels
-      if (channelName.toLowerCase().includes('announcements')) {
+      {
         const senderName = message.user ? await resolveSlackUserName(message.user) : null;
         const deadline = await detectDeadline(fullText, message.ts, senderName ?? undefined);
         if (deadline) {

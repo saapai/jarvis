@@ -172,10 +172,8 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Only detect deadlines for announcement channels
-        const isAnnouncementChannel = channelName!.toLowerCase().includes('announcements');
-        const senderName = isAnnouncementChannel && message.user ? await resolveSlackUserName(message.user) : null;
-        const deadline = isAnnouncementChannel ? await detectDeadline(fullText, message.ts, senderName ?? undefined) : null;
+        const senderName = message.user ? await resolveSlackUserName(message.user) : null;
+        const deadline = await detectDeadline(fullText, message.ts, senderName ?? undefined);
         if (deadline) {
           let factId: string | undefined;
           if (processResult.facts.length > 0) {

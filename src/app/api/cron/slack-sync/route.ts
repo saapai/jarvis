@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchChannelMessages, detectAnnouncementsChannel, resolveSlackUserName } from '@/lib/slack';
+import { fetchChannelMessages, detectAnnouncementsChannel, resolveSlackUserName, makeFilePublic } from '@/lib/slack';
 import { detectDeadline } from '@/lib/slackDeadline';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
@@ -63,26 +63,55 @@ export async function GET(req: NextRequest) {
     const defaultSpaceId = defaultSpace?.id || null;
 
     for (const message of messages) {
-      if (!message.text || message.text.trim().length === 0) {
+      if ((!message.text || message.text.trim().length === 0) && (!message.files || message.files.length === 0)) {
         continue;
       }
 
-      const messageText = message.text.trim();
+      const messageText = message.text?.trim() || '';
       const messageDate = new Date(parseFloat(message.ts) * 1000);
       const uploadName = `Slack: ${channelName} - ${messageDate.toISOString()}`;
 
+      // Make Slack files publicly accessible for MMS
+      const publicMediaUrls: string[] = [];
+      if (message.files && message.files.length > 0) {
+        for (const file of message.files) {
+          const isImage = file.mimetype?.startsWith('image/');
+          if (isImage) {
+            const publicUrl = await makeFilePublic(file.id);
+            if (publicUrl) {
+              publicMediaUrls.push(publicUrl);
+            }
+          }
+        }
+        console.log('[Slack Sync Cron] Processed files', {
+          total: message.files.length,
+          publicUrls: publicMediaUrls.length,
+        });
+      }
+
+      // Build text including file references for non-image files
+      let fullText = messageText;
+      if (message.files) {
+        const nonImageFiles = message.files.filter(f => !f.mimetype?.startsWith('image/'));
+        if (nonImageFiles.length > 0) {
+          const fileNames = nonImageFiles.map(f => f.name).join(', ');
+          fullText = fullText ? `${fullText}\n\n[Attached: ${fileNames}]` : `[Attached: ${fileNames}]`;
+        }
+      }
+
       console.log('[Slack Sync Cron] Processing message', {
         ts: message.ts,
-        textLength: messageText.length,
+        textLength: fullText.length,
+        fileCount: message.files?.length || 0,
       });
 
       try {
         const { id: uploadId } = await textExplorerRepository.createUpload({
           name: uploadName,
-          rawText: messageText,
+          rawText: fullText,
         });
 
-        const processResult = await processUpload(messageText, llmClient);
+        const processResult = await processUpload(fullText, llmClient);
 
         if (processResult.facts.length > 0) {
           const factsWithEmbeddings: ExtractedFact[] = await Promise.all(
@@ -109,7 +138,7 @@ export async function GET(req: NextRequest) {
         }
 
         const senderName = message.user ? await resolveSlackUserName(message.user) : null;
-        const deadline = await detectDeadline(messageText, message.ts, senderName ?? undefined);
+        const deadline = await detectDeadline(fullText, message.ts, senderName ?? undefined);
         if (deadline) {
             let factId: string | undefined;
             if (processResult.facts.length > 0) {
@@ -139,6 +168,7 @@ export async function GET(req: NextRequest) {
                 sourceFactId: factId,
                 sourceMessageTs: message.ts,
                 spaceId: defaultSpaceId,
+                mediaUrls: publicMediaUrls.length > 0 ? publicMediaUrls : undefined,
               },
             });
             // Only count as new if it was just created (no sentAt yet and created recently)

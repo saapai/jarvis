@@ -266,6 +266,7 @@ model ScheduledAnnouncement {
   sentAt          DateTime?
   sourceFactId    String? // Optional link to Fact that created this
   sourceMessageTs String?   @unique // Slack message timestamp — unique to prevent duplicate announcements
+  mediaUrls       Json?     // Array of public media URLs (images/files) to send via MMS
   createdAt       DateTime  @default(now())
 
   // Space scope

@@ -26,16 +26,21 @@ export async function validateTwilioSignature(
   return twilio.validateRequest(authToken, signature, url, params)
 }
 
-// Send SMS via Twilio
-export async function sendSms(to: string, body: string): Promise<{ ok: boolean; sid?: string; error?: string }> {
+// Send SMS/MMS via Twilio
+export async function sendSms(to: string, body: string, mediaUrls?: string[]): Promise<{ ok: boolean; sid?: string; error?: string }> {
   try {
     const client = getTwilioClient()
     const fromNumber = process.env.TWILIO_PHONE_NUMBER || ''
-    const message = await client.messages.create({
+    const params: any = {
       body,
       from: fromNumber,
       to: to.startsWith('+') ? to : `+1${to}`
-    })
+    }
+    if (mediaUrls && mediaUrls.length > 0) {
+      // Twilio supports up to 10 media URLs per MMS
+      params.mediaUrl = mediaUrls.slice(0, 10)
+    }
+    const message = await client.messages.create(params)
     return { ok: true, sid: message.sid }
   } catch (error) {
     console.error('Failed to send SMS:', error)

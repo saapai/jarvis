@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchChannelMessages, detectAnnouncementsChannel, listAllChannels, resolveSlackUserName } from '@/lib/slack';
+import { fetchChannelMessages, detectAnnouncementsChannel, listAllChannels, resolveSlackUserName, makeFilePublic } from '@/lib/slack';
 import { detectDeadline } from '@/lib/slackDeadline';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
@@ -83,34 +83,58 @@ export async function POST(req: NextRequest) {
     const defaultSpaceId = defaultSpace?.id || null;
 
     for (const message of messages) {
-      // Skip system messages and empty messages
-      if (!message.text || message.text.trim().length === 0) {
+      // Skip system messages and empty messages (unless they have files)
+      if ((!message.text || message.text.trim().length === 0) && (!message.files || message.files.length === 0)) {
         console.log('[Slack Sync] Skipping empty message', { ts: message.ts });
         continue;
       }
 
       // Skip messages that are just user joins/leaves
-      if (message.text.includes('joined') && message.text.includes('via invite')) {
+      if (message.text?.includes('joined') && message.text.includes('via invite')) {
         console.log('[Slack Sync] Skipping system message', { ts: message.ts, text: message.text.substring(0, 50) });
         continue;
       }
 
-      const messageText = message.text.trim();
+      const messageText = message.text?.trim() || '';
       const messageDate = new Date(parseFloat(message.ts) * 1000);
       const uploadName = `Slack: ${channelName} - ${messageDate.toISOString()}`;
 
+      // Make Slack files publicly accessible for MMS
+      const publicMediaUrls: string[] = [];
+      if (message.files && message.files.length > 0) {
+        for (const file of message.files) {
+          if (file.mimetype?.startsWith('image/')) {
+            const publicUrl = await makeFilePublic(file.id);
+            if (publicUrl) {
+              publicMediaUrls.push(publicUrl);
+            }
+          }
+        }
+      }
+
+      // Build text including file references for non-image files
+      let fullText = messageText;
+      if (message.files) {
+        const nonImageFiles = message.files.filter(f => !f.mimetype?.startsWith('image/'));
+        if (nonImageFiles.length > 0) {
+          const fileNames = nonImageFiles.map(f => f.name).join(', ');
+          fullText = fullText ? `${fullText}\n\n[Attached: ${fileNames}]` : `[Attached: ${fileNames}]`;
+        }
+      }
+
       console.log('[Slack Sync] Processing message', {
         ts: message.ts,
-        textLength: messageText.length,
+        textLength: fullText.length,
+        fileCount: message.files?.length || 0,
       });
 
       try {
         const { id: uploadId } = await textExplorerRepository.createUpload({
           name: uploadName,
-          rawText: messageText,
+          rawText: fullText,
         });
 
-        const processResult = await processUpload(messageText, llmClient);
+        const processResult = await processUpload(fullText, llmClient);
 
         if (processResult.facts.length > 0) {
           const factsWithEmbeddings: ExtractedFact[] = await Promise.all(
@@ -149,7 +173,7 @@ export async function POST(req: NextRequest) {
 
         // Detect deadlines and create scheduled announcements (relative time resolved from message sent date)
         const senderName = message.user ? await resolveSlackUserName(message.user) : null;
-        const deadline = await detectDeadline(messageText, message.ts, senderName ?? undefined);
+        const deadline = await detectDeadline(fullText, message.ts, senderName ?? undefined);
         if (deadline) {
           let factId: string | undefined;
           if (processResult.facts.length > 0) {
@@ -164,7 +188,7 @@ export async function POST(req: NextRequest) {
           // Strip any URLs the LLM may have included in content, then append deduplicated URLs from original message
           const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
           const cleanContent = deadline.content.replace(urlPattern, '').replace(/\s{2,}/g, ' ').trim();
-          const links = [...new Set(messageText.match(urlPattern) || [])];
+          const links = [...new Set(fullText.match(urlPattern) || [])];
           const contentWithLinks = links.length > 0
             ? `${cleanContent}\n\n${links.join('\n')}`
             : cleanContent;
@@ -179,6 +203,7 @@ export async function POST(req: NextRequest) {
               sourceFactId: factId,
               sourceMessageTs: message.ts,
               spaceId: defaultSpaceId,
+              mediaUrls: publicMediaUrls.length > 0 ? publicMediaUrls : undefined,
             },
           });
 

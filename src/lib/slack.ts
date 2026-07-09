@@ -1,6 +1,7 @@
 import { WebClient } from '@slack/web-api';
 
 let _slackClient: WebClient | null = null;
+let _slackSyncClient: WebClient | null = null;
 
 function getSlackClient(): WebClient {
   if (!_slackClient) {
@@ -16,27 +17,56 @@ function getSlackClient(): WebClient {
   return _slackClient;
 }
 
+/**
+ * Returns a Slack client for syncing/reading messages.
+ * Prefers SLACK_USER_TOKEN (xoxp-) for full channel access,
+ * falls back to SLACK_BOT_TOKEN if no user token is configured.
+ */
+function getSlackSyncClient(): WebClient {
+  if (!_slackSyncClient) {
+    const userToken = process.env.SLACK_USER_TOKEN;
+    if (userToken) {
+      console.log('[Slack] Using user token (xoxp-) for sync — full channel access');
+      _slackSyncClient = new WebClient(userToken);
+    } else {
+      console.log('[Slack] No SLACK_USER_TOKEN found, falling back to bot token for sync');
+      _slackSyncClient = getSlackClient();
+    }
+  }
+  return _slackSyncClient;
+}
+
+export interface SlackFile {
+  id: string;
+  name: string;
+  mimetype: string;
+  url_private: string;
+  url_private_download?: string;
+  filetype: string;
+  size: number;
+}
+
 export interface SlackMessage {
   ts: string;
   text: string;
   user?: string;
   channel: string;
   thread_ts?: string;
+  files?: SlackFile[];
 }
 
 export async function fetchChannelMessages(
   channelName: string,
   oldest?: string
 ): Promise<SlackMessage[]> {
-  const client = getSlackClient();
-  
+  const client = getSlackSyncClient();
+
   try {
-    // Get channels - for private channels, bot must be a member
-    // Note: conversations.list may not return all private channels if bot isn't properly authenticated
+    // Get channels - user token has access to all channels the user is in
     let allChannels: any[] = [];
     let cursor: string | undefined;
     let hasMore = true;
-    
+
     while (hasMore) {
       const channelList = await client.conversations.list({
         types: 'public_channel,private_channel',
@@ -44,22 +74,17 @@ export async function fetchChannelMessages(
         limit: 200,
         cursor,
       });
-      
+
       if (channelList.channels) {
         allChannels = [...allChannels, ...channelList.channels];
       }
-      
+
       cursor = channelList.response_metadata?.next_cursor;
       hasMore = !!cursor;
     }
-    
+
     console.log('[Slack] Fetching messages from channel:', channelName);
     console.log('[Slack] Total channels available:', allChannels.length);
-    console.log('[Slack] Private channels in list:', allChannels.filter(ch => ch.is_private).map(ch => ({
-      name: ch.name,
-      isMember: ch.is_member,
-      id: ch.id
-    })));
 
     // Try exact match first
     let channel = allChannels.find(
@@ -82,38 +107,20 @@ export async function fetchChannelMessages(
     }
 
     if (!channel || !channel.id) {
-      // List available channels for debugging
       const availableChannels = allChannels.map(ch => ({
         name: ch.name,
         id: ch.id,
         isPrivate: ch.is_private,
-        isMember: ch.is_member
       }));
-      
-      const announceChannels = availableChannels.filter(ch => 
+
+      const announceChannels = availableChannels.filter(ch =>
         ch.name?.toLowerCase().includes('announce')
       );
-      
-      console.error('[Slack] Channel not found. Available channels:', availableChannels);
-      console.error('[Slack] Channels with "announce" in name:', announceChannels);
-      
-      const channelListStr = availableChannels.map(c => 
-        `${c.name}${c.isPrivate ? ' (private' : ' (public'}${c.isMember ? ', member)' : ', not member)'}`
-      ).join(', ');
-      
-      throw new Error(
-        `Channel "${channelName}" not found. ` +
-        `Available channels: ${channelListStr}. ` +
-        `Note: For private channels, the bot must be a member to access them. ` +
-        `If the channel exists but isn't listed, the bot may need to be re-invited.`
-      );
-    }
 
-    // Check if bot is a member of private channels
-    if (channel.is_private && !channel.is_member) {
+      console.error('[Slack] Channel not found. Announce channels:', announceChannels);
+
       throw new Error(
-        `Bot is not a member of private channel "${channelName}". ` +
-        `Please invite the bot (@YourBotName) to the channel first using /invite @YourBotName`
+        `Channel "${channelName}" not found among ${allChannels.length} visible channels.`
       );
     }
 
@@ -139,14 +146,34 @@ export async function fetchChannelMessages(
           
           // Get text from message
           const messageText = msg.text || '';
-          
-          if (msg.ts && messageText.trim().length > 0) {
+
+          // Extract file attachments (images, documents, etc.)
+          const files: SlackFile[] = [];
+          if (msg.files && Array.isArray(msg.files)) {
+            for (const file of msg.files) {
+              if (file.id && file.url_private) {
+                files.push({
+                  id: file.id,
+                  name: file.name || 'untitled',
+                  mimetype: file.mimetype || '',
+                  url_private: file.url_private,
+                  url_private_download: file.url_private_download,
+                  filetype: file.filetype || '',
+                  size: file.size || 0,
+                });
+              }
+            }
+          }
+
+          // Include messages with text or files
+          if (msg.ts && (messageText.trim().length > 0 || files.length > 0)) {
             messages.push({
               ts: msg.ts,
               text: messageText,
               user: msg.user,
               channel: channel.id,
               thread_ts: msg.thread_ts,
+              files: files.length > 0 ? files : undefined,
             });
           }
         }
@@ -164,7 +191,7 @@ export async function fetchChannelMessages(
 }
 
 export async function getChannelId(channelName: string): Promise<string | null> {
-  const client = getSlackClient();
+  const client = getSlackSyncClient();
   
   try {
     const channelList = await client.conversations.list({
@@ -191,7 +218,7 @@ export interface ChannelInfo {
 }
 
 export async function listAllChannels(): Promise<ChannelInfo[]> {
-  const client = getSlackClient();
+  const client = getSlackSyncClient();
   
   try {
     // Get all channels with pagination
@@ -256,13 +283,51 @@ export async function listAllChannels(): Promise<ChannelInfo[]> {
 }
 
 export async function resolveSlackUserName(userId: string): Promise<string | null> {
-  const client = getSlackClient();
+  const client = getSlackSyncClient();
   try {
     const result = await client.users.info({ user: userId });
     const profile = result.user?.profile;
     return profile?.display_name || result.user?.real_name || null;
   } catch (error) {
     console.error('[Slack] Error resolving user name:', error);
+    return null;
+  }
+}
+
+/**
+ * Makes a Slack file publicly accessible and returns the public URL.
+ * Uses Slack's files.sharedPublicURL to generate a permalink.
+ * Requires the user token (xoxp-) with files:write scope.
+ */
+export async function makeFilePublic(fileId: string): Promise<string | null> {
+  const client = getSlackSyncClient();
+  try {
+    const result = await client.files.sharedPublicURL({ file: fileId });
+    if (result.ok && result.file) {
+      // Construct the public URL from permalink_public
+      const file = result.file as any;
+      if (file.permalink_public) {
+        // Slack public URLs need the pub_secret appended to url_private
+        const pubSecret = file.permalink_public.split('-').pop();
+        return `${file.url_private}?pub_secret=${pubSecret}`;
+      }
+    }
+    return null;
+  } catch (error: any) {
+    // already_public is fine — file was previously shared
+    if (error?.data?.error === 'already_public') {
+      try {
+        const info = await client.files.info({ file: fileId });
+        const file = info.file as any;
+        if (file?.permalink_public) {
+          const pubSecret = file.permalink_public.split('-').pop();
+          return `${file.url_private}?pub_secret=${pubSecret}`;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    console.error('[Slack] Error making file public:', error);
     return null;
   }
 }

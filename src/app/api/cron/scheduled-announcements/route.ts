@@ -62,13 +62,16 @@ async function sendScheduledAnnouncements(): Promise<{ sent: number; failed: num
 
       console.log(`[ScheduledAnnouncements] Sending scheduled announcement "${announcement.content.substring(0, 50)}..." to ${users.length} users${spaceId ? ` (space: ${spaceId})` : ''}`)
 
+      // Extract media URLs if present
+      const mediaUrls = Array.isArray(announcement.mediaUrls) ? announcement.mediaUrls as string[] : undefined
+
       let successCount = 0
 
       for (const user of users) {
         const userPhone = user.phone ? normalizePhone(user.phone) : ''
         if (userPhone.length < 10) continue
 
-        const result = await sendSms(toE164(userPhone), announcement.content)
+        const result = await sendSms(toE164(userPhone), announcement.content, mediaUrls)
         if (result.ok) {
           // Log message for this recipient with space context
           await messageRepo.logMessage(userPhone, 'outbound', announcement.content, {

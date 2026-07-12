@@ -10,7 +10,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:unit": "jest src/lib/planner/__tests__/personality.test.ts src/lib/planner/__tests__/fixes.test.ts src/lib/__tests__/slackDeadline.test.ts src/lib/__tests__/checkRecentActions.test.ts src/lib/planner/__tests__/contentRetrieval.test.ts"
+    "test:unit": "jest src/lib/planner/__tests__/personality.test.ts src/lib/planner/__tests__/fixes.test.ts src/lib/__tests__/slackDeadline.test.ts src/lib/__tests__/checkRecentActions.test.ts src/lib/planner/__tests__/contentRetrieval.test.ts",
+    "eval:classify": "tsx eval-classify.ts",
+    "eval:convos": "tsx eval-convos.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

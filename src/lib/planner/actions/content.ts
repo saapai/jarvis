@@ -1278,6 +1278,9 @@ function checkRecentActions(
     (lower.length < 30 && /\b(what|huh|wut|wat|wdym|meaning|mean|means|why|how)\b/i.test(lower)) ||
     // "what's this/that" style
     /\bwhat'?s?\s+(this|that|it)\b/i.test(lower) ||
+    // Deictic choice questions about something just shown ("which one should i click",
+    // "the second one?", "is that one in la?")
+    /\b(which one|this one|that one|the (first|second|third|last) one)\b/i.test(lower) ||
     // Conversational corrections ("no about X", "no I meant X", "not that, about X")
     /^(no|nah|nope|not that)[,.]?\s+(about|i meant|i mean|i'm asking|the|tell me about)\b/i.test(lower) ||
     // Reference to specific content in a recent announcement ("about janak", "the laptop thing", "reunion links")
@@ -1331,7 +1334,10 @@ function checkRecentActions(
       for (let j = i - 1; j >= Math.max(0, i - 10); j--) {
         const prevMsg = recentMessages[j]
 
-        if (prevMsg.direction === 'outbound' && prevMsg.text.includes('here\'s the')) {
+        // Draft previews always quote the content ("here's what i've got: \"...\"",
+        // "updated: \"...\"", "📝 draft's ready: \"...\"") — extract the quoted text
+        // rather than matching one template's exact wording
+        if (prevMsg.direction === 'outbound' && (prevMsg.meta?.action === 'draft_write' || /draft|announcement|updated|version|got/i.test(prevMsg.text))) {
           const match = prevMsg.text.match(/"([^"]+)"/);
           if (match && match[1]) {
             return { kind: 'recap', text: `i just sent out: "${match[1]}"` }

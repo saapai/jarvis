@@ -535,7 +535,7 @@ export function getQuickResponse(input: string): string | null {
     'bye': ['later 👋', 'bye. text me if you need anything', 'peace ✌️'],
     'goodbye': ['later 👋', 'bye bye', 'peace ✌️'],
     'later': ['later ✌️', 'peace', 'catch you later'],
-    'peace': ['peace ✌️', 'later', 'stay safe out there'],
+    'peace': ['peace ✌️', 'later', 'peace out, stay safe'],
     'gn': ['night 🌙', 'sleep tight', 'later'],
     'cya': ['cya ✌️', 'later', 'peace']
   }

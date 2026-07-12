@@ -220,6 +220,7 @@ describe('Scenario: Insults and Roasts', () => {
 // ============================================
 
 describe('Scenario: Quick Responses', () => {
+  // True acknowledgment/filler tokens: no content, no question → always chat
   const quickInputs = [
     { input: 'ok', expectShort: true },
     { input: 'lol', expectShort: true },
@@ -228,15 +229,23 @@ describe('Scenario: Quick Responses', () => {
     { input: 'cool', expectShort: true },
     { input: 'fr', expectShort: true },
     { input: 'bet', expectShort: true },
-    { input: '?', expectShort: true },
   ]
-  
+
   test.each(quickInputs)('$input → quick response', async ({ input, expectShort }) => {
     const result = await testMessage(regularUser, input)
     expect(result.action).toBe('chat')
     if (expectShort) {
       expect(result.response.length).toBeLessThan(100)
     }
+  })
+
+  // A lone "?" is genuinely ambiguous — a confused reaction (chat) OR a plea for
+  // guidance (capability_query). Both produce a helpful reply, so accept either.
+  // What it must NOT be is draft_write/content_query (there's nothing to broadcast
+  // or look up), which the classifier prompt explicitly guards against.
+  test('lone "?" → chat or capability, never a misroute', async () => {
+    const result = await testMessage(regularUser, '?')
+    expect(['chat', 'capability_query']).toContain(result.action)
   })
 })
 

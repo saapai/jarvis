@@ -4,7 +4,7 @@
  */
 
 import { ActionResult } from '../types'
-import { applyPersonality } from '../personality'
+import { TEXTER_MODEL } from '../models'
 import * as eventRepo from '@/lib/repositories/eventRepository'
 import * as memberRepo from '@/lib/repositories/memberRepository'
 import { sendSms } from '@/lib/twilio'
@@ -82,7 +82,7 @@ Respond with JSON:
 }`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Admin message: "${message}"` }
@@ -154,11 +154,7 @@ export async function handleEventUpdate(input: EventUpdateInput): Promise<Action
   if (!isAdmin) {
     return {
       action: 'chat',
-      response: applyPersonality({
-        baseResponse: "only admins can update events",
-        userMessage: message,
-        userName
-      })
+      response: "only admins can update events"
     }
   }
 
@@ -187,40 +183,24 @@ export async function handleEventUpdate(input: EventUpdateInput): Promise<Action
         
         return {
           action: 'event_update',
-          response: applyPersonality({
-            baseResponse: `✅ event updated: ${pendingConfirmation.description}.${blastMsg}`,
-            userMessage: message,
-            userName
-          })
+          response: `✅ event updated: ${pendingConfirmation.description}.${blastMsg}`
         }
       } catch (error) {
         console.error('[EventUpdate] Failed to update event:', error)
         return {
           action: 'event_update',
-          response: applyPersonality({
-            baseResponse: `failed to update event: ${error instanceof Error ? error.message : 'unknown error'}`,
-            userMessage: message,
-            userName
-          })
+          response: `failed to update event: ${error instanceof Error ? error.message : 'unknown error'}`
         }
       }
     } else if (isRejection) {
       return {
         action: 'event_update',
-        response: applyPersonality({
-          baseResponse: "ok, cancelled the update",
-          userMessage: message,
-          userName
-        })
+        response: "ok, cancelled the update"
       }
     } else {
       return {
         action: 'event_update',
-        response: applyPersonality({
-          baseResponse: "say 'yes' to confirm the update or 'no' to cancel",
-          userMessage: message,
-          userName
-        })
+        response: "say 'yes' to confirm the update or 'no' to cancel"
       }
     }
   }
@@ -233,11 +213,7 @@ export async function handleEventUpdate(input: EventUpdateInput): Promise<Action
   if (upcomingEvents.length === 0) {
     return {
       action: 'event_update',
-      response: applyPersonality({
-        baseResponse: "no upcoming events found to update",
-        userMessage: message,
-        userName
-      })
+      response: "no upcoming events found to update"
     }
   }
 
@@ -246,22 +222,14 @@ export async function handleEventUpdate(input: EventUpdateInput): Promise<Action
   if (!analysis.eventId || analysis.confidence < 0.5) {
     return {
       action: 'event_update',
-      response: applyPersonality({
-        baseResponse: "couldn't figure out which event you want to update. try being more specific?",
-        userMessage: message,
-        userName
-      })
+      response: "couldn't figure out which event you want to update. try being more specific?"
     }
   }
 
   if (Object.keys(analysis.updates).length === 0) {
     return {
       action: 'event_update',
-      response: applyPersonality({
-        baseResponse: "not sure what you want to change about that event. what field are you updating?",
-        userMessage: message,
-        userName
-      })
+      response: "not sure what you want to change about that event. what field are you updating?"
     }
   }
 
@@ -269,22 +237,14 @@ export async function handleEventUpdate(input: EventUpdateInput): Promise<Action
   if (!event) {
     return {
       action: 'event_update',
-      response: applyPersonality({
-        baseResponse: "found the event but can't load it right now. try again?",
-        userMessage: message,
-        userName
-      })
+      response: "found the event but can't load it right now. try again?"
     }
   }
 
   // Ask for confirmation
   return {
     action: 'event_update',
-    response: applyPersonality({
-      baseResponse: `confirm: ${analysis.summary} for "${event.title}"? reply yes/no`,
-      userMessage: message,
-      userName
-    }),
+    response: `confirm: ${analysis.summary} for "${event.title}"? reply yes/no`,
     pendingConfirmation: {
       eventId: analysis.eventId,
       updates: analysis.updates,

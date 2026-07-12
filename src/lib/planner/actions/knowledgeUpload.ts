@@ -4,7 +4,7 @@
  */
 
 import { ActionResult } from '../types'
-import { applyPersonality } from '../personality'
+import { TEXTER_MODEL } from '../models'
 import { processUpload, llmClient, textExplorerRepository } from '@/text-explorer'
 
 export interface KnowledgeUploadInput {
@@ -55,7 +55,7 @@ If the message contains knowledge worth uploading, suggest a brief title (5-8 wo
 Respond with JSON: { "shouldUpload": boolean, "title": string, "reasoning": string }`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Should this be added to the knowledge base? "${message}"` }
@@ -92,11 +92,7 @@ export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promis
   if (!isAdmin) {
     return {
       action: 'chat',
-      response: applyPersonality({
-        baseResponse: "only admins can add info to the knowledge base",
-        userMessage: message,
-        userName
-      })
+      response: "only admins can add info to the knowledge base"
     }
   }
 
@@ -109,11 +105,7 @@ export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promis
     console.log(`[KnowledgeUpload] Message doesn't contain uploadable knowledge: ${analysis.reasoning}`)
     return {
       action: 'chat',
-      response: applyPersonality({
-        baseResponse: "that doesn't look like info to add to the knowledge base. try something like 'ski retreat is happening jan 16-19 in utah'",
-        userMessage: message,
-        userName
-      })
+      response: "that doesn't look like info to add to the knowledge base. try something like 'ski retreat is happening jan 16-19 in utah'"
     }
   }
 
@@ -146,21 +138,13 @@ export async function handleKnowledgeUpload(input: KnowledgeUploadInput): Promis
 
     return {
       action: 'knowledge_upload',
-      response: applyPersonality({
-        baseResponse: `✅ added to knowledge base: "${uploadName}". ${factSummary}`,
-        userMessage: message,
-        userName
-      })
+      response: `✅ added to knowledge base: "${uploadName}". ${factSummary}`
     }
   } catch (error) {
     console.error('[KnowledgeUpload] Upload failed:', error)
     return {
       action: 'knowledge_upload',
-      response: applyPersonality({
-        baseResponse: `failed to upload. error: ${error instanceof Error ? error.message : 'unknown'}`,
-        userMessage: message,
-        userName
-      })
+      response: `failed to upload. error: ${error instanceof Error ? error.message : 'unknown'}`
     }
   }
 }

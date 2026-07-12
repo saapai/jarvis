@@ -4,6 +4,7 @@ import { detectDeadline } from '@/lib/slackDeadline';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
 import { getPrisma } from '@/lib/prisma';
+import { getPrimarySpaceId } from '@/lib/spaces';
 import { ExtractedFact } from '@/text-explorer/types';
 
 export const dynamic = 'force-dynamic';
@@ -43,8 +44,7 @@ async function syncChannel(channelName: string): Promise<ChannelSyncResult> {
   let scheduledCount = 0;
   let latestTs: string | undefined;
 
-  const defaultSpace = await prisma.space.findFirst();
-  const defaultSpaceId = defaultSpace?.id || null;
+  const defaultSpaceId = await getPrimarySpaceId();
 
   for (const message of messages) {
     if ((!message.text || message.text.trim().length === 0) && (!message.files || message.files.length === 0)) {

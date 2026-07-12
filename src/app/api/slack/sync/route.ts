@@ -4,6 +4,7 @@ import { detectDeadline } from '@/lib/slackDeadline';
 import { processUpload, llmClient, textExplorerRepository, reconcileFactsAfterUpload } from '@/text-explorer';
 import { embedText } from '@/text-explorer/embeddings';
 import { getPrisma } from '@/lib/prisma';
+import { getPrimarySpaceId } from '@/lib/spaces';
 import { ExtractedFact } from '@/text-explorer/types';
 
 export const dynamic = 'force-dynamic';
@@ -80,8 +81,7 @@ export async function POST(req: NextRequest) {
     let latestTs: string | undefined;
 
     // Find default space for space-scoped announcements
-    const defaultSpace = await prisma.space.findFirst();
-    const defaultSpaceId = defaultSpace?.id || null;
+    const defaultSpaceId = await getPrimarySpaceId();
 
     for (const message of messages) {
       // Skip system messages and empty messages (unless they have files)

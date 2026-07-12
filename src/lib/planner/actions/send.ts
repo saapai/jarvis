@@ -80,7 +80,7 @@ export async function handleDraftSend(input: SendActionInput): Promise<ActionRes
 
     return {
       action: 'draft_send',
-      response: TEMPLATES.draftSent(sentCount),
+      response: TEMPLATES.draftSent(sentCount, draft.content),
       newDraft: undefined
     }
   } catch (error) {
@@ -100,10 +100,13 @@ export async function handleDraftCancel(input: {
   phone: string
   message: string
   userName: string | null
+  spaceId?: string | null
 }): Promise<ActionResult> {
-  const { phone } = input
+  const { phone, spaceId } = input
 
-  const draft = await draftRepo.getActiveDraft(phone)
+  // Thread spaceId — without it a multi-space cancel can miss the real draft and
+  // silently no-op, leaving a live draft a later stray "send" could blast
+  const draft = await draftRepo.getActiveDraft(phone, spaceId)
 
   if (!draft) {
     return {
@@ -112,7 +115,7 @@ export async function handleDraftCancel(input: {
     }
   }
 
-  await draftRepo.deleteDraft(phone)
+  await draftRepo.deleteDraft(phone, spaceId)
 
   return {
     action: 'chat',

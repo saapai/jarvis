@@ -26,6 +26,7 @@ import * as draftRepo from '@/lib/repositories/draftRepository'
 import {
   handleDraftWrite,
   handleDraftSend,
+  handleDraftCancel,
   handleContentQuery,
   handleCapabilityQuery,
   handleChat,
@@ -138,6 +139,14 @@ export async function plan(input: PlannerInput): Promise<PlannerResult> {
           sendAnnouncement
         })
       }
+      break
+
+    case 'draft_cancel':
+      result = await handleDraftCancel({
+        phone,
+        message,
+        userName: user.name
+      })
       break
 
     case 'content_query':

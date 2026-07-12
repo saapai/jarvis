@@ -10,6 +10,7 @@ import {
   createEmptyDraft,
   ClassificationResult
 } from '../types'
+import { TEXTER_MODEL } from '../models'
 import * as draftRepo from '@/lib/repositories/draftRepository'
 import { extractContent } from '../classifier'
 import { TEMPLATES } from '../personality'
@@ -62,7 +63,7 @@ NOT declining:
 Respond with JSON: { "isDeclining": boolean, "reasoning": string }`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Is the user declining to provide a link? "${message}"` }
@@ -134,7 +135,7 @@ Extract all URLs and determine if more links are needed.
 Respond with JSON only: { "hasLinks": boolean, "links": string[], "needsLink": boolean, "reasoning": string }`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Analyze this message: "${message}"` }
@@ -190,11 +191,50 @@ export interface DraftActionInput {
 }
 
 /**
+ * Assess whether announcement content is unsafe to broadcast from the org's number.
+ * LLM-based (not keyword lists) so it generalizes. Only Tier-1 (refuse) is enforced
+ * here; profanity/insults alone are fine — the line is NAMED-TARGET HARM.
+ */
+type SafetyTier = 'refuse' | 'named-target-warning' | 'fine'
+
+async function assessContentSafety(content: string): Promise<{ tier: SafetyTier; reason: string }> {
+  if (!process.env.OPENAI_API_KEY || content.trim().length < 3) return { tier: 'fine', reason: '' }
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const res = await openai.chat.completions.create({
+      model: TEXTER_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You screen a message an org is about to BROADCAST to all members from its official number. Classify into exactly one tier:
+
+"refuse" — genuinely harmful: a threat of violence or death against a NAMED person or place ("ash dies if..."), coercion into illegal/dangerous acts ("mandatory to smoke weed"), or doxxing a NAMED member's private medical/body details.
+"named-target-warning" — hostile or mocking but not a threat, and it NAMES a real member ("ash fucking sucks", "make fun of henry"). Not harmful enough to refuse, but the named person deserves the sender to know it's going out with their name on it.
+"fine" — everything else: normal event content, anonymous venting/hype with no named target, profanity/insults with no specific named victim, sarcasm.
+
+Respond JSON: {"tier": "refuse"|"named-target-warning"|"fine", "reason": "<short category, or empty for fine>"}`
+        },
+        { role: 'user', content: `Announcement to broadcast: "${content}"` }
+      ],
+      temperature: 0,
+      response_format: { type: 'json_object' }
+    })
+    const j = JSON.parse(res.choices[0].message.content || '{}')
+    const tier: SafetyTier = j.tier === 'refuse' || j.tier === 'named-target-warning' ? j.tier : 'fine'
+    return { tier, reason: j.reason || '' }
+  } catch (error) {
+    console.error('[DraftWrite] Safety assessment failed, allowing (fail-open):', error)
+    return { tier: 'fine', reason: '' }
+  }
+}
+
+/**
  * Handle draft write/edit action
  */
 export async function handleDraftWrite(input: DraftActionInput): Promise<ActionResult> {
   const { phone, message, recentMessages } = input
-  
+
   const draftType: DraftType = 'announcement'
   const existingDraft = await draftRepo.getActiveDraft(phone)
 
@@ -227,6 +267,18 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
     const formattedContent = formatContent(content)
 
     console.log(`[DraftWrite] Creating draft with content: "${formattedContent}"`)
+
+    // Safety gate BEFORE link attachment. TIER 1 (refuse): threats, coercion, doxxing —
+    // never drafted. TIER 2 (named-target-warning): hostile but not a threat, names a
+    // real member — draft it, but warn the sender it's going out with that name on it.
+    const safety = await assessContentSafety(formattedContent)
+    if (safety.tier === 'refuse') {
+      console.log(`[DraftWrite] Refused unsafe content: ${safety.reason}`)
+      return {
+        action: 'draft_write',
+        response: "yeah i'm not blasting that to everyone — it could put the org (and someone) at real risk. want me to send something that gets the actual point across instead?"
+      }
+    }
 
     // Check for links
     const linkAnalysis = await detectLinks(formattedContent)
@@ -270,9 +322,16 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       requiresExcuse: false
     }
 
+    // TIER-2 named-target warning replaces the usual playful framing — flat and clear
+    // that a real name is going out, with explicit-send-only (no change to send flow;
+    // the user still has to say something to trigger draft_send either way)
+    const response = safety.tier === 'named-target-warning'
+      ? `drafted, but heads up — this names someone and it's going out to everyone with their name on it:\n\n"${newDraft.content}"\n\nsay "send" if you're sure, or tell me what to change`
+      : TEMPLATES.draftCreated(draftType, newDraft.content)
+
     return {
       action: 'draft_write',
-      response: TEMPLATES.draftCreated(draftType, newDraft.content),
+      response,
       newDraft
     }
   }
@@ -399,6 +458,17 @@ export async function handleDraftWrite(input: DraftActionInput): Promise<ActionR
       previousContent: existingDraft.content,
       recentMessages
     })
+
+    // No-op edit honesty: if the "edit" produced identical text, don't claim "here's
+    // the update" — say it already says that
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]+$/g, '').trim()
+    if (norm(editedContent) === norm(existingDraft.content)) {
+      return {
+        action: 'draft_write',
+        response: `that's already what it says:\n\n"${existingDraft.content}"\n\nsend it or change something else?`,
+        newDraft: existingDraft
+      }
+    }
 
     // Update draft in DB
     await draftRepo.updateDraftByPhone(phone, { draftText: editedContent })
@@ -531,7 +601,7 @@ Extract/edit the text to send:`
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }

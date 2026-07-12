@@ -3,7 +3,7 @@
  * Tests for intent classification with various conversation scenarios
  */
 
-import { classifyIntent, looksLikeQuestion, looksLikeCommand, extractContent } from '../classifier'
+import { classifyIntent, extractContent } from '../classifier'
 import { ClassificationContext, WeightedTurn, Draft } from '../types'
 
 // ============================================
@@ -332,11 +332,16 @@ describe('Chat Classification', () => {
     expect(result.action).toBe('chat')
   })
   
-  test('"cancel" with draft is chat (will clear draft)', async () => {
+  test('"cancel" with an active draft is draft_cancel (its own action now)', async () => {
     const result = await classifyIntent(createContext(
       'cancel',
       { isAdmin: true, activeDraft: createDraft('announcement', 'ready', 'test') }
     ))
+    expect(result.action).toBe('draft_cancel')
+  })
+
+  test('"cancel" with NO draft is chat (nothing to cancel)', async () => {
+    const result = await classifyIntent(createContext('cancel', { isAdmin: true }))
     expect(result.action).toBe('chat')
   })
 })
@@ -404,25 +409,6 @@ describe('Context-Based Classification', () => {
 // ============================================
 
 describe('Utility Functions', () => {
-  test('looksLikeQuestion detects questions', () => {
-    expect(looksLikeQuestion('when is the meeting?')).toBe(true)
-    expect(looksLikeQuestion('what time is it')).toBe(true)
-    expect(looksLikeQuestion('where is the party')).toBe(true)
-    expect(looksLikeQuestion('how do I do this')).toBe(true)
-    expect(looksLikeQuestion('is there a meeting')).toBe(true)
-    expect(looksLikeQuestion('meeting tonight')).toBe(false)
-    expect(looksLikeQuestion('send it')).toBe(false)
-  })
-  
-  test('looksLikeCommand detects commands', () => {
-    expect(looksLikeCommand('send it')).toBe(true)
-    expect(looksLikeCommand('make an announcement')).toBe(true)
-    expect(looksLikeCommand('create a poll')).toBe(true)
-    expect(looksLikeCommand('cancel')).toBe(true)
-    expect(looksLikeCommand('when is the meeting')).toBe(false)
-    expect(looksLikeCommand('hi')).toBe(false)
-  })
-  
   test('extractContent removes command prefixes for announcements', () => {
     expect(extractContent('announce meeting tonight', 'announcement'))
       .toBe('meeting tonight')

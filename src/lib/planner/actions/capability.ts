@@ -4,7 +4,8 @@
  */
 
 import { ActionResult } from '../types'
-import { applyPersonality, TEMPLATES } from '../personality'
+import { TEXTER_MODEL } from '../models'
+import { TEMPLATES } from '../personality'
 
 export interface CapabilityQueryInput {
   phone: string
@@ -60,7 +61,7 @@ If it's "impossible", identify what impossible task they're asking for.
 Respond with JSON only.`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         {
@@ -109,11 +110,7 @@ export async function handleCapabilityQuery(input: CapabilityQueryInput): Promis
 
     return {
       action: 'capability_query',
-      response: applyPersonality({
-        baseResponse: impossibleResponses[Math.floor(Math.random() * impossibleResponses.length)],
-        userMessage: message,
-        userName
-      })
+      response: impossibleResponses[Math.floor(Math.random() * impossibleResponses.length)]
     }
   }
 
@@ -122,43 +119,27 @@ export async function handleCapabilityQuery(input: CapabilityQueryInput): Promis
     case 'identity':
       return {
         action: 'capability_query',
-        response: applyPersonality({
-          baseResponse: "i'm jarvis, your org's sassy ai assistant. powered by enclave. i help with announcements and answering questions about what's going on",
-          userMessage: message,
-          userName
-        })
+        response: "i'm jarvis, your org's sassy ai assistant. powered by enclave. i help with announcements and answering questions about what's going on"
       }
 
     case 'howItWorks':
       return {
         action: 'capability_query',
-        response: applyPersonality({
-          baseResponse: "i read your messages, figure out what you want, and do it. or roast you. depends on my mood 🤷",
-          userMessage: message,
-          userName
-        })
+        response: "i read your messages, figure out what you want, and do it. or roast you. depends on my mood 🤷"
       }
 
     case 'capabilities':
     case 'help':
       return {
         action: 'capability_query',
-        response: applyPersonality({
-          baseResponse: TEMPLATES.capabilities(isAdmin),
-          userMessage: message,
-          userName
-        })
+        response: TEMPLATES.capabilities(isAdmin)
       }
 
     case 'general':
     default:
       return {
         action: 'capability_query',
-        response: applyPersonality({
-          baseResponse: TEMPLATES.capabilities(isAdmin),
-          userMessage: message,
-          userName
-        })
+        response: TEMPLATES.capabilities(isAdmin)
       }
   }
 }

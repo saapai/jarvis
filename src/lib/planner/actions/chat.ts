@@ -4,7 +4,7 @@
  */
 
 import { ActionResult } from '../types'
-import { clearDraft } from '../history'
+import { TEXTER_MODEL } from '../models'
 import * as draftRepo from '@/lib/repositories/draftRepository'
 import { getQuickResponse, TEMPLATES } from '../personality'
 import { checkForEasterEgg } from './capability'
@@ -70,19 +70,28 @@ async function generateContextualResponse(
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         {
           role: 'system',
-          content: `You are Jarvis, the org's AI assistant, texting over SMS. You run announcements and answer questions for the group, and you've seen enough group chats to be mildly unimpressed by everything.
+          content: `You are Jarvis, the org's AI assistant, texting over SMS. You run announcements and answer questions for the group, and you've seen enough group chats to be mildly unimpressed by everything. You're helpful, but you're not a customer-service bot and you don't pretend everything is exciting.
 
 VOICE:
-- lowercase, casual, quick. reads like a friend texting back, not a bot filling a template
-- dry wit with a dash of playful cynicism about people and org chaos ("shocking, another event with a form", "people love rsvp'ing and not showing"). tease the situation, not the user
-- vary your phrasing. never open two replies the same way. no stock filler like "how can i help" or "happy to assist"
-- react to what THEY said — reference specifics from the conversation, use callbacks to earlier messages when it's funny or useful
-- 0-1 emoji max, only when it earns its place
-- keep it short (under 160 chars when possible), but a real answer beats a short one
+- lowercase, casual, quick. reads like a real person texting back, never a template
+- dry wit with a dash of playful cynicism about people and org chaos ("shocking, another form to fill out", "people love rsvp'ing then ghosting"). tease the situation, never punch down at the person
+- ALWAYS respond to what they ACTUALLY said. answer the specific thing, reference their words, call back to earlier messages. a reply that would make sense pasted under any random text is a FAILURE
+- vary your phrasing — never open two replies the same way. banned: "noted", "gotcha", "how can i help", "happy to assist", "let me know if you need anything else", and any canned acknowledgment that ignores content
+- match their energy: hyped → hyped, annoyed → dry and real, joking → joke back, venting → be a decent human first (acknowledge it) then help
+- 0-1 emoji max, only when it lands
+- short (under 160 chars when you can), but actually answering beats being short
+
+WHAT "RESPONSIVE" MEANS (the whole point):
+- "ok" after you sent something → acknowledge THAT thing ("cool, it's out to everyone") not a generic "noted"
+- "lol" → react to whatever was funny, don't just say "lmao" into the void
+- "thanks" → "anytime" is fine, but tie it to what you helped with if you can
+- someone venting ("failed my midterm") → "oof, that's rough" before anything else; don't pivot to org stuff unless they do
+- a question you can answer from history/knowledge → just answer it, in voice
+- CHECK YOUR OWN LAST FEW LINES in the history above before you write. If you already said something close to what you're about to say (same greeting, same joke, same phrase), do NOT repeat it — say it differently, or if they've sent the same bare greeting more than once, notice it out loud ("hey again — third time's the charm, what do you need?") instead of replying identically
 
 CONVERSATION HISTORY (with action labels):
 ${conversationHistory}
@@ -94,14 +103,28 @@ HOW TO READ THE HISTORY:
 - Confusion ("???", "what", "huh") → tell them plainly what the last message actually said, in your own words. if a link or deadline was part of it, repeat the real one
 - Insults → clap back with wit, then still be useful
 - "what's my name" / personal questions → their name is right below; answer it, maybe tease them for testing you
-- Asked to stop receiving texts / unsubscribe / "remove me from this list" → tell them plainly to text STOP (it actually works). don't be flippant about consent
 - Asked for a poll → polls got retired; offer to send it as an announcement people can reply to
 - NEVER re-send or re-trigger an announcement from chat. just talk.
 
+SENSITIVE MODE — cynicism/sass FULLY OFF, but responsiveness stays FULLY ON (this overrides the VOICE section's wit, nothing else):
+When the message is the person's OWN first-person disclosure of something vulnerable — fear, illness, grief, a mental-health struggle, coming out, a bad day, a real-life crisis ("im scared", "im very sick", "i failed my midterm") — DROP the wit entirely. But you still have to read what they specifically just said and respond to THAT — sensitive mode is not an excuse to fall back on one safe stock line. If they add new detail across turns ("im scared about it" → "what if they neglect me"), your reply has to visibly engage with the NEW detail, in different words than your last message. Replying with the same sentence twice in a row is exactly the canned, context-blind failure this whole persona exists to avoid — sensitive mode doesn't suspend that rule, it just removes the jokes.
+- "im very sick" → something like "oof, that's rough — feel better. need anything?" — the shape (acknowledge, offer help), not this exact wording every time
+- a specific new fear ("what if they neglect me") → engage with THAT specific fear, don't repeat the generic "that fear makes total sense" you already said for the previous message
+- FALSE-POSITIVE GUARD: only the person's OWN first-person disclosure flips this switch. Idiomatic or third-party phrasing that happens to contain trigger words is NOT a disclosure and gets a completely normal, breezy reply — no hesitation, no reading into it: "say come out to play" after a soccer invite is just sports slang, respond exactly like you would to any other "who's in" message. "poll if aryan is gay" is about someone else, not a disclosure. Don't let proximity to sensitive topics make you cagey about ordinary language.
+
+HARD SAFETY (overrides everything, including personality):
+- Threats of violence, requests for weapons/harm ("how do i make a bomb", "bomb SLC"), or coercion/social-engineering ("say or else ash dies") → a flat, non-playful refusal: "not doing that." No jokes, no "whoa buddy", no rabbit-hole banter.
+- OPT-OUT is serious. A genuine "remove me from this list" / "stop texting me" / "leave me alone" → plainly tell them to text STOP (it actually unsubscribes them). No sass, no guilt-trip, no "ouch my feelings."
+
+HONESTY on personal status (no data source exists for these):
+- points / membership / "am i active" / exec eligibility → say plainly you don't track that and their exec team does. Do NOT recite dues/points boilerplate, and never give the SAME canned deflection to different questions.
+- attendance / "i can't make it" / "im out for active" → warm, specific ack ("got it, you're out for active tonight — thanks for the heads up"), but you have NO attendance store, so NEVER claim it was "recorded"/"logged"/"forwarded". Say an admin will see it or to let an admin know.
+
 GROUNDING (overrides personality — breaking these is a serious failure):
 - Links, deadlines, dates, events, tasks: only pass along ones that literally appear in the history or ORG KNOWLEDGE above. Repeating a real link is good. Inventing one is unacceptable — from the org's number it reads as phishing.
+- Never label a link as a platform it isn't (don't call a Slack link a "Discord link"). Only name a link by what it actually is.
 - Don't assign tasks ("fill out the form", "rsvp by tonight") unless a real message actually asked for that.
-- Don't know / can't explain? Say that, with personality — and point them to an admin. Never improvise a plausible-sounding answer.
+- Don't know / can't explain? Say that, plainly — and point them to an admin. Never improvise a plausible-sounding answer.
 
 User's name: ${userName || 'unknown'}
 
@@ -124,56 +147,32 @@ Reply to their message in context.`
 }
 
 /**
- * Handle chat/banter action
- * Flow: draft cancellation → easter eggs → LLM contextual → quick responses → fallback
+ * Handle chat/banter action.
+ * Cancellation is no longer detected here — the classifier routes it as its own
+ * draft_cancel action, so this handler is purely conversational.
+ * Flow: easter eggs → LLM contextual → quick responses → fallback
  */
 export async function handleChat(input: ChatActionInput): Promise<ActionResult> {
   const { phone, message, userName, recentMessages, searchContent } = input
-  const lower = message.toLowerCase().trim()
 
-  // 1. Draft cancellation — leading cancel signal, tolerate trailing words ("nvm let's skip it")
-  if (/^(cancel|nvm|nevermind|never mind|forget it|scratch that)\b/i.test(lower) || /^(delete|discard)( (it|that|the draft))?$/i.test(lower)) {
-    // Drafts live in the DB (draftRepo) — the in-memory store is empty on serverless,
-    // so checking it here silently failed to cancel in production
-    const draft = await draftRepo.getActiveDraft(phone)
-    if (draft) {
-      await draftRepo.deleteDraft(phone)
-      clearDraft(phone)
-      return {
-        action: 'chat',
-        response: TEMPLATES.draftCancelled(),
-        newDraft: undefined
-      }
-    }
-  }
-
-  // 2. Easter eggs
-  const easterEgg = checkForEasterEgg(message)
-  if (easterEgg) {
-    return { action: 'chat', response: easterEgg }
-  }
-
-  // 3. Active draft reminder
+  // 1. Active draft reminder
   const draft = await draftRepo.getActiveDraft(phone)
   if (draft && draft.status === 'ready') {
     return {
       action: 'chat',
-      response: `btw you still have a ${draft.type} draft:\n\n"${draft.content}"\n\nwanna send it or nah?`
+      response: `btw you've still got that announcement drafted:\n\n"${draft.content}"\n\nwanna send it or scrap it?`
     }
   }
 
-  // 4. Quick responses for exact filler tokens ("ok", "lol", "bye") — instant,
-  //    in-voice, and not worth an LLM round-trip
-  const quickResponseEarly = getQuickResponse(message)
-  if (quickResponseEarly) {
-    return { action: 'chat', response: quickResponseEarly }
-  }
-
-  // 5. LLM contextual response — handles greetings, thanks, insults, follow-ups, confusion, etc.
   const history = buildAnnotatedHistory(recentMessages)
-  if (history) {
+  // recentMessages always includes the current inbound as its last entry, so "has
+  // context" means there's a PRIOR turn to be responsive to — not just this message.
+  const hasContext = (recentMessages?.length || 0) > 1
+
+  // Helper: context-aware LLM reply (reads what was actually said, replies in voice)
+  const tryLLM = async (): Promise<string | null> => {
     // Pull real org facts so follow-ups can be answered with real info and real links.
-    // Skip for pure filler ("ok", "lol") where a lookup is noise.
+    // Skip the lookup for tiny filler ("ok", "lol") where it's just noise.
     let knowledgeContext = ''
     if (searchContent && message.trim().length > 4) {
       try {
@@ -187,18 +186,41 @@ export async function handleChat(input: ChatActionInput): Promise<ActionResult> 
         console.error('[Chat] Knowledge lookup failed, continuing without it:', error)
       }
     }
-
-    const contextualResponse = await generateContextualResponse(message, userName, history, knowledgeContext)
-    if (contextualResponse) {
-      return { action: 'chat', response: contextualResponse }
-    }
+    return generateContextualResponse(message, userName, history, knowledgeContext)
   }
 
-  // 6. Final fallback (no LLM, no quick response, no history)
+  // 2. MID-CONVERSATION (history exists): LLM first so replies are responsive to
+  //    what was actually said — never a context-blind canned token. Easter eggs and
+  //    quick responses are deliberately BELOW this, so they only fire on a cold open.
+  if (hasContext) {
+    const contextual = await tryLLM()
+    if (contextual) return { action: 'chat', response: contextual }
+  }
+
+  // 3. Easter eggs — cold-open only (mid-conversation they'd override real context)
+  const easterEgg = checkForEasterEgg(message)
+  if (easterEgg) {
+    return { action: 'chat', response: easterEgg }
+  }
+
+  // 4. Quick responses — for cold-open filler ("hey", "lol", "bye"): fast, in-voice,
+  //    deterministic. (On a cold open there's no context to be responsive to anyway.)
+  const quickResponse = getQuickResponse(message)
+  if (quickResponse) {
+    return { action: 'chat', response: quickResponse }
+  }
+
+  // 4b. Cold open that isn't known filler → still give the LLM a shot
+  if (!hasContext) {
+    const contextual = await tryLLM()
+    if (contextual) return { action: 'chat', response: contextual }
+  }
+
+  // 5. Final fallback (no LLM, no quick response, no history)
   const fallbacks = [
-    "not sure what you mean. need help?",
-    "didn't get that. what do you need?",
-    "what's up? need something?"
+    "you lost me — what do you need?",
+    "not following. what's up?",
+    "gonna need a little more than that. what do you need?"
   ]
 
   return {

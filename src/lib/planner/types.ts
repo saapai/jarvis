@@ -10,6 +10,7 @@
 export type ActionType =
   | 'draft_write'      // Create or edit announcement draft
   | 'draft_send'       // Send out an existing draft
+  | 'draft_cancel'     // Abandon/scrap the active draft
   | 'content_query'    // Questions about org content (events, meetings, etc.)
   | 'capability_query' // Questions about Jarvis/Enclave capabilities
   | 'knowledge_upload' // Add information to knowledge base (admin only)

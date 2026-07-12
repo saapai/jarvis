@@ -58,25 +58,24 @@ describe('filterResultsByCategories — topic matches survive category filtering
   })
 })
 
-describe('resolveVagueFollowUp — pronoun follow-ups inherit prior subject', () => {
+describe('resolveVagueFollowUp — pronoun follow-ups inherit prior subject (LLM-backed)', () => {
   const history = [
     { direction: 'inbound' as const, text: 'when are alumni reunions', createdAt: new Date() },
     { direction: 'outbound' as const, text: 'reunions are coming up soon', createdAt: new Date() },
     { direction: 'inbound' as const, text: 'when are they', createdAt: new Date() }
   ]
 
-  test('"when are they" folds in the previous question subject', () => {
-    const resolved = resolveVagueFollowUp('when are they', history)
-    expect(resolved).toContain('alumni reunions')
-    expect(resolved).not.toBe('when are they')
-  })
+  test('"when are they" folds in the previous question subject', async () => {
+    const resolved = (await resolveVagueFollowUp('when are they', history)).toLowerCase()
+    expect(resolved).toMatch(/reunion|alumni/)
+  }, 20000)
 
-  test('a self-contained question is left untouched', () => {
-    const resolved = resolveVagueFollowUp('when is the formal', history)
-    expect(resolved).toBe('when is the formal')
-  })
+  test('a self-contained question is left untouched', async () => {
+    const resolved = await resolveVagueFollowUp('when is the formal', history)
+    expect(resolved.toLowerCase()).toContain('formal')
+  }, 20000)
 
-  test('no history → unchanged', () => {
-    expect(resolveVagueFollowUp('when are they', [])).toBe('when are they')
+  test('no history → unchanged (no LLM call)', async () => {
+    expect(await resolveVagueFollowUp('when are they', [])).toBe('when are they')
   })
 })

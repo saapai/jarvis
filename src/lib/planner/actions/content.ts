@@ -5,7 +5,8 @@
  */
 
 import { ActionResult } from '../types'
-import { applyPersonality, TEMPLATES } from '../personality'
+import { TEXTER_MODEL } from '../models'
+import { TEMPLATES } from '../personality'
 
 const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
 
@@ -137,12 +138,12 @@ Respond with JSON: { "categories": string[], "reasoning": string }
 Categories should be one of: upcoming, recurring, past, facts, announcements, polls`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `What categories is this query asking about? "${message}"` }
       ],
-      temperature: 0.1,
+      temperature: 0, // category detection feeds which facts get retrieved — must be deterministic
       max_tokens: 150,
       response_format: { type: 'json_object' }
     })
@@ -228,12 +229,12 @@ Respond with JSON: { "searchTerms": string }
 The searchTerms should be a space-separated list of keywords that would help find relevant items in that category.`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Original query: "${originalQuery}"\nCategory: ${category}\nGenerate search terms:` }
       ],
-      temperature: 0.2,
+      temperature: 0, // search-term generation — deterministic so retrieval doesn't vary run to run
       max_tokens: 100,
       response_format: { type: 'json_object' }
     })
@@ -271,7 +272,7 @@ async function isRecurringFromContent(body: string): Promise<boolean> {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         {
           role: 'system',
@@ -282,7 +283,7 @@ async function isRecurringFromContent(body: string): Promise<boolean> {
           content: `Content: "${body.substring(0, 300)}"\nIs this a recurring event that happens on a regular schedule?`
         }
       ],
-      temperature: 0.1,
+      temperature: 0,
       max_tokens: 50,
       response_format: { type: 'json_object' }
     })
@@ -429,12 +430,12 @@ SPECIFIC OBJECT QUERIES (return false):
 Respond with JSON: { "isCategoryQuery": boolean, "reasoning": string }`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Is this a category/meta query? "${query}"` }
       ],
-      temperature: 0.1,
+      temperature: 0,
       max_tokens: 100,
       response_format: { type: 'json_object' }
     })
@@ -505,12 +506,12 @@ Respond with JSON mapping event titles to arrays of announcement indices: { "eve
 Only include associations if the announcement/poll provides context or information about the event.`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: 'Find associations between events and announcements/polls.' }
       ],
-      temperature: 0.2,
+      temperature: 0,
       max_tokens: 500,
       response_format: { type: 'json_object' }
     })
@@ -768,12 +769,20 @@ VOICE — apply to every reply:
 - URLs must be passed through EXACTLY as they appear, on their own line or after a dash
 - a dash of dry wit is welcome when it fits ("rsvp now or wander around lost, your call") but never at the cost of clarity
 
+DATE FIDELITY (highest priority): reproduce every date EXACTLY as it appears in the result body or its "Sent on"/Event date line — never change the month, day, or year, and never let "weekend of" shift a month. If two results give different dates for one named event, present BOTH and label which is upcoming relative to today; never average, guess, or silently pick one.
+
+TOPIC FIDELITY / NO FILLER: answer ONLY the specific thing asked. If NO result is a primary match for the user's specific topic (e.g. they asked "when is soccer" but results are retreat/ski), do NOT pad the answer with those unrelated events — say in one line you don't have that specific info and offer to check with an admin. Never substitute a different event to look helpful.
+
+LINK GROUNDING: if ANY result contains a URL for the asked-about event, you MUST return that exact URL. Only say there's no link when NO result contains one for that event. Never invent a link.
+PLATFORM-NAME ACCURACY: if the user asks for a link to a SPECIFIC platform ("discord link", "slack link", "google form"), check the URL's actual domain before answering. A url containing "slack.com" is a Slack link, "discord.gg"/"discord.com" is Discord, "forms.google.com"/"docs.google.com" is a Google Form, "luma.com" is Luma — NEVER call a link by a platform name its domain doesn't match, even to be helpful. If the only link you have is the wrong platform, say plainly "i don't have a discord link, but here's [what you have]: <url>" — do not say "here's the discord link" while giving a non-discord URL.
+
 PRIMARY MATCHES:
 - There are ${primaryResultsCount} results that directly mention the main topic words from the user's question (${topicWords.join(', ') || 'none'}).
 - Any result marked with [PRIMARY_MATCH] is directly about what the user asked (e.g., an announcement that literally mentions "soccer").
 - You MUST base your answer on PRIMARY_MATCH results first if any exist, before considering other results.
+- When several results share an event name, list each with its date, LEAD with the soonest upcoming as the answer, and mark past instances as past.
 
-CRITICAL: If search results are provided, they ARE relevant to the query. DO NOT say "no information" or "I don't have that information" if results are provided. Use the information in the results to answer the question, even if it's incomplete.
+CRITICAL: If PRIMARY_MATCH results are provided, use them. But if the results only tangentially relate (no primary match for the specific topic asked), it is correct to say you don't have that specific info rather than forcing an unrelated answer.
 
 TODAY'S CONTEXT:
 - Today is ${todayDayName}, ${todayStr}
@@ -809,6 +818,11 @@ TIME DIRECTIONALITY:
 - PAST, ANNOUNCEMENTS, and POLLS categories contain past dates
 - Use the Category and timeDirection metadata to understand temporal context
 - Relative dates in announcements/polls are calculated from their "Sent on" date, NOT today
+
+RECURRING-EVENT AUTHORITY (critical — this is the #1 source of wrong dates):
+- A RECURRING result carries a pre-calculated "Next occurrence: <day> (<when>)" line. That line is ALWAYS correct and ALWAYS wins.
+- IGNORE relative-date words like "tomorrow"/"tonight"/"this week" found INSIDE an old announcement's raw text when answering "when is the next X" — those words describe when THAT announcement was sent, not today. Multiple past announcements about the same recurring event will each say "tomorrow" relative to their own send date; picking any of them instead of the "Next occurrence" line gives a different wrong answer every time.
+- Only use an announcement's relative-date text to explain HISTORY ("the meeting on July 7 was announced as happening 'tomorrow'"), never to answer "when is the next one."
 
 WEEK-OF-TERM EVENTS:
 - Some events or facts may be labeled by week, like "Week 1", "Week 2", "Week 3", etc.
@@ -876,7 +890,7 @@ FORMATTING RULES:
       : ''
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Question: "${query}"${categoryInfo}\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
@@ -887,7 +901,7 @@ FORMATTING RULES:
 - Use the Category metadata to understand time directionality and filter appropriately
 - Extract and present the information from these results to answer the question\n\nAnswer in jarvis's voice: lowercase, casual, short, plain text (no markdown), answer first:` }
       ],
-      temperature: 0.3,
+      temperature: 0, // date fidelity — never let sampling shift a month/day/year
       max_tokens: 400
     })
 
@@ -924,38 +938,57 @@ function eventToContentResult(event: EventResult): ContentResult {
 
 /**
  * Resolve a vague / pronoun-only follow-up ("when are they", "where is it",
- * "what time") by appending the subject of the most recent prior user question.
- * "when are they" after "when are alumni reunions" → "when are they (alumni reunions)".
- * Returns the message unchanged when it already carries its own subject.
+ * "hello when are they") into a self-contained query by inheriting the subject from
+ * the recent conversation. LLM-based so it handles pronouns, greetings, and topic
+ * shifts ("what about X" keeps X, doesn't inherit) without brittle patterns.
+ * Returns the message unchanged when it already carries its own subject or when
+ * there's nothing to inherit.
  */
-export function resolveVagueFollowUp(
+export async function resolveVagueFollowUp(
   message: string,
   recentMessages?: Array<{ direction: 'inbound' | 'outbound'; text: string; createdAt: Date; meta?: unknown }>
-): string {
+): Promise<string> {
   if (!recentMessages || recentMessages.length === 0) return message
-  const lower = message.toLowerCase().trim()
+  if (!process.env.OPENAI_API_KEY) return message
 
-  // Only expand short questions built around a pronoun / bare time-place word
-  const isVague =
-    lower.length <= 24 &&
-    /\b(they|them|it|that|those|these|this one|that one)\b/.test(lower) ||
-    /^(when|where|what time|how much|who)\??$/.test(lower)
-  if (!isVague) return message
+  // Build a short transcript of the recent turns for context
+  const transcript = recentMessages
+    .slice(-6)
+    .map(m => `${m.direction === 'inbound' ? 'User' : 'Jarvis'}: ${(m.text || '').slice(0, 200)}`)
+    .join('\n')
 
-  // Find the most recent EARLIER user message that carried a real subject
-  for (let i = recentMessages.length - 1; i >= 0; i--) {
-    const m = recentMessages[i]
-    if (m.direction !== 'inbound') continue
-    if (m.text.trim().toLowerCase() === lower) continue // skip the current message
-    const subjectWords = m.text
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(w => w.length > 3 && !FALLBACK_KEYWORDS.includes(w))
-    if (subjectWords.length > 0) {
-      return `${message} (${m.text.trim()})`
-    }
+  try {
+    const { getOpenAI } = await import('@/lib/openai')
+    const openai = getOpenAI()
+    const res = await openai.chat.completions.create({
+      model: TEXTER_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You rewrite a member's latest SMS into a SELF-CONTAINED search query by resolving pronouns and vague references from the recent conversation.
+
+RULES:
+- If the message already names its own subject ("when is the formal"), return it UNCHANGED.
+- If it's vague — a pronoun ("when are they", "where is it"), or a bare "when?"/"where?" — replace the vague part with the concrete subject from the most recent relevant earlier turn.
+- Strip a leading greeting ("hello when are they" → resolve "when are they").
+- "what about X" / "how about X" is a TOPIC SHIFT to X — keep X as the subject, do NOT inherit the previous topic.
+- If nothing in the conversation gives a clear subject to inherit, return the message UNCHANGED.
+- Output ONLY the rewritten query text, nothing else.`
+        },
+        {
+          role: 'user',
+          content: `Recent conversation:\n${transcript}\n\nLatest message: "${message}"\n\nSelf-contained query:`
+        }
+      ],
+      temperature: 0,
+      max_tokens: 60
+    })
+    const resolved = res.choices[0].message.content?.trim().replace(/^["']|["']$/g, '') || message
+    return resolved.length > 0 ? resolved : message
+  } catch (error) {
+    console.error('[ContentQuery] Vague follow-up resolution failed, using original:', error)
+    return message
   }
-  return message
 }
 
 /**
@@ -963,7 +996,7 @@ export function resolveVagueFollowUp(
  * Searches content database, events, and past announcements/polls, then uses LLM to filter and format results.
  */
 export async function handleContentQuery(input: ContentQueryInput): Promise<ActionResult> {
-  const { phone, message, userName, searchContent, searchEvents, recentMessages, searchPastActions } = input
+  const { phone, message, searchContent, searchEvents, recentMessages, searchPastActions } = input
   
   console.log(`[ContentQuery] Processing query: "${message}"`)
   
@@ -971,13 +1004,11 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   const recentAction = checkRecentActions(message, recentMessages)
   if (recentAction?.kind === 'recap') {
     console.log(`[ContentQuery] Recapping recent announcement`)
+    // Return the recap as-is — it already quotes the real content. Wrapping it in
+    // applyPersonality glued on sass prefixes ("okay okay ... there you go").
     return {
       action: 'content_query',
-      response: applyPersonality({
-        baseResponse: recentAction.text,
-        userMessage: message,
-        userName
-      })
+      response: recentAction.text
     }
   }
   if (recentAction?.kind === 'followup') {
@@ -990,7 +1021,7 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   
   // Resolve vague / pronoun follow-ups ("when are they", "where is it") by folding in
   // the subject from the previous user question, so search has something to match on
-  const resolvedMessage = resolveVagueFollowUp(message, recentMessages)
+  const resolvedMessage = await resolveVagueFollowUp(message, recentMessages)
   if (resolvedMessage !== message) {
     console.log(`[ContentQuery] Resolved vague query "${message}" → "${resolvedMessage}"`)
   }
@@ -1209,15 +1240,11 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     return (b.score || 0) - (a.score || 0)
   })
   
-  // If no results, return no results message
+  // If no results, return no results message (already in-voice; no sass-wrap)
   if (allResults.length === 0) {
         return {
           action: 'content_query',
-          response: applyPersonality({
-            baseResponse: TEMPLATES.noResults(),
-            userMessage: message,
-            userName
-          })
+          response: TEMPLATES.noResults()
         }
       }
       
@@ -1428,7 +1455,7 @@ async function answerAnnouncementFollowUp(
     const openai = getOpenAI()
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: TEXTER_MODEL,
       messages: [
         {
           role: 'system',

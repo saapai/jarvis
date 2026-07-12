@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { validateTwilioSignature, toTwiml, sendSms } from '@/lib/twilio'
 import { normalizePhone, toE164 } from '@/lib/db'
 import { classifyIntent } from '@/lib/planner/classifier'
-import { applyPersonalityAsync } from '@/lib/planner/personality'
 import { buildWeightedHistoryFromMessages } from '@/lib/planner/history'
 import * as actions from '@/lib/planner/actions'
 import * as messageRepo from '@/lib/repositories/messageRepository'
@@ -13,6 +12,7 @@ import * as eventRepo from '@/lib/repositories/eventRepository'
 import * as spaceContext from '@/lib/spaceContext'
 import type { ActionResult } from '@/lib/planner/types'
 import { routeContentSearch } from '@/text-explorer/router'
+import { extractName } from '@/lib/planner/nameExtraction'
 
 export async function POST(request: NextRequest) {
   try {
@@ -261,6 +261,16 @@ async function handleMessage(phone: string, message: string): Promise<string> {
       console.log(`[DraftSend] Result: ${actionResult.response.substring(0, 50)}...`)
       break
 
+    case 'draft_cancel':
+      console.log(`[DraftCancel] Scrapping active draft...`)
+      actionResult = await actions.handleDraftCancel({
+        phone,
+        message,
+        userName: user.name,
+        spaceId: activeSpaceId
+      })
+      break
+
     case 'content_query':
       console.log(`[ContentQuery] Querying content for: "${message}"`)
       actionResult = await actions.handleContentQuery({
@@ -333,30 +343,13 @@ async function handleMessage(phone: string, message: string): Promise<string> {
   
   console.log(`[ActionRouter] Action complete, applying personality...`)
 
-  // 8. Apply personality to response (using LLM for context-aware personality)
-  // Skip LLM personality for:
-  // - draft actions: LLM can alter displayed draft content
-  // - chat actions: chat handler already generates contextual LLM response
-  // - content queries: the formatter LLM already answers in jarvis's voice; re-wrapping
-  //   glued sass prefixes onto the answer and could mangle links
-  const skipPersonalityLLM = classification.action === 'draft_write'
-    || classification.action === 'draft_send'
-    || classification.action === 'chat'
-    || classification.action === 'content_query'
-  const historyString = history.length > 0
-    ? history.map(turn => `${turn.role === 'user' ? 'User' : 'Jarvis'}: ${turn.content}`).join('\n')
-    : undefined
+  // 8. Every handler now returns text already in Jarvis's voice — the chat/content
+  //    handlers generate it via the LLM, and the structured handlers (draft, cancel,
+  //    capability, knowledge, event) return clean in-voice templates. There's no
+  //    separate personality-application pass anymore; a second wrapper only ever
+  //    stacked canned sass onto text that didn't need it.
+  const finalResponse = actionResult.response
 
-  const finalResponse = skipPersonalityLLM
-    ? actionResult.response
-    : await applyPersonalityAsync({
-        baseResponse: actionResult.response,
-        userMessage: message,
-        userName: user.name,
-        useLLM: true,
-        conversationHistory: historyString
-      })
-  
   // 9. Log outbound message with draft content if applicable
   const metadata: any = {
     action: classification.action,
@@ -492,80 +485,6 @@ text STOP to unsubscribe`
  * Use LLM to intelligently extract a name from a message
  * Returns null if the message doesn't contain a name
  */
-async function extractName(message: string): Promise<string | null> {
-  const text = message.trim()
-  
-  // Quick checks first
-  if (text.length > 100 || text.length < 2) return null
-  
-  // Obvious commands - skip LLM call
-  if (/^(yes|no|maybe|\d+|stop|help|start|announce|poll|reset)$/i.test(text.toLowerCase())) {
-    return null
-  }
-  
-  // Obvious greetings - skip LLM call
-  if (/^(hi|hello|hey|yo|sup|what'?s up|wassup|hola|heyo)$/i.test(text.toLowerCase())) {
-    return null
-  }
-  
-  try {
-    const OpenAI = (await import('openai')).default
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-    
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a name extraction assistant. Analyze the user's message and determine if it contains a person's name.
-
-Rules:
-- Return ONLY the name if one is clearly present (can be any ethnicity, any format)
-- Return "NOT_A_NAME" if the message is a greeting, question, casual chat, or doesn't contain a name
-- Names can be 1-3 words typically
-- Be smart: "I'm Sarah" = "Sarah", "my name is John" = "John", "call me Mike" = "Mike"
-- But: "yo what up" = NOT_A_NAME, "when is the trip" = NOT_A_NAME, "hi there" = NOT_A_NAME
-
-Return format: Just the name (capitalized properly) or "NOT_A_NAME"`
-        },
-        {
-          role: 'user',
-          content: `Message: "${text}"\n\nExtract the name or return NOT_A_NAME:`
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 20
-    })
-    
-    const result = response.choices[0]?.message?.content?.trim() || null
-    
-    if (!result || result === 'NOT_A_NAME' || result.toLowerCase() === 'not a name') {
-      return null
-    }
-    
-    // Clean and format the name
-    const cleaned = result
-      .replace(/[!.?,;:]+$/, '')  // Remove trailing punctuation
-      .trim()
-    
-    // Validate length
-    if (cleaned.length < 2 || cleaned.length > 50) {
-      return null
-    }
-    
-    // Capitalize properly (first letter of each word)
-    return cleaned
-      .split(/\s+/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ')
-      
-  } catch (error) {
-    console.error('[extractName] LLM error:', error)
-    // Fallback to null if LLM fails
-    return null
-  }
-}
-
 async function handleOnboarding(phone: string, message: string, user: any, activeSpaceId?: string | null, isSpaceMember?: boolean): Promise<string> {
   const extractedName = await extractName(message)
 

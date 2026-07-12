@@ -38,8 +38,14 @@ function patternMatch(message: string, context: ClassificationContext): PatternM
     }
   }
 
-  // Explicit announce command with content — unambiguous regardless of context
-  if (!activeDraft && /^announce(ment)?\s+\S/i.test(lower)) {
+  // Explicit broadcast commands with content — unambiguous intent to send.
+  // "let everyone know X" / "tell everyone X" read as knowledge_upload to the LLM
+  // often enough to be flaky, so pin them here.
+  if (!activeDraft && (
+    /^announce(ment)?\s+\S/i.test(lower) ||
+    /^(tell|let|notify)\s+(everyone|everybody|the group|all|people)\b.+\S/i.test(lower) ||
+    /^send\s+(out\s+)?(a\s+|an\s+)?(message|announcement|text|blast)\b/i.test(lower)
+  )) {
     return { action: 'draft_write', confidence: 0.95, subtype: 'announcement' }
   }
 

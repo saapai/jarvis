@@ -5,8 +5,10 @@ import type { ContentResult } from '@/lib/planner/actions/content'
 
 const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
 
-// Below this cosine similarity a vector match is noise — rely on keyword results instead
-const MIN_SIMILARITY = 0.3
+// Below this cosine similarity a vector match is noise — rely on keyword results instead.
+// text-embedding-3-small produces low absolute cosine scores: a genuinely relevant
+// match often lands around 0.2-0.3, so anything much higher discards real hits.
+const MIN_SIMILARITY = 0.12
 
 export async function searchFacts(query: string, limit = 10, spaceId?: string | null): Promise<ContentResult[]> {
   const prisma = await getPrisma()

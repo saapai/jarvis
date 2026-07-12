@@ -550,9 +550,10 @@ Only include associations if the announcement/poll provides context or informati
 /**
  * Filter results by category based on query intent
  */
-function filterResultsByCategories(
+export function filterResultsByCategories(
   results: Array<ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }>,
-  targetCategories: ContentCategory[]
+  targetCategories: ContentCategory[],
+  query?: string
 ): Array<ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date }> {
   // If all categories are requested, return all results
   const allCategories: ContentCategory[] = ['upcoming', 'recurring', 'past', 'facts', 'announcements', 'polls']
@@ -560,8 +561,24 @@ function filterResultsByCategories(
     return results
   }
 
+  // Topic words from the query — a result that literally names what the user asked
+  // about should never be dropped on a category technicality (e.g. "alumni reunion"
+  // stored as a plain fact with no parsed date still answers "when are the reunions")
+  const topicWords = (query || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !FALLBACK_KEYWORDS.includes(w))
+  const isTopicMatch = (r: ContentResult) => {
+    if (topicWords.length === 0) return false
+    const text = `${r.title || ''} ${r.body || ''}`.toLowerCase()
+    return topicWords.some(word => text.includes(word))
+  }
+
   return results.filter(r => {
     const resultCategory = r.category || 'facts'
+
+    // Keep any result that directly mentions the query topic, whatever its category
+    if (isTopicMatch(r)) return true
 
     // Always include announcements and polls when the user is asking about
     // events or facts, even if they didn't explicitly say "announcements" or "polls".
@@ -593,7 +610,10 @@ function filterResultsByCategories(
 async function filterAndFormatResultsWithLLM(
   query: string,
   allResults: Array<ContentResult & { category?: ContentCategory; source?: 'content' | 'announcement' | 'poll'; sentDate?: Date; eventDate?: Date }>,
-  targetCategories: ContentCategory[]
+  targetCategories: ContentCategory[],
+  // Topic-resolved query used for category filtering (may differ from the user's
+  // literal wording for pronoun follow-ups); the answer still addresses `query`
+  filterQuery: string = query
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY || allResults.length === 0) {
     return allResults[0]?.body || TEMPLATES.noResults()
@@ -608,8 +628,8 @@ async function filterAndFormatResultsWithLLM(
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     const todayDayName = dayNames[today.getDay()]
     
-    // Filter results by target categories
-    const filteredResults = filterResultsByCategories(allResults, targetCategories)
+    // Filter results by target categories (keeping direct topic matches regardless of category)
+    const filteredResults = filterResultsByCategories(allResults, targetCategories, filterQuery)
     
     // Extract main topic words from the query (excluding common stop words)
     const queryWordsAll = query.toLowerCase().split(/\s+/).filter(w => w.length > 1)
@@ -903,6 +923,42 @@ function eventToContentResult(event: EventResult): ContentResult {
 }
 
 /**
+ * Resolve a vague / pronoun-only follow-up ("when are they", "where is it",
+ * "what time") by appending the subject of the most recent prior user question.
+ * "when are they" after "when are alumni reunions" → "when are they (alumni reunions)".
+ * Returns the message unchanged when it already carries its own subject.
+ */
+export function resolveVagueFollowUp(
+  message: string,
+  recentMessages?: Array<{ direction: 'inbound' | 'outbound'; text: string; createdAt: Date; meta?: unknown }>
+): string {
+  if (!recentMessages || recentMessages.length === 0) return message
+  const lower = message.toLowerCase().trim()
+
+  // Only expand short questions built around a pronoun / bare time-place word
+  const isVague =
+    lower.length <= 24 &&
+    /\b(they|them|it|that|those|these|this one|that one)\b/.test(lower) ||
+    /^(when|where|what time|how much|who)\??$/.test(lower)
+  if (!isVague) return message
+
+  // Find the most recent EARLIER user message that carried a real subject
+  for (let i = recentMessages.length - 1; i >= 0; i--) {
+    const m = recentMessages[i]
+    if (m.direction !== 'inbound') continue
+    if (m.text.trim().toLowerCase() === lower) continue // skip the current message
+    const subjectWords = m.text
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !FALLBACK_KEYWORDS.includes(w))
+    if (subjectWords.length > 0) {
+      return `${message} (${m.text.trim()})`
+    }
+  }
+  return message
+}
+
+/**
  * Handle content query action
  * Searches content database, events, and past announcements/polls, then uses LLM to filter and format results.
  */
@@ -932,9 +988,16 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
+  // Resolve vague / pronoun follow-ups ("when are they", "where is it") by folding in
+  // the subject from the previous user question, so search has something to match on
+  const resolvedMessage = resolveVagueFollowUp(message, recentMessages)
+  if (resolvedMessage !== message) {
+    console.log(`[ContentQuery] Resolved vague query "${message}" → "${resolvedMessage}"`)
+  }
+
   // Detect which categories the query is asking about
   console.log(`[ContentQuery] Detecting query categories...`)
-  const { categories: targetCategories, reasoning } = await detectQueryCategories(message)
+  const { categories: targetCategories, reasoning } = await detectQueryCategories(resolvedMessage)
   console.log(`[ContentQuery] Target categories: ${targetCategories.join(', ')} (${reasoning})`)
   
   // Collect all results from all sources
@@ -944,28 +1007,29 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   // Search broadly and let categorization + LLM processing handle filtering
   // For link queries, always search all categories to find events with links
   const isLinkQuery = message.toLowerCase().includes('link') || message.toLowerCase().includes('rsvp') || message.toLowerCase().includes('url')
-  const categoriesToSearch: ContentCategory[] = isLinkQuery 
+  const categoriesToSearch: ContentCategory[] = isLinkQuery
     ? ['facts', 'upcoming', 'recurring', 'past'] as ContentCategory[] // Search all categories for link queries
     : targetCategories
-  
+
   if (searchContent && (categoriesToSearch.includes('facts') || categoriesToSearch.includes('upcoming') || categoriesToSearch.includes('recurring') || categoriesToSearch.includes('past'))) {
     console.log(`[ContentQuery] Searching content database...`)
     try {
       // Use LLM to generate a better search query if this is a category query
       // This helps find relevant events/meetings even when query doesn't explicitly mention them
-      let searchQuery = message
+      // (start from resolvedMessage so pronoun follow-ups carry their subject into search)
+      let searchQuery = resolvedMessage
       if (targetCategories.includes('recurring') && targetCategories.length === 1) {
         // For recurring-only queries, use LLM to generate search terms that would find recurring events
-        searchQuery = await generateSearchQueryForCategory(message, 'recurring')
+        searchQuery = await generateSearchQueryForCategory(resolvedMessage, 'recurring')
       } else if (targetCategories.includes('recurring') && targetCategories.length > 1) {
         // For queries that include recurring, expand the search to include recurring event terms
         // This ensures recurring events are found even when query mentions multiple categories
-        const recurringTerms = await generateSearchQueryForCategory(message, 'recurring')
+        const recurringTerms = await generateSearchQueryForCategory(resolvedMessage, 'recurring')
         // Combine original query with recurring-specific terms
-        searchQuery = `${message} ${recurringTerms}`
+        searchQuery = `${resolvedMessage} ${recurringTerms}`
       } else if (targetCategories.length === 1 && targetCategories.includes('upcoming')) {
         // For upcoming-only queries, use LLM to generate search terms for future events
-        searchQuery = await generateSearchQueryForCategory(message, 'upcoming')
+        searchQuery = await generateSearchQueryForCategory(resolvedMessage, 'upcoming')
       }
       
       const contentResults = await searchContent(searchQuery)
@@ -1164,7 +1228,9 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   
   // Use LLM to filter and format the most relevant results
   console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)
-  const formattedResponse = await filterAndFormatResultsWithLLM(message, allResults, categoriesForFiltering)
+  // Use the resolved query throughout so a pronoun follow-up ("when are they")
+  // both keeps topic matches AND tells the answerer what subject to answer about
+  const formattedResponse = await filterAndFormatResultsWithLLM(resolvedMessage, allResults, categoriesForFiltering)
   console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
   
   // The formatter LLM already writes in jarvis's voice — wrapping it in

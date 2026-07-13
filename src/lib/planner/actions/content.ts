@@ -621,7 +621,10 @@ async function filterAndFormatResultsWithLLM(
   filterQuery: string = query,
   // The user's ORIGINAL wording, insults and all — so the answer can react to tone
   // (a rude "what do you know, fuckface" earns a one-line jab THEN the real info)
-  rawMessage: string = query
+  rawMessage: string = query,
+  // Compact recent transcript so the answer is conversationally aware — mainly to
+  // NOTICE when this same thing was just asked and not repeat the block verbatim.
+  recentHistory: string = ''
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY || allResults.length === 0) {
     return allResults[0]?.body || TEMPLATES.noResults()
@@ -796,6 +799,7 @@ VOICE — apply to every reply:
 - URLs must be passed through EXACTLY as they appear, on their own line or after a dash
 - a dash of dry wit is welcome when it fits ("rsvp now or wander around lost, your call") but never at the cost of clarity
 - TONE-MATCH: if the user's original message is rude or insulting (see "USER'S ACTUAL MESSAGE" below), open with ONE short, in-character jab that reacts to what they actually said, then give the full answer. Vary it — never reuse a stock opener. Never let the comeback replace or shorten the info. If the message is normal, no jab at all.
+- REPEAT AWARENESS: check RECENT CONVERSATION below. If you ALREADY answered this same or a very similar question a moment ago, do NOT paste the same block again like a robot — call it out lightly and keep it short: "still every wednesday at 8, hasn't moved" / "same as two seconds ago — july 15" / "asked and answered, but sure: ...". Give the key detail (and any link) again, just don't re-dump the whole thing verbatim. Vary how you acknowledge it each time. If they've asked THREE+ times, you can be a touch more amused about it.
 
 DATE FIDELITY (highest priority): reproduce every date EXACTLY as it appears in the result body or its "Sent on"/Event date line — never change the month, day, or year, and never let "weekend of" shift a month. If two results give different dates for one named event, present BOTH and label which is upcoming relative to today; never average, guess, or silently pick one.
 NO INVENTED MONTHS: never write a month or season ("in sep 2026", "this september", "fall 2026") unless that month LITERALLY appears in the results. When an event spans multiple dates, either list the dates or state the real span ("july–august 2026") computed from the actual dates — never collapse them into a single month header. (Also: the org's name is SEP — if you mention it, write it uppercase "SEP", never "sep", which reads as September.)
@@ -923,7 +927,7 @@ FORMATTING RULES:
       model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Question: "${query}"${rawMessage !== query ? `\nUSER'S ACTUAL MESSAGE (react to this tone): "${rawMessage}"` : ''}${categoryInfo}\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
+        { role: 'user', content: `Question: "${query}"${rawMessage !== query ? `\nUSER'S ACTUAL MESSAGE (react to this tone): "${rawMessage}"` : ''}${recentHistory ? `\n\nRECENT CONVERSATION (for repeat-awareness — did you already answer this?):\n${recentHistory}` : ''}${categoryInfo}\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
 - These ${filteredResults.length} search results were found by searching the knowledge base for "${query}"
 - If a result mentions the topic from your question (e.g., "study hall", "ae summons"), it IS relevant and you MUST use it
 - Even if information is incomplete (e.g., "TBD", no date), still provide what IS available
@@ -1331,11 +1335,18 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   // call (the single biggest latency cost left), without dropping the real answer.
   const topResults = allResults.slice(0, 14)
 
+  // Compact recent transcript so the answer can notice repeat questions and not re-dump
+  // the same block verbatim. Last few turns, truncated — keeps the prompt cheap.
+  const recentHistory = (recentMessages || [])
+    .slice(-6)
+    .map(m => `${m.direction === 'inbound' ? 'User' : 'Jarvis'}: ${(m.text || '').slice(0, 180)}`)
+    .join('\n')
+
   // Use LLM to filter and format the most relevant results
   console.log(`[ContentQuery] Filtering and formatting ${topResults.length} of ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)
   // Use the resolved query throughout so a pronoun follow-up ("when are they")
   // both keeps topic matches AND tells the answerer what subject to answer about
-  const formattedResponse = await filterAndFormatResultsWithLLM(resolvedMessage, topResults, categoriesForFiltering, resolvedMessage, message)
+  const formattedResponse = await filterAndFormatResultsWithLLM(resolvedMessage, topResults, categoriesForFiltering, resolvedMessage, message, recentHistory)
   console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
   
   // The formatter LLM already writes in jarvis's voice — wrapping it in

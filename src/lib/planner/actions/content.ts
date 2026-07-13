@@ -5,7 +5,7 @@
  */
 
 import { ActionResult } from '../types'
-import { TEXTER_MODEL } from '../models'
+import { TEXTER_MODEL, HELPER_MODEL } from '../models'
 import { TEMPLATES } from '../personality'
 
 const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
@@ -155,7 +155,7 @@ Respond with JSON: { "categories": string[], "reasoning": string, "isOverview": 
 Categories should be one of: upcoming, recurring, past, facts, announcements, polls`
 
     const response = await openai.chat.completions.create({
-      model: TEXTER_MODEL,
+      model: HELPER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `What categories is this query asking about? "${message}"` }
@@ -247,7 +247,7 @@ Respond with JSON: { "searchTerms": string }
 The searchTerms should be a space-separated list of keywords that would help find relevant items in that category.`
 
     const response = await openai.chat.completions.create({
-      model: TEXTER_MODEL,
+      model: HELPER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Original query: "${originalQuery}"\nCategory: ${category}\nGenerate search terms:` }
@@ -298,7 +298,7 @@ async function batchDetectRecurring(bodies: string[]): Promise<boolean[]> {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     const list = bodies.map((b, i) => `${i}. "${b.substring(0, 300)}"`).join('\n')
     const response = await openai.chat.completions.create({
-      model: TEXTER_MODEL,
+      model: HELPER_MODEL,
       messages: [
         {
           role: 'system',
@@ -434,7 +434,7 @@ SPECIFIC OBJECT QUERIES (return false):
 Respond with JSON: { "isCategoryQuery": boolean, "reasoning": string }`
 
     const response = await openai.chat.completions.create({
-      model: TEXTER_MODEL,
+      model: HELPER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Is this a category/meta query? "${query}"` }
@@ -510,7 +510,7 @@ Respond with JSON mapping event titles to arrays of announcement indices: { "eve
 Only include associations if the announcement/poll provides context or information about the event.`
 
     const response = await openai.chat.completions.create({
-      model: TEXTER_MODEL,
+      model: HELPER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: 'Find associations between events and announcements/polls.' }
@@ -991,7 +991,7 @@ export async function resolveVagueFollowUp(
     const { getOpenAI } = await import('@/lib/openai')
     const openai = getOpenAI()
     const res = await openai.chat.completions.create({
-      model: TEXTER_MODEL,
+      model: HELPER_MODEL,
       messages: [
         {
           role: 'system',
@@ -1066,10 +1066,20 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
 
   console.log(`[ContentQuery] Processing query: "${message}"`)
 
+  // Category detection and vague-resolution are independent — run them in PARALLEL so
+  // the hot path pays for one round-trip, not two. (resolveVagueFollowUp returns
+  // instantly with no LLM call when there's no history to fold in.)
+  const [earlyDetection, resolvedMessage] = await Promise.all([
+    detectQueryCategories(message),
+    resolveVagueFollowUp(message, recentMessages)
+  ])
+  if (resolvedMessage !== message) {
+    console.log(`[ContentQuery] Resolved vague query "${message}" → "${resolvedMessage}"`)
+  }
+
   // OVERVIEW ("what info do you know") — must run BEFORE the follow-up heuristic, which
   // otherwise hijacks it and replays the last answer. They're asking about the SCOPE of
   // the knowledge base, so show a sampler of real topics, not a repeat of the last reply.
-  const earlyDetection = await detectQueryCategories(message)
   if (earlyDetection.isOverview && listKnownTopics) {
     try {
       const topics = await listKnownTopics()
@@ -1101,16 +1111,8 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // Resolve vague / pronoun follow-ups ("when are they", "where is it") by folding in
-  // the subject from the previous user question, so search has something to match on
-  const resolvedMessage = await resolveVagueFollowUp(message, recentMessages)
-  if (resolvedMessage !== message) {
-    console.log(`[ContentQuery] Resolved vague query "${message}" → "${resolvedMessage}"`)
-  }
-
-  // Detect which categories the query is asking about (reuse the early call unless
-  // vague-resolution rewrote the query)
-  console.log(`[ContentQuery] Detecting query categories...`)
+  // Reuse the parallel detection; only re-detect if vague-resolution actually rewrote
+  // the query (rare — pronoun follow-ups), where the rewritten subject changes categories.
   const { categories: targetCategories, reasoning } =
     resolvedMessage === message ? earlyDetection : await detectQueryCategories(resolvedMessage)
   console.log(`[ContentQuery] Target categories: ${targetCategories.join(', ')} (${reasoning})`)
@@ -1126,39 +1128,25 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     ? ['facts', 'upcoming', 'recurring', 'past'] as ContentCategory[] // Search all categories for link queries
     : targetCategories
 
-  if (searchContent && (categoriesToSearch.includes('facts') || categoriesToSearch.includes('upcoming') || categoriesToSearch.includes('recurring') || categoriesToSearch.includes('past'))) {
-    console.log(`[ContentQuery] Searching content database...`)
+  // Fire all three sources CONCURRENTLY — they're independent, so this costs one
+  // round-trip of latency instead of three. Each returns [] when not applicable or on error.
+  type PastAction = { type: 'announcement' | 'poll'; content: string; sentAt: Date; sentBy: string }
+  const wantFacts = !!searchContent && (categoriesToSearch.includes('facts') || categoriesToSearch.includes('upcoming') || categoriesToSearch.includes('recurring') || categoriesToSearch.includes('past'))
+  const wantEvents = !!searchEvents && (targetCategories.includes('upcoming') || targetCategories.includes('past'))
+  const contentSearchP: Promise<ContentResult[]> = wantFacts
+    ? searchContent!(resolvedMessage).catch(err => { console.error('[ContentQuery] Content search failed:', err); return [] })
+    : Promise.resolve([])
+  const eventsSearchP: Promise<EventResult[]> = wantEvents
+    ? searchEvents!().catch(err => { console.error('[ContentQuery] Event search failed:', err); return [] })
+    : Promise.resolve([])
+  const pastActionsP: Promise<PastAction[]> = searchPastActions
+    ? searchPastActions().catch(err => { console.error('[ContentQuery] Past actions failed:', err); return [] })
+    : Promise.resolve([])
+
+  if (wantFacts) {
     try {
-      // Use LLM to generate a better search query if this is a category query
-      // This helps find relevant events/meetings even when query doesn't explicitly mention them
-      // (start from resolvedMessage so pronoun follow-ups carry their subject into search)
-      let searchQuery = resolvedMessage
-      if (targetCategories.includes('recurring') && targetCategories.length === 1) {
-        // For recurring-only queries, use LLM to generate search terms that would find recurring events
-        searchQuery = await generateSearchQueryForCategory(resolvedMessage, 'recurring')
-      } else if (targetCategories.includes('recurring') && targetCategories.length > 1) {
-        // For queries that include recurring, expand the search to include recurring event terms
-        // This ensures recurring events are found even when query mentions multiple categories
-        const recurringTerms = await generateSearchQueryForCategory(resolvedMessage, 'recurring')
-        // Combine original query with recurring-specific terms
-        searchQuery = `${resolvedMessage} ${recurringTerms}`
-      } else if (targetCategories.length === 1 && targetCategories.includes('upcoming')) {
-        // For upcoming-only queries, use LLM to generate search terms for future events
-        searchQuery = await generateSearchQueryForCategory(resolvedMessage, 'upcoming')
-      }
-      
-      // Search the RAW query first — it ranks exact matches (e.g. "Alumni Reunion" for
-      // "alumni reunions") at the top. The category-augmented searchQuery casts a wider
-      // net for recurring/upcoming coverage but dilutes precise matches, so we MERGE the
-      // two (raw first) instead of letting augmentation bury the exact answer.
-      const rawResults = await searchContent(resolvedMessage)
-      let contentResults = rawResults
-      if (searchQuery !== resolvedMessage) {
-        const augmentedResults = await searchContent(searchQuery)
-        const seen = new Set(rawResults.map(r => `${r.title || ''}_${r.dateStr || ''}`))
-        contentResults = [...rawResults, ...augmentedResults.filter(r => !seen.has(`${r.title || ''}_${r.dateStr || ''}`))]
-      }
-      console.log(`[ContentQuery] Found ${contentResults.length} content results (raw: "${resolvedMessage}", augmented: "${searchQuery}")`)
+      const contentResults = await contentSearchP
+      console.log(`[ContentQuery] Found ${contentResults.length} content results for "${resolvedMessage}"`)
       
       // Categorize deterministically first; batch the few results whose body needs an
       // LLM recurring-check into ONE call (was one call PER result — the fan-out).
@@ -1193,11 +1181,10 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // 2. Search Events from Event table
-  if (searchEvents && (targetCategories.includes('upcoming') || targetCategories.includes('past'))) {
-    console.log(`[ContentQuery] Searching events...`)
+  // 2. Events (already running concurrently)
+  if (wantEvents) {
     try {
-      const events = await searchEvents()
+      const events = await eventsSearchP
       console.log(`[ContentQuery] Found ${events.length} events`)
       const eventResults = events.map(eventToContentResult)
       allResults.push(...eventResults)
@@ -1205,17 +1192,17 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       console.error('[ContentQuery] Event search failed:', error)
     }
   }
-  
-  // 3. Search past announcements/polls (always search, not just when categories are detected)
+
+  // 3. Past announcements/polls (already running concurrently)
   if (searchPastActions) {
-    console.log(`[ContentQuery] Searching past announcements/polls...`)
     try {
-      const pastActions = await searchPastActions()
+      const pastActions = await pastActionsP
       console.log(`[ContentQuery] Found ${pastActions.length} past actions`)
       
-      // Use LLM to determine if this is a category query (meta query about all items) vs specific object query
-      const isMetaQuery = await isCategoryQuery(message)
-      console.log(`[ContentQuery] Is category/meta query: ${isMetaQuery}`)
+      // Cheap heuristic (was an LLM call): broad "what's going on / what did you send /
+      // recent updates" asks are meta-queries that should pull in all recent announcements.
+      const isMetaQuery = /\b(going on|happening|what'?s new|everything|all (the )?(announcements?|updates?)|what did you (send|announce|post)|recent(ly)?|latest|updates?)\b/i.test(message)
+      console.log(`[ContentQuery] Is meta query (heuristic): ${isMetaQuery}`)
       
       const queryLower = message.toLowerCase()
       // Extract meaningful keywords (longer words, not common stop words)
@@ -1307,23 +1294,10 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     }
   }
   
-  // Find associations between events and announcements/polls
-  const events = allResults.filter(r => r.category === 'upcoming' || r.category === 'recurring' || r.category === 'past')
-  const announcements = allResults.filter(r => r.category === 'announcements' || r.category === 'polls')
-  const associations = await findAssociations(events, announcements)
-  
-  // Supplement events with associated announcements/polls
-  if (associations.size > 0) {
-    console.log(`[ContentQuery] Found ${associations.size} event-association pairs`)
-    for (const [eventTitle, relatedAnnouncements] of associations.entries()) {
-      const event = allResults.find(r => r.title === eventTitle)
-      if (event && relatedAnnouncements.length > 0) {
-        // Add association context to event body
-        event.body += `\n\nRelated context:\n${relatedAnnouncements.map(a => a.body).join('\n')}`
-      }
-    }
-  }
-  
+  // (Event↔announcement association enrichment removed — it cost a sequential LLM call
+  //  for marginal gain; the answer LLM already sees every result together and can relate
+  //  them itself.)
+
   // Sort all results by category priority
   allResults.sort((a, b) => {
     const categoryA = a.category || 'facts'
@@ -1352,11 +1326,16 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     ? ['facts', 'upcoming', 'recurring', 'past', 'announcements', 'polls'] as ContentCategory[]
     : targetCategories
   
+  // Cap what the answer LLM sees: results are already sorted by category priority then
+  // score, so the top ~14 hold everything relevant. A smaller prompt = a faster final
+  // call (the single biggest latency cost left), without dropping the real answer.
+  const topResults = allResults.slice(0, 14)
+
   // Use LLM to filter and format the most relevant results
-  console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)
+  console.log(`[ContentQuery] Filtering and formatting ${topResults.length} of ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)
   // Use the resolved query throughout so a pronoun follow-up ("when are they")
   // both keeps topic matches AND tells the answerer what subject to answer about
-  const formattedResponse = await filterAndFormatResultsWithLLM(resolvedMessage, allResults, categoriesForFiltering, resolvedMessage, message)
+  const formattedResponse = await filterAndFormatResultsWithLLM(resolvedMessage, topResults, categoriesForFiltering, resolvedMessage, message)
   console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
   
   // The formatter LLM already writes in jarvis's voice — wrapping it in

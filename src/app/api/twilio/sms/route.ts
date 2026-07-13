@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateTwilioSignature, toTwiml, sendSms } from '@/lib/twilio'
+
+// The SMS pipeline chains several LLM calls; the default function timeout can be as
+// low as 10s and would cut off a valid (if slow) reply. Give it headroom — the real
+// ceiling is Twilio's ~15s webhook wait, which the mini/4o split keeps us under.
+export const maxDuration = 60
 import { normalizePhone, toE164 } from '@/lib/db'
 import { classifyIntent } from '@/lib/planner/classifier'
 import { buildWeightedHistoryFromMessages } from '@/lib/planner/history'

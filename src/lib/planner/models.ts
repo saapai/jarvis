@@ -16,3 +16,11 @@
 
 export const CLASSIFIER_MODEL = 'gpt-4o'
 export const TEXTER_MODEL = 'gpt-4o'
+
+// HELPER_MODEL — internal, non-voice reasoning that the user never reads: category
+// detection, search-term generation, recurring checks, vague-query rewrites. These
+// run SEQUENTIALLY before the answer, so on gpt-4o a heavy content query stacked up
+// past Twilio's ~15s webhook timeout and the bot went silent. mini here is invisible
+// to voice quality and keeps the pipeline inside the timeout. Voice-facing generation
+// (the actual answer, chat, capability) stays on TEXTER_MODEL.
+export const HELPER_MODEL = 'gpt-4o-mini'

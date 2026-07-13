@@ -20,14 +20,28 @@ export async function POST(request: NextRequest) {
     const body = formData.get('Body')?.toString() || ''
     const from = formData.get('From')?.toString() || ''
     
-    // Validate signature in production
+    // Validate signature in production. Twilio signs the EXACT public URL it POSTed to,
+    // so validate against the real request host (from Vercel's proxy headers) rather
+    // than a hardcoded APP_URL — otherwise moving the webhook domain silently 403s every
+    // message. APP_URL is kept as a fallback for resilience.
     if (process.env.NODE_ENV === 'production') {
       const signature = request.headers.get('x-twilio-signature') || ''
-      const url = `${process.env.APP_URL}/api/twilio/sms`
       const params: Record<string, string> = {}
       formData.forEach((value, key) => { params[key] = value.toString() })
-      
-      if (!await validateTwilioSignature(signature, url, params)) {
+
+      const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || ''
+      const proto = request.headers.get('x-forwarded-proto') || 'https'
+      const candidateUrls = [
+        host ? `${proto}://${host}/api/twilio/sms` : '',
+        process.env.APP_URL ? `${process.env.APP_URL}/api/twilio/sms` : ''
+      ].filter(Boolean)
+
+      let valid = false
+      for (const candidate of candidateUrls) {
+        if (await validateTwilioSignature(signature, candidate, params)) { valid = true; break }
+      }
+      if (!valid) {
+        console.error('[SMS] Twilio signature validation failed for URLs:', candidateUrls)
         return new NextResponse('Forbidden', { status: 403 })
       }
     }

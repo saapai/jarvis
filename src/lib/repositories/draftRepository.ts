@@ -74,12 +74,16 @@ export async function createDraft(
 export async function getActiveDraft(phoneNumber: string, spaceId?: string | null): Promise<Draft | null> {
   const prisma = await getPrisma()
 
-  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+  const where: { phoneNumber: string; status: string; OR?: Array<{ spaceId: string | null }> } = {
     phoneNumber,
     status: 'in_progress'
   }
+  // Match this space OR legacy NULL-space drafts. A draft created without a space
+  // (spaceId NULL) must stay findable AND cancellable from any space — otherwise it
+  // gets stuck: chat.ts finds it (no space filter) but the space-scoped lookups (the
+  // classifier context, cancel, send) don't, so it can never be sent or scrapped.
   if (spaceId !== undefined) {
-    where.spaceId = spaceId
+    where.OR = [{ spaceId }, { spaceId: null }]
   }
 
   const draft = await prisma.announcementDraft.findFirst({
@@ -158,12 +162,16 @@ export async function updateDraftByPhone(
 ): Promise<AnnouncementDraftDB | null> {
   const prisma = await getPrisma()
 
-  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+  const where: { phoneNumber: string; status: string; OR?: Array<{ spaceId: string | null }> } = {
     phoneNumber,
     status: 'in_progress'
   }
+  // Match this space OR legacy NULL-space drafts. A draft created without a space
+  // (spaceId NULL) must stay findable AND cancellable from any space — otherwise it
+  // gets stuck: chat.ts finds it (no space filter) but the space-scoped lookups (the
+  // classifier context, cancel, send) don't, so it can never be sent or scrapped.
   if (spaceId !== undefined) {
-    where.spaceId = spaceId
+    where.OR = [{ spaceId }, { spaceId: null }]
   }
 
   const existingDraft = await prisma.announcementDraft.findFirst({
@@ -182,12 +190,16 @@ export async function updateDraftByPhone(
 export async function finalizeDraft(phoneNumber: string, spaceId?: string | null): Promise<void> {
   const prisma = await getPrisma()
 
-  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+  const where: { phoneNumber: string; status: string; OR?: Array<{ spaceId: string | null }> } = {
     phoneNumber,
     status: 'in_progress'
   }
+  // Match this space OR legacy NULL-space drafts. A draft created without a space
+  // (spaceId NULL) must stay findable AND cancellable from any space — otherwise it
+  // gets stuck: chat.ts finds it (no space filter) but the space-scoped lookups (the
+  // classifier context, cancel, send) don't, so it can never be sent or scrapped.
   if (spaceId !== undefined) {
-    where.spaceId = spaceId
+    where.OR = [{ spaceId }, { spaceId: null }]
   }
 
   await prisma.announcementDraft.updateMany({
@@ -203,12 +215,16 @@ export async function finalizeDraft(phoneNumber: string, spaceId?: string | null
 export async function deleteDraft(phoneNumber: string, spaceId?: string | null): Promise<void> {
   const prisma = await getPrisma()
 
-  const where: { phoneNumber: string; status: string; spaceId?: string | null } = {
+  const where: { phoneNumber: string; status: string; OR?: Array<{ spaceId: string | null }> } = {
     phoneNumber,
     status: 'in_progress'
   }
+  // Match this space OR legacy NULL-space drafts. A draft created without a space
+  // (spaceId NULL) must stay findable AND cancellable from any space — otherwise it
+  // gets stuck: chat.ts finds it (no space filter) but the space-scoped lookups (the
+  // classifier context, cancel, send) don't, so it can never be sent or scrapped.
   if (spaceId !== undefined) {
-    where.spaceId = spaceId
+    where.OR = [{ spaceId }, { spaceId: null }]
   }
 
   await prisma.announcementDraft.deleteMany({ where })

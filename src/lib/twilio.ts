@@ -84,9 +84,19 @@ function chunkMessage(text: string, target = 320): string[] {
   return chunks.filter(Boolean)
 }
 
+// Texting doesn't end sentences with a period — a trailing "." reads stiff/robotic.
+// Drop a single trailing period (keep "...", "?", "!", and anything mid-message).
+function stripTrailingPeriod(text: string): string {
+  return text.replace(/([^.\s])\.\s*$/, '$1')
+}
+
 export function toTwiml(messages: string[]): string {
-  // First break into short chunks (~320), then apply the hard SMS-segment cap as a backstop.
-  const allMessages = messages.flatMap(msg => chunkMessage(msg, 320)).flatMap(m => splitLongMessage(m, 1600))
+  // First break into short chunks (~320), then apply the hard SMS-segment cap as a
+  // backstop, and finally drop the stiff trailing period from each text.
+  const allMessages = messages
+    .flatMap(msg => chunkMessage(msg, 320))
+    .flatMap(m => splitLongMessage(m, 1600))
+    .map(stripTrailingPeriod)
   
   if (allMessages.length === 1) {
     return `<?xml version="1.0" encoding="UTF-8"?>

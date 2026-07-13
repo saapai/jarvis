@@ -5,7 +5,6 @@
 
 import { ActionResult } from '../types'
 import { TEXTER_MODEL } from '../models'
-import * as draftRepo from '@/lib/repositories/draftRepository'
 import { getQuickResponse, TEMPLATES } from '../personality'
 import { checkForEasterEgg } from './capability'
 
@@ -165,14 +164,11 @@ Reply to their message in context.`
 export async function handleChat(input: ChatActionInput): Promise<ActionResult> {
   const { phone, message, userName, recentMessages, searchContent } = input
 
-  // 1. Active draft reminder
-  const draft = await draftRepo.getActiveDraft(phone)
-  if (draft && draft.status === 'ready') {
-    return {
-      action: 'chat',
-      response: `btw you've still got that announcement drafted:\n\n"${draft.content}"\n\nwanna send it or scrap it?`
-    }
-  }
+  // NOTE: no "you've still got a draft" reminder here anymore — it fired on EVERY chat
+  // message when a draft existed, hijacking the whole conversation (ask "who are you"
+  // and get the draft reminder instead). A pending draft is handled by explicit send/
+  // cancel; chat should just talk. (This also broke a stuck NULL-space draft into an
+  // infinite loop — see draftRepository space-matching fix.)
 
   const history = buildAnnotatedHistory(recentMessages)
   // recentMessages always includes the current inbound as its last entry, so "has

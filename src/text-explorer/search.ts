@@ -167,15 +167,23 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
         ]
       }
     },
-    orderBy: [
-      // Prioritize exact matches in subcategory
-      { subcategory: 'desc' },
-      { createdAt: 'desc' }
-    ],
-    take: limit * 2 // Get more results to allow for better ranking
+    // Rank in JS below — the pool must be big enough to hold EVERY keyword match.
+    // (This used to take limit*2 ordered by subcategory DESC — i.e. alphabetically
+    // backwards — so "Active Meetings" (A) was truncated out of the pool before
+    // scoring while "Weekly Meeting" (W) sailed in. Candidate selection must never
+    // be the ranking.)
+    orderBy: { createdAt: 'desc' },
+    take: 200
   })
 
-  // Rank results: exact subcategory matches first, then content matches
+  const queryLower = query.toLowerCase()
+  // Per-keyword matcher with a singular fallback ("reunions" also matches "reunion")
+  const matches = (text: string, kw: string) =>
+    text.includes(kw) || (kw.endsWith('s') && text.includes(kw.slice(0, -1)))
+
+  // Rank by HOW MANY query keywords hit, weighted by where they hit. Boolean any-match
+  // scoring made "Weekly Meeting" (1 keyword: "meeting") tie "Active Meetings"
+  // (2 keywords: "active"+"meeting") for "when is active meeting".
   const ranked = facts.map((fact) => {
     const subcategoryLower = (fact.subcategory || '').toLowerCase()
     const contentLower = (fact.content || '').toLowerCase()
@@ -184,42 +192,28 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
     const entitiesLower = (fact.entities || '').toLowerCase()
 
     let score = 0
-    const queryLower = query.toLowerCase()
-
-    // Exact subcategory match gets highest score
-    if (subcategoryLower.includes(queryLower) || queryLower.includes(subcategoryLower)) {
-      score += 10
+    const subHits = keywords.filter(kw => matches(subcategoryLower, kw)).length
+    score += subHits * 5
+    if (keywords.length > 1 && subHits === keywords.length) score += 6 // title covers the whole query
+    if (subcategoryLower && (subcategoryLower.includes(queryLower) || queryLower.includes(subcategoryLower))) {
+      score += 10 // exact phrase either direction
     }
-    // Subcategory contains keywords
-    if (keywords.some(kw => subcategoryLower.includes(kw))) {
-      score += 5
-    }
-    // Content contains keywords
-    if (keywords.some(kw => contentLower.includes(kw) || sourceTextLower.includes(kw))) {
-      score += 3
-    }
-    // TimeRef match (important for recurring events)
-    if (keywords.some(kw => timeRefLower.includes(kw))) {
-      score += 2
-    }
-    // Entities contain keywords (city names, links, people — where a topic often lives)
-    if (keywords.some(kw => entitiesLower.includes(kw))) {
-      score += 2
-    }
+    score += keywords.filter(kw => matches(contentLower, kw) || matches(sourceTextLower, kw)).length * 2
+    if (keywords.some(kw => matches(timeRefLower, kw))) score += 2
+    if (keywords.some(kw => matches(entitiesLower, kw))) score += 2
 
     return { fact, score }
   }).sort((a, b) => b.score - a.score).slice(0, limit)
 
-  // Normalize the internal 0-~20 relevance into a real similarity-scale score so
-  // keyword hits COMPETE with vector matches in the merge instead of always losing.
-  // Previously this returned score:0, so an exact title match ("Alumni Reunion" for
-  // "reunion") was buried under semantically-mediocre vector noise at ~0.25. Now an
-  // exact subcategory match lands ~0.87, clearly above that noise; a bare
-  // content/entity match stays modest so it doesn't outrank a genuine vector hit.
+  // Normalize the internal relevance into a real similarity-scale score so keyword
+  // hits COMPETE with vector matches in the merge instead of always losing (this used
+  // to return score:0, burying exact title matches under vector noise). A full-title
+  // match lands ~0.9+; a stray single-keyword content match stays near the vector
+  // noise floor so it can't outrank a genuine semantic hit.
   return ranked.map(({ fact, score }) => ({
     title: fact.subcategory || fact.category,
     body: buildBody(fact.content, fact.timeRef, fact.subcategory || undefined, fact.dateStr || undefined),
-    score: Math.min(0.95, 0.12 + score * 0.075),
+    score: Math.min(0.95, 0.12 + score * 0.04),
     dateStr: fact.dateStr || null,
     timeRef: fact.timeRef || null,
     sourceText: fact.sourceText || null,

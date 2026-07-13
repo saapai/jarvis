@@ -34,6 +34,8 @@ export interface ContentQueryInput {
     sentAt: Date
     sentBy: string
   }>>
+  // Distinct topics in the knowledge base — for "what info do you know" overview asks
+  listKnownTopics?: () => Promise<string[]>
 }
 
 export interface ContentResult {
@@ -116,6 +118,7 @@ const CATEGORY_CONFIG: Record<ContentCategory, {
 async function detectQueryCategories(message: string): Promise<{
   categories: ContentCategory[]
   reasoning: string
+  isOverview?: boolean
 }> {
   if (!process.env.OPENAI_API_KEY) {
     // Fallback to keyword-based detection
@@ -146,7 +149,9 @@ Examples:
 - Any question about links/RSVPs for events → include ["upcoming", "recurring", "facts"] to find the event
 - Any question about future events without specific category → include both ["upcoming", "recurring"]
 
-Respond with JSON: { "categories": string[], "reasoning": string }
+OVERVIEW QUERIES: if the user is asking about the SCOPE of what the bot knows — "what info do you know", "what do you know", "what's in your notes", "what kind of stuff can i ask you", "what do you have on the org" — set "isOverview": true (categories can be empty). These want a sampler of known topics, not a search for one topic. A question about a SPECIFIC thing ("what do you know about the retreat") is NOT an overview — that's a normal search.
+
+Respond with JSON: { "categories": string[], "reasoning": string, "isOverview": boolean }
 Categories should be one of: upcoming, recurring, past, facts, announcements, polls`
 
     const response = await openai.chat.completions.create({
@@ -168,7 +173,8 @@ Categories should be one of: upcoming, recurring, past, facts, announcements, po
       ) as ContentCategory[]
       return {
         categories: categories.length > 0 ? categories : ['upcoming', 'recurring', 'facts', 'announcements', 'polls'],
-        reasoning: parsed.reasoning || 'LLM analysis'
+        reasoning: parsed.reasoning || 'LLM analysis',
+        isOverview: parsed.isOverview === true
       }
     }
   } catch (error) {
@@ -802,6 +808,8 @@ VOICE — apply to every reply:
 - a dash of dry wit is welcome when it fits ("rsvp now or wander around lost, your call") but never at the cost of clarity
 
 DATE FIDELITY (highest priority): reproduce every date EXACTLY as it appears in the result body or its "Sent on"/Event date line — never change the month, day, or year, and never let "weekend of" shift a month. If two results give different dates for one named event, present BOTH and label which is upcoming relative to today; never average, guess, or silently pick one.
+NO INVENTED MONTHS: never write a month or season ("in sep 2026", "this september", "fall 2026") unless that month LITERALLY appears in the results. When an event spans multiple dates, either list the dates or state the real span ("july–august 2026") computed from the actual dates — never collapse them into a single month header. (Also: the org's name is SEP — if you mention it, write it uppercase "SEP", never "sep", which reads as September.)
+FULL-INFO REQUESTS: when the user asks for "the full info", "all the details", "everything about X", or complains they didn't get something ("you didn't give me the links"), give the COMPLETE picture in one reply — every date, location, and EVERY link in the results. Holding links back on a full-info request is a failure.
 
 TOPIC FIDELITY / NO FILLER: answer ONLY the specific thing asked. If NO result is a primary match for the user's specific topic (e.g. they asked "when is soccer" but results are retreat/ski), do NOT pad the answer with those unrelated events — say in one line you don't have that specific info and offer to check with an admin. Never substitute a different event to look helpful.
 
@@ -1002,6 +1010,8 @@ export async function resolveVagueFollowUp(
 RULES:
 - If the message already names its own subject ("when is the formal"), return it UNCHANGED.
 - If it's vague — a pronoun ("when are they", "where is it"), or a bare "when?"/"where?" — replace the vague part with the concrete subject from the most recent relevant earlier turn.
+- SUBJECT-LESS REQUESTS inherit the topic just like pronouns: "give me links" / "give me the full info" / "send me that" / "you didn't give me my links" right after a conversation about the alumni reunion → "alumni reunion rsvp links" / "alumni reunion full details". The thing they want links/info FOR is whatever was just being discussed.
+- Strip insults/profanity — they carry no search meaning: "fuck you give me the full info" → resolve "give me the full info" against the recent topic.
 - Strip a leading greeting ("hello when are they" → resolve "when are they").
 - "what about X" / "how about X" is a TOPIC SHIFT to X — keep X as the subject, do NOT inherit the previous topic.
 - If nothing in the conversation gives a clear subject to inherit, return the message UNCHANGED.
@@ -1024,14 +1034,62 @@ RULES:
 }
 
 /**
+ * Compose an in-voice overview of what's in the knowledge base — for "what info do
+ * you know" style questions. Shows a sampler of REAL topics so the person learns what
+ * they can actually ask, instead of getting the last answer replayed at them.
+ */
+async function composeKnowledgeOverview(message: string, topics: string[]): Promise<string | null> {
+  if (!process.env.OPENAI_API_KEY) return null
+  try {
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const res = await openai.chat.completions.create({
+      model: TEXTER_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are Jarvis, the org's SMS assistant. Someone asked what info you know. Below are REAL topics currently in your knowledge base. Reply in your voice — lowercase, casual, dry — with a natural sampler of what you can answer about: pick ~6-10 of the most interesting/useful topics, group them loosely (events, meetings, deadlines, logistics), and mention they can ask about any of it. Plain text, no markdown. Don't list every topic — this is a taste, not an inventory dump. End by inviting a specific question, in character (not "how can i help").
+
+KNOWN TOPICS:
+${topics.slice(0, 60).join(', ')}`
+        },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.6,
+      max_tokens: 200
+    })
+    return res.choices[0].message.content?.trim() || null
+  } catch (error) {
+    console.error('[ContentQuery] Overview composition failed:', error)
+    return null
+  }
+}
+
+/**
  * Handle content query action
  * Searches content database, events, and past announcements/polls, then uses LLM to filter and format results.
  */
 export async function handleContentQuery(input: ContentQueryInput): Promise<ActionResult> {
-  const { phone, message, searchContent, searchEvents, recentMessages, searchPastActions } = input
-  
+  const { phone, message, searchContent, searchEvents, recentMessages, searchPastActions, listKnownTopics } = input
+
   console.log(`[ContentQuery] Processing query: "${message}"`)
-  
+
+  // OVERVIEW ("what info do you know") — must run BEFORE the follow-up heuristic, which
+  // otherwise hijacks it and replays the last answer. They're asking about the SCOPE of
+  // the knowledge base, so show a sampler of real topics, not a repeat of the last reply.
+  const earlyDetection = await detectQueryCategories(message)
+  if (earlyDetection.isOverview && listKnownTopics) {
+    try {
+      const topics = await listKnownTopics()
+      if (topics.length > 0) {
+        const overview = await composeKnowledgeOverview(message, topics)
+        if (overview) return { action: 'content_query', response: overview }
+      }
+    } catch (error) {
+      console.error('[ContentQuery] Overview failed, falling through to search:', error)
+    }
+  }
+
   // Check if asking about recent actions first (highest priority)
   const recentAction = checkRecentActions(message, recentMessages)
   if (recentAction?.kind === 'recap') {
@@ -1058,9 +1116,11 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     console.log(`[ContentQuery] Resolved vague query "${message}" → "${resolvedMessage}"`)
   }
 
-  // Detect which categories the query is asking about
+  // Detect which categories the query is asking about (reuse the early call unless
+  // vague-resolution rewrote the query)
   console.log(`[ContentQuery] Detecting query categories...`)
-  const { categories: targetCategories, reasoning } = await detectQueryCategories(resolvedMessage)
+  const { categories: targetCategories, reasoning } =
+    resolvedMessage === message ? earlyDetection : await detectQueryCategories(resolvedMessage)
   console.log(`[ContentQuery] Target categories: ${targetCategories.join(', ')} (${reasoning})`)
   
   // Collect all results from all sources

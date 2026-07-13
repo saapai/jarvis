@@ -280,7 +280,8 @@ async function handleMessage(phone: string, message: string): Promise<string> {
         searchContent: (query: string) => searchFactsDatabase(query, activeSpaceId),
         searchEvents: () => searchEventsDatabase(activeSpaceId),
         recentMessages,
-        searchPastActions: () => searchPastAnnouncements(activeSpaceId)
+        searchPastActions: () => searchPastAnnouncements(activeSpaceId),
+        listKnownTopics: () => listKnowledgeTopics(activeSpaceId)
       })
       console.log(`[ContentQuery] Result: ${actionResult.response.substring(0, 50)}...`)
       break
@@ -584,6 +585,20 @@ import type { ContentResult, EventResult } from '@/lib/planner/actions/content'
 
 async function searchFactsDatabase(query: string, spaceId?: string | null): Promise<ContentResult[]> {
   return routeContentSearch(query, spaceId)
+}
+
+// Distinct topics currently in the knowledge base — feeds the "what info do you know"
+// overview so the answer samples REAL topics instead of replaying the last reply.
+async function listKnowledgeTopics(spaceId?: string | null): Promise<string[]> {
+  const prisma = await (await import('@/lib/prisma')).getPrisma()
+  const rows = await prisma.fact.findMany({
+    where: spaceId ? { OR: [{ spaceId }, { spaceId: null }] } : {},
+    select: { subcategory: true },
+    distinct: ['subcategory'],
+    orderBy: { createdAt: 'desc' },
+    take: 80
+  })
+  return rows.map(r => r.subcategory).filter((s): s is string => !!s && s.length > 2)
 }
 
 async function searchEventsDatabase(spaceId?: string | null): Promise<EventResult[]> {

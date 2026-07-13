@@ -49,8 +49,44 @@ export async function sendSms(to: string, body: string, mediaUrls?: string[]): P
 }
 
 // Generate TwiML response
+// Break a reply into a few SHORT texts instead of one long one — each chunk aims for
+// ~`target` chars and only splits at natural boundaries (blank lines, list items,
+// sentence ends). Never breaks a word or a URL: a line containing a link stays whole
+// even if it's a little long. A short reply passes through as a single message.
+function chunkMessage(text: string, target = 320): string[] {
+  const trimmed = (text || '').trim()
+  if (trimmed.length <= target) return [trimmed]
+
+  const chunks: string[] = []
+  let cur = ''
+  const flush = () => { if (cur.trim()) chunks.push(cur.trim()); cur = '' }
+
+  for (const line of trimmed.split('\n')) {
+    // Whole line fits onto the current chunk (preserving the line break)? add it.
+    const withLine = cur ? `${cur}\n${line}` : line
+    if (withLine.length <= target) { cur = withLine; continue }
+
+    // It doesn't fit — flush what we have and place the line.
+    flush()
+    if (line.length <= target) { cur = line; continue }
+
+    // The line itself is too long: word-wrap it at spaces. Words (incl. whole URLs)
+    // are atomic — never split mid-token — so links stay clickable. A lone token that
+    // exceeds target becomes its own (over-length) chunk rather than getting broken.
+    let buf = ''
+    for (const word of line.split(' ')) {
+      if (buf && `${buf} ${word}`.length > target) { chunks.push(buf.trim()); buf = word }
+      else buf = buf ? `${buf} ${word}` : word
+    }
+    cur = buf // leftover carries forward so the next line can pack onto it
+  }
+  flush()
+  return chunks.filter(Boolean)
+}
+
 export function toTwiml(messages: string[]): string {
-  const allMessages = messages.flatMap(msg => splitLongMessage(msg, 1600))
+  // First break into short chunks (~320), then apply the hard SMS-segment cap as a backstop.
+  const allMessages = messages.flatMap(msg => chunkMessage(msg, 320)).flatMap(m => splitLongMessage(m, 1600))
   
   if (allMessages.length === 1) {
     return `<?xml version="1.0" encoding="UTF-8"?>

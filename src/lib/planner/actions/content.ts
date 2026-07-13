@@ -618,7 +618,10 @@ async function filterAndFormatResultsWithLLM(
   targetCategories: ContentCategory[],
   // Topic-resolved query used for category filtering (may differ from the user's
   // literal wording for pronoun follow-ups); the answer still addresses `query`
-  filterQuery: string = query
+  filterQuery: string = query,
+  // The user's ORIGINAL wording, insults and all — so the answer can react to tone
+  // (a rude "what do you know, fuckface" earns a one-line jab THEN the real info)
+  rawMessage: string = query
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY || allResults.length === 0) {
     return allResults[0]?.body || TEMPLATES.noResults()
@@ -792,6 +795,7 @@ VOICE — apply to every reply:
 - ABSOLUTELY NO MARKDOWN: no **bold**, no headers, no bullet-point asterisks — SMS renders them as literal symbols. plain text, simple dashes for lists
 - URLs must be passed through EXACTLY as they appear, on their own line or after a dash
 - a dash of dry wit is welcome when it fits ("rsvp now or wander around lost, your call") but never at the cost of clarity
+- TONE-MATCH: if the user's original message is rude or insulting (see "USER'S ACTUAL MESSAGE" below), open with ONE short, in-character jab that reacts to what they actually said, then give the full answer. Vary it — never reuse a stock opener. Never let the comeback replace or shorten the info. If the message is normal, no jab at all.
 
 DATE FIDELITY (highest priority): reproduce every date EXACTLY as it appears in the result body or its "Sent on"/Event date line — never change the month, day, or year, and never let "weekend of" shift a month. If two results give different dates for one named event, present BOTH and label which is upcoming relative to today; never average, guess, or silently pick one.
 NO INVENTED MONTHS: never write a month or season ("in sep 2026", "this september", "fall 2026") unless that month LITERALLY appears in the results. When an event spans multiple dates, either list the dates or state the real span ("july–august 2026") computed from the actual dates — never collapse them into a single month header. (Also: the org's name is SEP — if you mention it, write it uppercase "SEP", never "sep", which reads as September.)
@@ -919,7 +923,7 @@ FORMATTING RULES:
       model: TEXTER_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Question: "${query}"${categoryInfo}\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
+        { role: 'user', content: `Question: "${query}"${rawMessage !== query ? `\nUSER'S ACTUAL MESSAGE (react to this tone): "${rawMessage}"` : ''}${categoryInfo}\n\nSearch Results (${filteredResults.length} results found - these results ARE relevant to your query):\n${formattedResults}\n\nCRITICAL INSTRUCTIONS:
 - These ${filteredResults.length} search results were found by searching the knowledge base for "${query}"
 - If a result mentions the topic from your question (e.g., "study hall", "ae summons"), it IS relevant and you MUST use it
 - Even if information is incomplete (e.g., "TBD", no date), still provide what IS available
@@ -1035,6 +1039,8 @@ async function composeKnowledgeOverview(message: string, topics: string[]): Prom
         {
           role: 'system',
           content: `You are Jarvis, the org's SMS assistant. Someone asked what info you know. Below are REAL topics currently in your knowledge base. Reply in your voice — lowercase, casual, dry — with a natural sampler of what you can answer about: pick ~6-10 of the most interesting/useful topics, group them loosely (events, meetings, deadlines, logistics), and mention they can ask about any of it. Plain text, no markdown. Don't list every topic — this is a taste, not an inventory dump. End by inviting a specific question, in character (not "how can i help").
+
+If their message was rude or insulting, open with ONE short in-character jab that reacts to what they actually said (vary it, no stock line) then give the sampler anyway. If it was normal, skip the jab.
 
 KNOWN TOPICS:
 ${topics.slice(0, 60).join(', ')}`
@@ -1350,7 +1356,7 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   console.log(`[ContentQuery] Filtering and formatting ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)
   // Use the resolved query throughout so a pronoun follow-up ("when are they")
   // both keeps topic matches AND tells the answerer what subject to answer about
-  const formattedResponse = await filterAndFormatResultsWithLLM(resolvedMessage, allResults, categoriesForFiltering)
+  const formattedResponse = await filterAndFormatResultsWithLLM(resolvedMessage, allResults, categoriesForFiltering, resolvedMessage, message)
   console.log(`[ContentQuery] Result: ${formattedResponse.substring(0, 50)}...`)
   
   // The formatter LLM already writes in jarvis's voice — wrapping it in

@@ -638,7 +638,16 @@ async function filterAndFormatResultsWithLLM(
     const todayStr = today.toISOString().split('T')[0]
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     const todayDayName = dayNames[today.getDay()]
-    
+
+    // UCLA quarter calendar (approx): summer break runs mid-June → late September, when
+    // the org is mostly dormant. Lets the answer infer "it's summer, things are quiet"
+    // instead of dredging up stale announcements to manufacture activity.
+    const m = today.getMonth(), d = today.getDate()
+    const isSummerBreak = (m === 5 && d >= 14) || m === 6 || m === 7 || (m === 8 && d < 24)
+    const academicContext = isSummerBreak
+      ? "It's UCLA SUMMER BREAK — the org is mostly dormant, people are away, little is actively scheduled. If someone asks what's going on and there's no genuinely current/upcoming item, the honest answer is it's summer and things are quiet. Do NOT resurface weeks-old announcements to fake activity."
+      : "UCLA is in session (normal quarter) — regular org activity is expected."
+
     // Filter results by target categories (keeping direct topic matches regardless of category)
     const filteredResults = filterResultsByCategories(allResults, targetCategories, filterQuery)
     
@@ -821,6 +830,12 @@ CRITICAL: If PRIMARY_MATCH results are provided, use them. But if the results on
 TODAY'S CONTEXT:
 - Today is ${todayDayName}, ${todayStr}
 - Use this to calculate relative dates and determine when recurring events occur next
+
+LENGTH (important): keep it to a normal text — 2-4 short sentences, aim under ~400 characters. The ONLY reason to run longer is a genuine list where each line carries its own distinct date+link (like per-city RSVP links). Never pad, never over-explain, never restate a point twice.
+
+RECENCY: every announcement shows a "Sent on" date. Do NOT present a weeks-old announcement — an old canceled meeting, a passed deadline — as if it's current news. If its date has already passed, it's history: mention it only if directly asked, and label it as past. A "what's going on" answer leans on genuinely current/upcoming items, not stale ones.
+
+ACADEMIC CALENDAR: ${academicContext}
 
 CATEGORY SYSTEM:
 Results are organized by categories with time directionality:
@@ -1042,7 +1057,7 @@ async function composeKnowledgeOverview(message: string, topics: string[]): Prom
       messages: [
         {
           role: 'system',
-          content: `You are Jarvis, the org's SMS assistant. Someone asked what info you know. Below are REAL topics currently in your knowledge base. Reply in your voice — lowercase, casual, dry — with a natural sampler of what you can answer about: pick ~6-10 of the most interesting/useful topics, group them loosely (events, meetings, deadlines, logistics), and mention they can ask about any of it. Plain text, no markdown. Don't list every topic — this is a taste, not an inventory dump. End by inviting a specific question, in character (not "how can i help").
+          content: `You are Jarvis, the org's SMS assistant. Someone asked what info you know. Below are REAL topics currently in your knowledge base. Reply in your voice — lowercase, casual, dry — with a SHORT sampler: name ~4-5 of the most useful things you can answer about (e.g. events, meetings, deadlines) in ONE or TWO tight sentences, and say they can ask about any of it. KEEP IT UNDER ~350 CHARACTERS — this is a taste, not an inventory dump, not a wall of text. Plain text, no markdown. End with a brief in-character nudge, not "how can i help".
 
 If their message was rude or insulting, open with ONE short in-character jab that reacts to what they actually said (vary it, no stock line) then give the sampler anyway. If it was normal, skip the jab.
 

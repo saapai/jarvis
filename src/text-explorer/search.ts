@@ -95,7 +95,7 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
     : ''
 
   const sql = `
-    SELECT content, subcategory, category, "timeRef", "dateStr", "sourceText", entities, "calendarDates", details,
+    SELECT content, subcategory, category, "timeRef", "dateStr", "sourceText", entities, "calendarDates", details, "createdAt",
       1 - (embedding <=> ${vectorArray}) AS score
     FROM "Fact"
     WHERE embedding IS NOT NULL
@@ -104,7 +104,7 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
     LIMIT ${safeLimit}
   `
 
-  type Row = { content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; entities: string | null; calendarDates: string | null; details: string | null; score: number }
+  type Row = { content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; entities: string | null; calendarDates: string | null; details: string | null; createdAt: Date | null; score: number }
   const rows = await (spaceId
     ? prisma.$queryRawUnsafe<Row[]>(sql, spaceId)
     : prisma.$queryRawUnsafe<Row[]>(sql))
@@ -120,7 +120,8 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
       sourceText: row.sourceText || null,
       entities: parseJsonArray(row.entities),
       calendarDates: parseJsonArray(row.calendarDates),
-      details: parseDetails(row.details)
+      details: parseDetails(row.details),
+      createdAt: row.createdAt || null
     }))
 }
 
@@ -219,7 +220,8 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
     sourceText: fact.sourceText || null,
     entities: parseJsonArray(fact.entities),
     calendarDates: parseJsonArray(fact.calendarDates),
-    details: parseDetails((fact as { details?: string | null }).details)
+    details: parseDetails((fact as { details?: string | null }).details),
+    createdAt: fact.createdAt || null
   }))
 }
 

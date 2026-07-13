@@ -50,6 +50,7 @@ export interface ContentResult {
   entities?: string[] | null      // extracted entities — often where signup URLs live
   calendarDates?: string[] | null // every parsed date (YYYY-MM-DD), not just the range start
   details?: FactDetail[] | null   // structured sub-items grouped under this entity (per-city dates+links)
+  createdAt?: Date | null         // when this fact was recorded — used to prefer recent info over stale
 }
 
 // Structured sub-detail of a fact (kept in sync with text-explorer/detailsExtraction).
@@ -743,10 +744,21 @@ async function filterAndFormatResultsWithLLM(
         resultText += `\nAll dates for this: ${r.calendarDates.join(', ')} (use these EXACT dates; do not summarize into a single month)`
       }
 
-      // Include the full original text when it carries more detail than the summary —
-      // 600 chars so a signup URL or per-city breakdown near the end isn't truncated off.
-      if (r.sourceText && r.sourceText.length > r.body.length * 1.5 && !resultText.includes('Full details:')) {
+      const ageDays = r.createdAt ? Math.floor((today.getTime() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : null
+      const isStale = ageDays !== null && ageDays >= 45
+
+      // Include the full original text when it carries more detail than the summary — BUT
+      // NOT for stale cards. Old cards' raw text is exactly where outdated volatile
+      // details hide (an old meeting location, a moved room); dumping it lets the answerer
+      // parrot the stale detail. Recent cards keep their full text (signup URLs etc.).
+      if (r.sourceText && !isStale && r.sourceText.length > r.body.length * 1.5 && !resultText.includes('Full details:')) {
         resultText += `\nFull details: ${r.sourceText.substring(0, 600)}${r.sourceText.length > 600 ? '...' : ''}`
+      }
+
+      // Recency signal — lets the answerer prefer recent info over stale details.
+      if (ageDays !== null) {
+        const recorded = ageDays <= 0 ? 'today' : ageDays === 1 ? 'yesterday' : ageDays < 14 ? `${ageDays} days ago` : ageDays < 60 ? `${Math.floor(ageDays / 7)} weeks ago` : `${Math.floor(ageDays / 30)} months ago`
+        resultText += `\nRecorded: ${recorded}${isStale ? ' (OLD — treat its volatile details like location/room/time as possibly outdated)' : ''}`
       }
 
       // Add category information (this helps LLM understand context)
@@ -833,7 +845,14 @@ TODAY'S CONTEXT:
 
 LENGTH (important): keep it to a normal text — 2-4 short sentences, aim under ~400 characters. The ONLY reason to run longer is a genuine list where each line carries its own distinct date+link (like per-city RSVP links). Never pad, never over-explain, never restate a point twice.
 
-RECENCY: every announcement shows a "Sent on" date. Do NOT present a weeks-old announcement — an old canceled meeting, a passed deadline — as if it's current news. If its date has already passed, it's history: mention it only if directly asked, and label it as past. A "what's going on" answer leans on genuinely current/upcoming items, not stale ones.
+RECENCY: every result shows how recent it is ("Recorded: ..." / "Sent on: ..."). Do NOT present a weeks-old announcement — an old canceled meeting, a passed deadline — as if it's current news. If its date has already passed, it's history: mention it only if directly asked, and label it as past. A "what's going on" answer leans on genuinely current/upcoming items, not stale ones.
+
+RECENCY SUPERSEDES (critical — read carefully): stored info goes stale, and a card marked "OLD — may be stale" is the LEAST trustworthy source for a volatile detail like LOCATION/room/time. When answering WHERE something is:
+- Do NOT default to a location baked into an old recurring card. Instead look at where the ACTUAL RECENT meetings/events happened.
+- The recent entries may be titled differently (a "general meeting", "elections meeting", "weekly meeting" ARE the same gathering as the "active meeting" — the org just names announcements loosely). If the last several of these recent meeting entries all name the SAME place (e.g. every July meeting is "at Hitch"), then that IS the current location — say it plainly ("it's been at hitch lately").
+- Once you've concluded the current location from recent entries, do NOT also mention the old one, and NEVER hedge with "usually at X or Y". Pick the current answer.
+- Only fall back to an old card's location if there's genuinely no recent signal.
+Apply this to any entity and any volatile attribute, not just meeting locations.
 
 ACADEMIC CALENDAR: ${academicContext}
 
@@ -1327,9 +1346,15 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
     if (priorityA !== priorityB) {
       return priorityB - priorityA // Higher priority first
     }
-    
-    // Same priority, sort by score
-    return (b.score || 0) - (a.score || 0)
+
+    // Same priority: blend relevance with recency so recent info (which can supersede
+    // stale details) surfaces into the top results the answerer actually sees.
+    const recencyBoost = (r: typeof a) => {
+      if (!r.createdAt) return 0
+      const ageDays = (Date.now() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+      return Math.max(0, 0.15 * (1 - ageDays / 60)) // up to +0.15 for brand-new, fading to 0 by ~60 days
+    }
+    return ((b.score || 0) + recencyBoost(b)) - ((a.score || 0) + recencyBoost(a))
   })
   
   // If no results, return no results message (already in-voice; no sass-wrap)

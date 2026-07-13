@@ -2,6 +2,7 @@ import { getPrisma } from '@/lib/prisma';
 import { TextExplorerRepository, ExtractedFact } from './types';
 import { VECTOR_DIMENSION, embedText } from './embeddings';
 import { openai } from '@/lib/openai';
+import { populateDetailsForUpload } from './detailsExtraction';
 
 // ---- Time helpers for card-oriented identity ----
 
@@ -909,6 +910,15 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
         }
       }
     }, { timeout: 60000 }); // 60 second timeout to allow for LLM merge and embedding generation
+
+    // Batch-by-relation: after the facts are written, extract structured sub-details
+    // (per-city dates+links etc.) for this upload. Outside the transaction and
+    // best-effort — a failure here must never fail the ingestion.
+    try {
+      await populateDetailsForUpload(uploadId);
+    } catch (error) {
+      console.error('[TextExplorer Facts] details population failed for upload', uploadId, error);
+    }
   },
 };
 

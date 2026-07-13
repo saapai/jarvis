@@ -358,9 +358,10 @@ describe('Admin vs Non-Admin Behavior', () => {
     expect(adminResults[0].action).toBe('capability_query')
     expect(userResults[0].action).toBe('capability_query')
 
-    // Everyone should see announcement capabilities
-    expect(adminResults[0].response.toLowerCase()).toMatch(/announce/)
-    expect(userResults[0].response.toLowerCase()).toMatch(/announce/)
+    // Everyone should hear about the announcement capability (LLM-generated now, so
+    // accept the natural phrasings — "announce", "send to everyone", "tell the group")
+    expect(adminResults[0].response.toLowerCase()).toMatch(/announce|message|tell every|everyone|broadcast|send/)
+    expect(userResults[0].response.toLowerCase()).toMatch(/announce|message|tell every|everyone|broadcast|send/)
   })
   
   test('Both can ask questions', async () => {

@@ -417,8 +417,9 @@ describe('Scenario: Easter Eggs', () => {
   })
   
   test('good morning', async () => {
+    // Now LLM-generated (not a canned easter egg), so just assert a real reply
     const result = await testMessage(regularUser, 'good morning')
-    expect(result.response.toLowerCase()).toMatch(/morn|need/)
+    expect(result.response.length).toBeGreaterThan(2)
   })
   
   test('how are you', async () => {

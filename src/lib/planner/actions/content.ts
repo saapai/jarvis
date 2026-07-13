@@ -45,6 +45,18 @@ export interface ContentResult {
   category?: ContentCategory
   eventDate?: Date
   sourceText?: string | null  // Full original text (may contain URLs/links)
+  entities?: string[] | null      // extracted entities — often where signup URLs live
+  calendarDates?: string[] | null // every parsed date (YYYY-MM-DD), not just the range start
+  details?: FactDetail[] | null   // structured sub-items grouped under this entity (per-city dates+links)
+}
+
+// Structured sub-detail of a fact (kept in sync with text-explorer/detailsExtraction).
+export interface FactDetail {
+  label: string
+  date?: string
+  url?: string
+  location?: string
+  note?: string
 }
 
 export interface EventResult {
@@ -669,30 +681,26 @@ async function filterAndFormatResultsWithLLM(
       }
       
       let resultText = `[${idx + 1}] ${r.source === 'announcement' ? '📢' : r.source === 'poll' ? '📊' : '📋'} ${r.title || 'Info'}${relevanceNote}\n${r.body}`
-      
-      // Always extract and display links from sourceText if available
-      // This is critical for queries asking for links
-      if (r.sourceText) {
-        // Extract URLs from sourceText (handle both regular URLs and Slack format <https://...>)
+
+      // Extract links from EVERYWHERE a URL can hide for this fact — not just sourceText.
+      // Signup/RSVP URLs frequently live only in `entities` or the summarized body, so
+      // scanning sourceText alone silently dropped them (the "no urls" bug).
+      const linkPool = [r.body, ...(r.entities || []), r.sourceText || ''].filter(Boolean).join('\n')
+      if (linkPool) {
         const slackLinkPattern = /<https?:\/\/([^>|]+)(\|[^>]*)?>/gi
         const regularUrlPattern = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi
-        
+
         const urls: string[] = []
-        
-        // First, extract Slack-formatted links <https://url>
         let match
-        while ((match = slackLinkPattern.exec(r.sourceText)) !== null) {
-          urls.push(`https://${match[1]}`)
+        while ((match = slackLinkPattern.exec(linkPool)) !== null) {
+          const u = `https://${match[1]}`
+          if (!urls.includes(u)) urls.push(u)
         }
-        
-        // Then extract regular URLs (avoid duplicates)
-        const allUrls = r.sourceText.match(regularUrlPattern) || []
+        const allUrls = linkPool.match(regularUrlPattern) || []
         for (const url of allUrls) {
-          if (!urls.includes(url)) {
-            urls.push(url)
-          }
+          if (!urls.includes(url)) urls.push(url)
         }
-        
+
         if (urls.length > 0) {
           // Always show links prominently, especially if query mentions "link"
           const queryLower = query.toLowerCase()
@@ -703,13 +711,37 @@ async function filterAndFormatResultsWithLLM(
             resultText += `\n🔗 Links: ${urls.join(', ')}`
           }
         }
-        
-        // Also include full sourceText if it's significantly different (contains more detail)
-        if (r.sourceText.length > r.body.length * 1.5 && !resultText.includes('Full details:')) {
-          resultText += `\nFull details: ${r.sourceText.substring(0, 300)}${r.sourceText.length > 300 ? '...' : ''}`
-        }
       }
-      
+
+      // STRUCTURED SUB-DETAILS (batch-by-relation): when a fact groups several parallel
+      // sub-items (per-city reunions, per-night rush events), each already carries its OWN
+      // date + link, correctly matched. Hand the LLM the clean table so it presents every
+      // one with the right date and the right url — no guessing, no dropped links.
+      if (r.details && r.details.length > 0) {
+        const lines = r.details.map(d => {
+          const bits = [d.label]
+          if (d.location && d.location !== d.label) bits.push(`(${d.location})`)
+          if (d.date) bits.push(`— ${d.date}`)
+          if (d.url) bits.push(`— RSVP/link: ${d.url}`)
+          if (d.note) bits.push(`(${d.note})`)
+          return `   • ${bits.join(' ')}`
+        }).join('\n')
+        resultText += `\nDETAILS (present ALL of these, each with its exact date and its own link):\n${lines}`
+      }
+
+      // Every parsed date for this entity — the whole point is the answer LLM should
+      // see ALL of them (per-city reunion dates), not derive a wrong month from a lone
+      // range-start dateStr. This is the fix for "in sep 2026" over July/Aug dates.
+      if (r.calendarDates && r.calendarDates.length > 0) {
+        resultText += `\nAll dates for this: ${r.calendarDates.join(', ')} (use these EXACT dates; do not summarize into a single month)`
+      }
+
+      // Include the full original text when it carries more detail than the summary —
+      // 600 chars so a signup URL or per-city breakdown near the end isn't truncated off.
+      if (r.sourceText && r.sourceText.length > r.body.length * 1.5 && !resultText.includes('Full details:')) {
+        resultText += `\nFull details: ${r.sourceText.substring(0, 600)}${r.sourceText.length > 600 ? '...' : ''}`
+      }
+
       // Add category information (this helps LLM understand context)
       resultText += `\nCategory: ${category.toUpperCase()}`
       
@@ -1063,8 +1095,18 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
         searchQuery = await generateSearchQueryForCategory(resolvedMessage, 'upcoming')
       }
       
-      const contentResults = await searchContent(searchQuery)
-      console.log(`[ContentQuery] Found ${contentResults.length} content results (search query: "${searchQuery}")`)
+      // Search the RAW query first — it ranks exact matches (e.g. "Alumni Reunion" for
+      // "alumni reunions") at the top. The category-augmented searchQuery casts a wider
+      // net for recurring/upcoming coverage but dilutes precise matches, so we MERGE the
+      // two (raw first) instead of letting augmentation bury the exact answer.
+      const rawResults = await searchContent(resolvedMessage)
+      let contentResults = rawResults
+      if (searchQuery !== resolvedMessage) {
+        const augmentedResults = await searchContent(searchQuery)
+        const seen = new Set(rawResults.map(r => `${r.title || ''}_${r.dateStr || ''}`))
+        contentResults = [...rawResults, ...augmentedResults.filter(r => !seen.has(`${r.title || ''}_${r.dateStr || ''}`))]
+      }
+      console.log(`[ContentQuery] Found ${contentResults.length} content results (raw: "${resolvedMessage}", augmented: "${searchQuery}")`)
       
       // Assign categories to all results using existing metadata (await since it's async)
       const categorizedResults = await Promise.all(

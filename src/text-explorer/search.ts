@@ -3,6 +3,30 @@ import { getPrisma } from '@/lib/prisma'
 import { embedText } from './embeddings'
 import type { ContentResult } from '@/lib/planner/actions/content'
 
+// entities/calendarDates are stored as JSON strings. Parse leniently — a bad row
+// should degrade to "no extras", never throw and kill the whole search.
+function parseJsonArray(raw: string | null | undefined): string[] | null {
+  if (!raw) return null
+  try {
+    const v = JSON.parse(raw)
+    return Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : null
+  } catch {
+    return null
+  }
+}
+
+// details is a JSON array of objects {label,date?,url?,location?,note?}
+function parseDetails(raw: string | null | undefined): ContentResult['details'] {
+  if (!raw) return null
+  try {
+    const v = JSON.parse(raw)
+    if (!Array.isArray(v)) return null
+    return v.filter((d) => d && typeof d.label === 'string')
+  } catch {
+    return null
+  }
+}
+
 const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
 
 // Below this cosine similarity a vector match is noise — rely on keyword results instead.
@@ -37,10 +61,13 @@ export async function searchFacts(query: string, limit = 10, spaceId?: string | 
     }
   })
   
-  // Add keyword results (they might catch things vector search missed)
+  // Add keyword results (they might catch things vector search missed). Keep the
+  // HIGHER score when a fact showed up in both — a strong exact-title keyword hit
+  // must not be masked by the same fact's weak vector score.
   keywordResults.forEach(r => {
     const key = `${r.title || ''}_${r.dateStr || ''}`
-    if (!resultMap.has(key)) {
+    const existing = resultMap.get(key)
+    if (!existing || (existing.score || 0) < r.score) {
       resultMap.set(key, r)
     }
   })
@@ -68,7 +95,7 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
     : ''
 
   const sql = `
-    SELECT content, subcategory, category, "timeRef", "dateStr", "sourceText",
+    SELECT content, subcategory, category, "timeRef", "dateStr", "sourceText", entities, "calendarDates", details,
       1 - (embedding <=> ${vectorArray}) AS score
     FROM "Fact"
     WHERE embedding IS NOT NULL
@@ -77,13 +104,10 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
     LIMIT ${safeLimit}
   `
 
+  type Row = { content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; entities: string | null; calendarDates: string | null; details: string | null; score: number }
   const rows = await (spaceId
-    ? prisma.$queryRawUnsafe<
-        Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; score: number }>
-      >(sql, spaceId)
-    : prisma.$queryRawUnsafe<
-        Array<{ content: string; subcategory: string | null; category: string; timeRef: string | null; dateStr: string | null; sourceText: string | null; score: number }>
-      >(sql))
+    ? prisma.$queryRawUnsafe<Row[]>(sql, spaceId)
+    : prisma.$queryRawUnsafe<Row[]>(sql))
 
   return rows
     .filter((row) => Number.isFinite(row.score) && row.score >= MIN_SIMILARITY)
@@ -93,7 +117,10 @@ async function searchByVector(prisma: Awaited<ReturnType<typeof getPrisma>>, emb
       score: row.score ?? 0,
       dateStr: row.dateStr || null,
       timeRef: row.timeRef || null,
-      sourceText: row.sourceText || null
+      sourceText: row.sourceText || null,
+      entities: parseJsonArray(row.entities),
+      calendarDates: parseJsonArray(row.calendarDates),
+      details: parseDetails(row.details)
     }))
 }
 
@@ -154,10 +181,11 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
     const contentLower = (fact.content || '').toLowerCase()
     const sourceTextLower = (fact.sourceText || '').toLowerCase()
     const timeRefLower = (fact.timeRef || '').toLowerCase()
-    
+    const entitiesLower = (fact.entities || '').toLowerCase()
+
     let score = 0
     const queryLower = query.toLowerCase()
-    
+
     // Exact subcategory match gets highest score
     if (subcategoryLower.includes(queryLower) || queryLower.includes(subcategoryLower)) {
       score += 10
@@ -174,17 +202,30 @@ async function searchByKeywords(prisma: Awaited<ReturnType<typeof getPrisma>>, q
     if (keywords.some(kw => timeRefLower.includes(kw))) {
       score += 2
     }
-    
+    // Entities contain keywords (city names, links, people — where a topic often lives)
+    if (keywords.some(kw => entitiesLower.includes(kw))) {
+      score += 2
+    }
+
     return { fact, score }
   }).sort((a, b) => b.score - a.score).slice(0, limit)
 
-  return ranked.map(({ fact }) => ({
+  // Normalize the internal 0-~20 relevance into a real similarity-scale score so
+  // keyword hits COMPETE with vector matches in the merge instead of always losing.
+  // Previously this returned score:0, so an exact title match ("Alumni Reunion" for
+  // "reunion") was buried under semantically-mediocre vector noise at ~0.25. Now an
+  // exact subcategory match lands ~0.87, clearly above that noise; a bare
+  // content/entity match stays modest so it doesn't outrank a genuine vector hit.
+  return ranked.map(({ fact, score }) => ({
     title: fact.subcategory || fact.category,
     body: buildBody(fact.content, fact.timeRef, fact.subcategory || undefined, fact.dateStr || undefined),
-    score: 0,
+    score: Math.min(0.95, 0.12 + score * 0.075),
     dateStr: fact.dateStr || null,
     timeRef: fact.timeRef || null,
-    sourceText: fact.sourceText || null
+    sourceText: fact.sourceText || null,
+    entities: parseJsonArray(fact.entities),
+    calendarDates: parseJsonArray(fact.calendarDates),
+    details: parseDetails((fact as { details?: string | null }).details)
   }))
 }
 

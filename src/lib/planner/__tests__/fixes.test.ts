@@ -70,14 +70,14 @@ describe('Question mark responses', () => {
   test('"?????" gets a reasonable response (arbitrary length)', () => {
     const response = getQuickResponse('?????')
     expect(response).not.toBeNull()
-    // Should NOT be something like "noted!" or contextless
-    expect(response).toMatch(/what|need|good|up/i)
+    // Should be a contextual "you good?"-type reaction, not "noted!" or a task funnel
+    expect(response).toMatch(/what|good|up|lost|confus/i)
   })
 
   test('"??????????" gets a reasonable response', () => {
     const response = getQuickResponse('??????????')
     expect(response).not.toBeNull()
-    expect(response).toMatch(/what|need|good|up/i)
+    expect(response).toMatch(/what|good|up|lost|confus/i)
   })
 })
 

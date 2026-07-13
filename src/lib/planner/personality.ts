@@ -125,11 +125,9 @@ export function getQuickResponse(input: string): string | null {
     'nvm': ['ok', 'sure', 'k'],
     'mb': ['all good', 'np', 'you\'re fine'],
     'my bad': ['all good', 'np', 'you\'re fine'],
-    'hi': ['hey, what\'s up?', 'yo. need something?', 'hey hey 👋'],
-    'hello': ['hey, what\'s up?', 'hello hello. what do you need?', 'yo 👋'],
-    'hey': ['what\'s up?', 'yo. need something?', 'hey 👋'],
-    'yo': ['yo. what\'s good?', 'sup', 'yo 👋'],
-    'sup': ['not much, running the org. you?', 'sup. need something?', 'chillin. what do you need?'],
+    // NOTE: greetings (hi/hey/yo/sup/hello) intentionally NOT here — they fall
+    // through to the LLM so a "hey" gets a varied, interactive reply instead of a
+    // canned "what do you need?" funnel. Only pure filler stays canned below.
     'thanks': ['np 🙏', 'you\'re welcome', 'anytime'],
     'thank you': ['np 🙏', 'you\'re welcome', 'anytime'],
     'ty': ['np', 'you got it', 'anytime'],
@@ -146,9 +144,10 @@ export function getQuickResponse(input: string): string | null {
     return responses[Math.floor(Math.random() * responses.length)]
   }
 
-  // Handle any number of question marks (?, ??, ???, ?????, etc.)
+  // Handle any number of question marks (?, ??, ???, ?????, etc.) — a confused
+  // reaction, not a task request. Keep it light, don't funnel to "what do you need".
   if (/^\?+$/.test(lower)) {
-    const qmResponses = ['what\'s up?', 'you good?', 'need something?', 'what do you need?']
+    const qmResponses = ['what\'s up?', 'you good?', 'lost me there', 'what\'s confusing you']
     return qmResponses[Math.floor(Math.random() * qmResponses.length)]
   }
 

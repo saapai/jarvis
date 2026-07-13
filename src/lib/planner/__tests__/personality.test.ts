@@ -72,23 +72,15 @@ describe('Easter Eggs', () => {
     expect(result).toBeTruthy()
   })
   
-  test('good morning', () => {
-    const result = checkForEasterEgg('good morning')
-    expect(result).toBeTruthy()
-    expect(result!.toLowerCase()).toMatch(/morn|need/)
+  // Greetings/small-talk ("good morning", "good night", "how are you") are NO LONGER
+  // canned easter eggs — they route through the LLM chat persona so replies are
+  // varied and interactive instead of the old "is it? anyway what do you need" funnel.
+  test('greetings/small-talk are not canned easter eggs (route to LLM)', () => {
+    expect(checkForEasterEgg('good morning')).toBeNull()
+    expect(checkForEasterEgg('good night')).toBeNull()
+    expect(checkForEasterEgg('how are you')).toBeNull()
   })
-  
-  test('good night', () => {
-    const result = checkForEasterEgg('good night')
-    expect(result).toBeTruthy()
-    expect(result!.toLowerCase()).toMatch(/night|sleep|later/)
-  })
-  
-  test('how are you', () => {
-    const result = checkForEasterEgg('how are you')
-    expect(result).toBeTruthy()
-  })
-  
+
   const nonEasterEggs = [
     'when is the meeting',
     'make an announcement',

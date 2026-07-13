@@ -21,7 +21,7 @@ export interface LLMClient {
 
 export interface TextExplorerRepository {
   createUpload(params: { name: string; rawText: string; spaceId?: string | null }): Promise<{ id: string }>;
-  createFacts(params: { uploadId: string; facts: ExtractedFact[]; spaceId?: string | null }): Promise<void>;
+  createFacts(params: { uploadId: string; facts: ExtractedFact[]; spaceId?: string | null; sourceDate?: Date | null }): Promise<void>;
 }
 
 export interface FactNode {

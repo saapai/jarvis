@@ -99,6 +99,7 @@ async function syncChannel(channelName: string): Promise<ChannelSyncResult> {
         await textExplorerRepository.createFacts({
           uploadId,
           facts: factsWithEmbeddings,
+          sourceDate: messageDate, // real Slack send time → fact.createdAt for accurate recency
         });
 
         await reconcileFactsAfterUpload(uploadId);

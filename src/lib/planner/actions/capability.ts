@@ -10,12 +10,14 @@
 import { ActionResult } from '../types'
 import { TEXTER_MODEL } from '../models'
 import { TEMPLATES } from '../personality'
+import { describeConversationTiming, buildRecentTranscript } from '../timing'
 
 export interface CapabilityQueryInput {
   phone: string
   message: string
   userName: string | null
   isAdmin: boolean
+  recentMessages?: Array<{ direction: 'inbound' | 'outbound'; text: string; createdAt: Date; meta?: unknown }>
 }
 
 // What Jarvis actually is and does. Single source of truth for the identity/capability
@@ -47,12 +49,22 @@ WHEN THEY ASK WHAT YOU CAN DO ("help", "what can you do", "commands", "what do y
 
 HOW TO END: land the answer and stop. NEVER tack on a task-prompt — "what do you need", "what do you want", "what's on your mind", "how can i help", "what're you trying to do", "let me know if…" are all banned, on EVERY reply including help/capability answers. The rundown is complete on its own; it does not need a question stapled to the end.`
 
-async function generateCapabilityReply(message: string, userName: string | null, isAdmin: boolean): Promise<string | null> {
+async function generateCapabilityReply(message: string, userName: string | null, isAdmin: boolean, recentMessages?: CapabilityQueryInput['recentMessages']): Promise<string | null> {
   if (!process.env.OPENAI_API_KEY) return null
 
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Conversation awareness — so "what do you do" right after "who are you" flows as one
+    // exchange (don't re-greet, don't restate what you just said) instead of reading cold.
+    const transcript = buildRecentTranscript(recentMessages)
+    const timing = describeConversationTiming(recentMessages)
+    const contextBlock = [
+      transcript ? `RECENT CONVERSATION:\n${transcript}` : '',
+      timing,
+      transcript ? 'Read the flow: if you already introduced yourself or answered something a beat ago, do NOT repeat it — continue naturally, like the same person still texting. Don\'t re-open with "hey [name]" every single message.' : ''
+    ].filter(Boolean).join('\n\n')
 
     const response = await openai.chat.completions.create({
       model: TEXTER_MODEL,
@@ -60,7 +72,7 @@ async function generateCapabilityReply(message: string, userName: string | null,
         { role: 'system', content: CAPABILITY_SYSTEM_PROMPT },
         {
           role: 'user',
-          content: `The person texting you ${userName ? `(their name is ${userName})` : ''}${isAdmin ? ' is an admin' : ''} said: "${message}"\n\nReply in your voice. Land the answer and stop — no "what's on your mind?" tacked on the end.`
+          content: `${contextBlock ? contextBlock + '\n\n' : ''}The person texting you ${userName ? `(their name is ${userName})` : ''}${isAdmin ? ' is an admin' : ''} said: "${message}"\n\nReply in your voice. Land the answer and stop — no "what's on your mind?" tacked on the end.`
         }
       ],
       temperature: 0.6,
@@ -78,9 +90,9 @@ async function generateCapabilityReply(message: string, userName: string | null,
  * Handle capability query — conversational, in-voice, accurate.
  */
 export async function handleCapabilityQuery(input: CapabilityQueryInput): Promise<ActionResult> {
-  const { message, userName, isAdmin } = input
+  const { message, userName, isAdmin, recentMessages } = input
 
-  const reply = await generateCapabilityReply(message, userName, isAdmin)
+  const reply = await generateCapabilityReply(message, userName, isAdmin, recentMessages)
   if (reply) {
     return { action: 'capability_query', response: reply }
   }

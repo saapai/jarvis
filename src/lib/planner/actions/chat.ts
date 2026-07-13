@@ -7,6 +7,7 @@ import { ActionResult } from '../types'
 import { TEXTER_MODEL } from '../models'
 import { getQuickResponse, TEMPLATES } from '../personality'
 import { checkForEasterEgg } from './capability'
+import { describeConversationTiming } from '../timing'
 
 export interface ChatActionInput {
   phone: string
@@ -60,7 +61,8 @@ async function generateContextualResponse(
   message: string,
   userName: string | null,
   conversationHistory: string,
-  knowledgeContext: string
+  knowledgeContext: string,
+  timingNote: string = ''
 ): Promise<string | null> {
   if (!process.env.OPENAI_API_KEY) return null
 
@@ -98,7 +100,7 @@ WHAT "RESPONSIVE" MEANS (the whole point):
 - a question you can answer from history/knowledge → just answer it, in voice
 - CHECK YOUR OWN LAST FEW LINES in the history above before you write. If you already said something close to what you're about to say (same greeting, same joke, same phrase), do NOT repeat it — say it differently, or if they've sent the same bare greeting more than once, notice it out loud ("hey again — third time's the charm, what do you need?") instead of replying identically
 
-CONVERSATION HISTORY (with action labels):
+${timingNote ? timingNote + '\n' : ''}CONVERSATION HISTORY (with action labels):
 ${conversationHistory}
 ${knowledgeContext}
 HOW TO READ THE HISTORY:
@@ -192,7 +194,7 @@ export async function handleChat(input: ChatActionInput): Promise<ActionResult> 
         console.error('[Chat] Knowledge lookup failed, continuing without it:', error)
       }
     }
-    return generateContextualResponse(message, userName, history, knowledgeContext)
+    return generateContextualResponse(message, userName, history, knowledgeContext, describeConversationTiming(recentMessages))
   }
 
   // 2. MID-CONVERSATION (history exists): LLM first so replies are responsive to

@@ -160,9 +160,12 @@ export const textExplorerRepository: TextExplorerRepository = {
     return { id: upload.id };
   },
 
-  async createFacts({ uploadId, facts, spaceId }) {
+  async createFacts({ uploadId, facts, spaceId, sourceDate }) {
     const prisma = await getPrisma();
-    
+    // Stamp facts with when the SOURCE message was actually sent (from Slack ts), not
+    // the sync-run time — so recency reflects reality. Falls back to now() when unknown.
+    const createdAtIso = sourceDate ? new Date(sourceDate).toISOString() : null;
+
     // Check if embedding column exists
     const columnExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
       SELECT EXISTS (
@@ -870,10 +873,10 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
           if (hasEmbeddingColumn && hasEmbedding && factEmbedding) {
             await tx.$executeRawUnsafe(
               `
-              INSERT INTO "Fact" 
-                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, embedding, "spaceId")
-              VALUES 
-                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector, $11)
+              INSERT INTO "Fact"
+                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, embedding, "spaceId", "createdAt")
+              VALUES
+                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector, $11, COALESCE($12::timestamptz, now()))
               `,
               uploadId,
               fact.content,
@@ -885,15 +888,16 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
               calendarDatesJson,
               JSON.stringify(fact.entities),
               `[${factEmbedding.join(',')}]`,
-              spaceId || null
+              spaceId || null,
+              createdAtIso
             );
           } else {
             await tx.$executeRawUnsafe(
               `
-              INSERT INTO "Fact" 
-                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, "spaceId")
-              VALUES 
-                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+              INSERT INTO "Fact"
+                (id, "uploadId", content, "sourceText", category, subcategory, "timeRef", "dateStr", "calendarDates", entities, "spaceId", "createdAt")
+              VALUES
+                (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::timestamptz, now()))
               `,
               uploadId,
               fact.content,
@@ -904,7 +908,8 @@ Return JSON: { "mergedContent": "updated summary here with links preserved", "me
               fact.dateStr,
               calendarDatesJson,
               JSON.stringify(fact.entities),
-              spaceId || null
+              spaceId || null,
+              createdAtIso
             );
           }
         }

@@ -7,6 +7,7 @@
 import { ActionResult } from '../types'
 import { TEXTER_MODEL, HELPER_MODEL } from '../models'
 import { TEMPLATES } from '../personality'
+import { describeConversationTiming } from '../timing'
 
 const FALLBACK_KEYWORDS = ['the', 'and', 'for', 'are', 'what', 'when', 'where', 'how', 'who', 'why', 'can', 'does', 'will', 'about', 'with']
 
@@ -849,8 +850,8 @@ RECENCY: every result shows how recent it is ("Recorded: ..." / "Sent on: ...").
 
 RECENCY SUPERSEDES (critical — read carefully): stored info goes stale, and a card marked "OLD — may be stale" is the LEAST trustworthy source for a volatile detail like LOCATION/room/time. When answering WHERE something is:
 - Do NOT default to a location baked into an old recurring card. Instead look at where the ACTUAL RECENT meetings/events happened.
-- The recent entries may be titled differently (a "general meeting", "elections meeting", "weekly meeting" ARE the same gathering as the "active meeting" — the org just names announcements loosely). If the last several of these recent meeting entries all name the SAME place (e.g. every July meeting is "at Hitch"), then that IS the current location — say it plainly ("it's been at hitch lately").
-- Once you've concluded the current location from recent entries, do NOT also mention the old one, and NEVER hedge with "usually at X or Y". Pick the current answer.
+- The same real-world thing is often referred to by different names across announcements (a recurring gathering might show up as "general meeting", "elections meeting", "weekly meeting" — all the same event). Treat clearly-related recent entries as being about the same thing. If the last several of them consistently agree on a volatile detail (a place, a room, a time) that differs from an older card, the recent consensus is what's true now — state it plainly ("it's been at [that place] lately").
+- Once you've concluded the current value from recent entries, do NOT also mention the old one, and NEVER hedge with "usually at X or Y". Pick the current answer.
 - Only fall back to an old card's location if there's genuinely no recent signal.
 Apply this to any entity and any volatile attribute, not just meeting locations.
 
@@ -1375,12 +1376,15 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
   // call (the single biggest latency cost left), without dropping the real answer.
   const topResults = allResults.slice(0, 14)
 
-  // Compact recent transcript so the answer can notice repeat questions and not re-dump
-  // the same block verbatim. Last few turns, truncated — keeps the prompt cheap.
-  const recentHistory = (recentMessages || [])
+  // Compact recent transcript + timing so the answer is conversationally aware — notices
+  // repeat questions (don't re-dump the same block) and treats back-to-back messages as
+  // one thread vs a gap as a fresh start.
+  const timing = describeConversationTiming(recentMessages)
+  const transcript = (recentMessages || [])
     .slice(-6)
     .map(m => `${m.direction === 'inbound' ? 'User' : 'Jarvis'}: ${(m.text || '').slice(0, 180)}`)
     .join('\n')
+  const recentHistory = [transcript, timing].filter(Boolean).join('\n\n')
 
   // Use LLM to filter and format the most relevant results
   console.log(`[ContentQuery] Filtering and formatting ${topResults.length} of ${allResults.length} results with LLM (target categories: ${categoriesForFiltering.join(', ')}, isLinkQuery: ${isLinkQuery})...`)

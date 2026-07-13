@@ -157,6 +157,7 @@ export async function POST(req: NextRequest) {
           await textExplorerRepository.createFacts({
             uploadId,
             facts: factsWithEmbeddings,
+            sourceDate: messageDate, // real Slack send time → fact.createdAt, so recency is accurate
           });
 
           await reconcileFactsAfterUpload(uploadId);

@@ -275,124 +275,110 @@ The searchTerms should be a space-separated list of keywords that would help fin
 /**
  * Check if content describes a recurring event by examining body text
  */
-async function isRecurringFromContent(body: string): Promise<boolean> {
-  if (!process.env.OPENAI_API_KEY) {
-    // Fallback: simple keyword check
-    const bodyLower = body.toLowerCase()
-    return bodyLower.includes('every') && 
-           (bodyLower.includes('wednesday') || bodyLower.includes('monday') || bodyLower.includes('tuesday') || 
-            bodyLower.includes('thursday') || bodyLower.includes('friday') || bodyLower.includes('saturday') || 
-            bodyLower.includes('sunday') || bodyLower.includes('week') || bodyLower.includes('weekly'))
+// A body with none of these words CANNOT be a recurring event, so it never needs the
+// LLM check — this gate is what eliminates the per-result recurring-detection fan-out.
+const RECURRENCE_SIGNAL = /\b(every|weekly|bi-?weekly|monthly|recurring|daily|each\s+(week|month|day)|weekdays?|weekends?)\b|\b(mon|tues|wednes|thurs|fri|satur|sun)day\b/i
+
+/**
+ * One LLM call to classify N result bodies as recurring-or-not, instead of one call
+ * per result. Only ambiguous bodies (those with a recurrence signal word but no
+ * recurring dateStr/timeRef) ever reach here, so the list is usually tiny or empty.
+ */
+async function batchDetectRecurring(bodies: string[]): Promise<boolean[]> {
+  if (bodies.length === 0) return []
+  // Offline/test fallback mirrors the original strict keyword heuristic
+  const strictKeyword = (b: string) => {
+    const s = b.toLowerCase()
+    return s.includes('every') && /(monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|weekly)/.test(s)
   }
+  if (!process.env.OPENAI_API_KEY) return bodies.map(strictKeyword)
 
   try {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
+    const list = bodies.map((b, i) => `${i}. "${b.substring(0, 300)}"`).join('\n')
     const response = await openai.chat.completions.create({
       model: TEXTER_MODEL,
       messages: [
         {
           role: 'system',
-          content: 'Determine if this content describes a RECURRING event (happens regularly like "every Wednesday", "weekly meeting"). Respond with JSON: { "isRecurring": boolean }'
+          content: 'For EACH numbered item, decide if it describes a RECURRING event (happens regularly on a schedule like "every Wednesday", "weekly meeting"). Respond with JSON covering every item: { "results": [{ "i": number, "isRecurring": boolean }, ...] }'
         },
-        {
-          role: 'user',
-          content: `Content: "${body.substring(0, 300)}"\nIs this a recurring event that happens on a regular schedule?`
-        }
+        { role: 'user', content: list }
       ],
       temperature: 0,
-      max_tokens: 50,
+      max_tokens: 500,
       response_format: { type: 'json_object' }
     })
-
     const content = response.choices[0].message.content
     if (content) {
       const parsed = JSON.parse(content)
-      return parsed.isRecurring || false
+      const flags = new Array(bodies.length).fill(false)
+      if (Array.isArray(parsed.results)) {
+        for (const r of parsed.results) {
+          if (typeof r?.i === 'number' && r.i >= 0 && r.i < bodies.length) flags[r.i] = !!r.isRecurring
+        }
+      }
+      return flags
     }
   } catch (error) {
-    console.error('[ContentQuery] Recurring detection from content failed:', error)
+    console.error('[ContentQuery] Batch recurring detection failed:', error)
   }
+  return bodies.map(strictKeyword)
+}
 
-  // Fallback: keyword check
-  const bodyLower = body.toLowerCase()
-  return bodyLower.includes('every') && 
-         (bodyLower.includes('wednesday') || bodyLower.includes('monday') || bodyLower.includes('tuesday') || 
-          bodyLower.includes('thursday') || bodyLower.includes('friday') || bodyLower.includes('saturday') || 
-          bodyLower.includes('sunday') || bodyLower.includes('week') || bodyLower.includes('weekly'))
+// Date-based categorization (no LLM). UPCOMING / PAST / FACTS from eventDate or dateStr.
+function categorizeByDate(result: ContentResult & { eventDate?: Date }): ContentCategory {
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  if (result.eventDate) {
+    const d = new Date(result.eventDate)
+    d.setHours(0, 0, 0, 0)
+    return d >= now ? 'upcoming' : 'past'
+  }
+  if (result.dateStr && !result.dateStr.startsWith('recurring:')) {
+    try {
+      const d = new Date(result.dateStr)
+      d.setHours(0, 0, 0, 0)
+      return d >= now ? 'upcoming' : 'past'
+    } catch {
+      // invalid date → fact
+    }
+  }
+  return 'facts'
 }
 
 /**
- * Assign category to a content result based on its existing metadata (dateStr, timeRef, eventDate)
- * Uses the same categorization logic as the inbox: UPCOMING, RECURRING, PAST, FACTS
+ * Synchronous category assignment from existing metadata (dateStr, timeRef, eventDate).
+ * Returns a category, OR null when the body carries a recurrence signal and needs the
+ * batched LLM confirmation to decide recurring-vs-dated. Same logic as the inbox.
  */
-async function assignCategoryToResult(result: ContentResult & { source?: 'content' | 'announcement' | 'poll'; eventDate?: Date }): Promise<ContentCategory> {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0) // Compare dates only, not times
-
+function categorizeResultSync(result: ContentResult & { source?: 'content' | 'announcement' | 'poll'; eventDate?: Date }): ContentCategory | null {
   // Assign based on source type (announcements/polls are always past)
   if (result.source === 'announcement') return 'announcements'
   if (result.source === 'poll') return 'polls'
 
-  // Check if dateStr indicates recurring pattern (matches inbox logic)
-  if (result.dateStr?.startsWith('recurring:')) {
-    return 'recurring'
-  }
+  // dateStr recurring pattern (matches inbox logic)
+  if (result.dateStr?.startsWith('recurring:')) return 'recurring'
 
-  // Week-of-term style events (e.g., "week:5") should behave like upcoming
-  // events in the inbox, even if they don't have a concrete calendar date.
-  // This keeps "Kegger" / "Formal" week cards queryable as upcoming.
-  if (result.dateStr?.startsWith('week:')) {
-    return 'upcoming'
-  }
+  // Week-of-term style events (e.g., "week:5") behave like upcoming — keeps
+  // "Kegger" / "Formal" week cards queryable even without a concrete date.
+  if (result.dateStr?.startsWith('week:')) return 'upcoming'
 
-  // Check if timeRef indicates recurring pattern (e.g., "every Wednesday")
+  // timeRef recurring pattern (e.g., "every Wednesday")
   if (result.timeRef) {
-    const timeRefLower = result.timeRef.toLowerCase()
-    if (timeRefLower.includes('every') || 
-        timeRefLower.includes('weekly') || 
-        timeRefLower.includes('recurring') ||
-        /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*(at|@)?/.test(timeRefLower)) {
+    const t = result.timeRef.toLowerCase()
+    if (t.includes('every') || t.includes('weekly') || t.includes('recurring') ||
+        /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*(at|@)?/.test(t)) {
       return 'recurring'
     }
   }
 
-  // Check body content for recurring patterns if no dateStr or timeRef indicates it
-  if (result.body) {
-    const isRecurring = await isRecurringFromContent(result.body)
-    if (isRecurring) {
-      return 'recurring'
-    }
-  }
+  // Only bodies with a recurrence signal are ambiguous enough to need the LLM.
+  // Everything else is categorized by date right here, no LLM call.
+  if (result.body && RECURRENCE_SIGNAL.test(result.body)) return null
 
-  // Assign based on eventDate or dateStr (parse date and compare)
-  if (result.eventDate) {
-    const eventDate = new Date(result.eventDate)
-    eventDate.setHours(0, 0, 0, 0)
-    if (eventDate >= now) {
-      return 'upcoming'
-    } else {
-      return 'past'
-    }
-  }
-
-  if (result.dateStr && !result.dateStr.startsWith('recurring:')) {
-    try {
-      const eventDate = new Date(result.dateStr)
-      eventDate.setHours(0, 0, 0, 0)
-      if (eventDate >= now) {
-        return 'upcoming'
-      } else {
-        return 'past'
-      }
-    } catch (e) {
-      // Invalid date, treat as fact
-    }
-  }
-
-  // Default to facts (no date or invalid date)
-  return 'facts'
+  return categorizeByDate(result)
 }
 
 /**
@@ -1168,20 +1154,25 @@ export async function handleContentQuery(input: ContentQueryInput): Promise<Acti
       }
       console.log(`[ContentQuery] Found ${contentResults.length} content results (raw: "${resolvedMessage}", augmented: "${searchQuery}")`)
       
-      // Assign categories to all results using existing metadata (await since it's async)
-      const categorizedResults = await Promise.all(
-        contentResults.map(async r => {
-          const category = await assignCategoryToResult({ ...r, source: 'content' })
-          console.log(`[ContentQuery] Categorized result: "${r.title || 'untitled'}" as ${category} (dateStr: ${r.dateStr}, timeRef: ${r.timeRef})`)
-          return { 
-            ...r, 
-            source: 'content' as const,
-            category,
-            dateStr: r.dateStr || null,
-            timeRef: r.timeRef || null
-          }
-        })
-      )
+      // Categorize deterministically first; batch the few results whose body needs an
+      // LLM recurring-check into ONE call (was one call PER result — the fan-out).
+      const withSyncCat = contentResults.map(r => ({ r, cat: categorizeResultSync({ ...r, source: 'content' }) }))
+      const ambiguous = withSyncCat.filter(x => x.cat === null)
+      const recurringFlags = await batchDetectRecurring(ambiguous.map(x => x.r.body || ''))
+      let ambigIdx = 0
+      const categorizedResults = withSyncCat.map(({ r, cat }) => {
+        const category: ContentCategory = cat !== null
+          ? cat
+          : (recurringFlags[ambigIdx++] ? 'recurring' : categorizeByDate(r))
+        console.log(`[ContentQuery] Categorized result: "${r.title || 'untitled'}" as ${category} (dateStr: ${r.dateStr}, timeRef: ${r.timeRef})`)
+        return {
+          ...r,
+          source: 'content' as const,
+          category,
+          dateStr: r.dateStr || null,
+          timeRef: r.timeRef || null
+        }
+      })
       
       allResults.push(...categorizedResults)
       console.log(`[ContentQuery] Category breakdown: ${Object.entries(

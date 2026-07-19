@@ -91,32 +91,30 @@ export async function GET() {
     console.log(`[Admin] Grouped messages by phone:`, Object.keys(messagesByPhone))
 
     // ============================================
-    // 3) Build conversations for users that exist in Prisma
+    // 3) Build one conversation per phone that has messages. A phone without a
+    //    Prisma user (e.g. history backfilled from canvas/Duttapad) still gets
+    //    a conversation, displayed under its phone number.
     // ============================================
-    const conversations = allUsers
-      .map(user => {
-        const userMessages = messagesByPhone[user.normalizedPhone] || []
+    const conversations = Object.entries(messagesByPhone)
+      .map(([normalizedPhone, userMessages]) => {
+        const user = userMap.get(normalizedPhone)
 
-        console.log(
-          `[Admin] User ${user.name} (${user.phone} -> ${user.normalizedPhone}): ${userMessages.length} messages`
+        const sorted = userMessages.sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() -
+            new Date(b.createdAt).getTime()
         )
 
         return {
-          id: user.id,
-          name: user.name,
-          phone: user.phone,
-          optedOut: user.optedOut,
-          spaces: user.spaces,
-          messageCount: userMessages.length,
-          messages: userMessages.sort(
-            (a, b) =>
-              new Date(a.createdAt).getTime() -
-              new Date(b.createdAt).getTime()
-          ),
-          lastMessageAt:
-            userMessages.length > 0
-              ? userMessages[userMessages.length - 1].createdAt
-              : null
+          id: user?.id || `phone-${normalizedPhone}`,
+          name: user?.name || normalizedPhone,
+          phone: user?.phone || normalizedPhone,
+          optedOut: user?.optedOut || false,
+          spaces: user?.spaces || [],
+          messageCount: sorted.length,
+          messages: sorted,
+          lastMessage: sorted[sorted.length - 1]?.text || '',
+          lastMessageAt: sorted[sorted.length - 1]?.createdAt || null
         }
       })
       .filter(conv => conv.messageCount > 0)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Message {
   id: string
@@ -17,6 +17,7 @@ interface Conversation {
   optedOut: boolean
   messageCount: number
   messages: Message[]
+  lastMessage?: string
   lastMessageAt: string | null
 }
 
@@ -25,6 +26,14 @@ export default function AdminPage() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const messagesRef = useRef<HTMLDivElement>(null)
+
+  // Newest messages sit at the bottom — jump there whenever a conversation opens
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight
+    }
+  }, [selectedConversation])
 
   useEffect(() => {
     fetch('/api/admin/conversations')
@@ -114,6 +123,11 @@ export default function AdminPage() {
                     {conv.messageCount} msgs
                   </span>
                 </div>
+                {(conv.lastMessage || conv.messages[conv.messages.length - 1]?.text) && (
+                  <p className="mt-1 text-xs text-gray-500 truncate">
+                    {conv.lastMessage || conv.messages[conv.messages.length - 1]?.text}
+                  </p>
+                )}
                 {conv.optedOut && (
                   <span className="inline-block mt-1 text-xs text-red-600 font-mono">
                     opted out
@@ -138,7 +152,7 @@ export default function AdminPage() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
               {selectedConversation.messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-8">
                   No messages yet

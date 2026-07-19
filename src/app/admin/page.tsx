@@ -1,29 +1,34 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
-// SMS conversations, read from the Jarvis database (/api/admin/conversations),
-// which holds the full history including the canvas backfill. Each conversation
-// arrives with its complete message list (oldest first), so switching threads is
-// instant and we scroll to the newest message at the bottom on open.
+// SMS conversations, read LIVE from the canvas (Duttapad) pipeline via the
+// cached /api/admin/canvas-conversations proxy — canvas is the source of truth
+// and keeps receiving messages, so reading it live means /admin is never behind
+// (a DB snapshot would lag). The 120s server-side cache keeps loads fast.
+// The list endpoint returns summaries; full threads load lazily per phone and
+// are cached client-side so switching between conversations never refetches.
 
-interface Message {
+interface ConvoSummary {
+  phone_normalized: string
+  last_message: string | null
+  last_message_at: string
+  member_name: string | null
+  total_count: number
+}
+
+interface ThreadMessage {
   id: string
   direction: 'inbound' | 'outbound'
   text: string
   meta: any
-  createdAt: string
+  created_at: string
 }
 
-interface Conversation {
-  id: string
-  name: string
+interface Thread {
   phone: string
-  optedOut: boolean
-  messageCount: number
-  messages: Message[]
-  lastMessage?: string
-  lastMessageAt: string | null
+  name: string | null
+  messages: ThreadMessage[]
 }
 
 function formatPhone(phone: string): string {
@@ -58,16 +63,30 @@ function formatTimestamp(dateStr: string): string {
   })
 }
 
+// Canvas may return meta as a JSON string or an already-parsed object.
+function metaAction(meta: any): string | null {
+  if (!meta) return null
+  try {
+    const obj = typeof meta === 'string' ? JSON.parse(meta) : meta
+    return obj?.action || null
+  } catch {
+    return null
+  }
+}
+
 export default function AdminPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [selected, setSelected] = useState<Conversation | null>(null)
+  const [conversations, setConversations] = useState<ConvoSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(null)
+  const [thread, setThread] = useState<Thread | null>(null)
+  const [threadLoading, setThreadLoading] = useState(false)
+  const threadCache = useRef<Map<string, Thread>>(new Map())
   const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetch('/api/admin/conversations')
+    fetch('/api/admin/canvas-conversations')
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`)
         return res.json()
@@ -80,17 +99,49 @@ export default function AdminPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Newest message sits at the bottom — jump there whenever a thread opens.
+  const openConversation = useCallback(async (phone: string) => {
+    setSelectedPhone(phone)
+
+    const cached = threadCache.current.get(phone)
+    if (cached) {
+      setThread(cached)
+      return
+    }
+
+    setThread(null)
+    setThreadLoading(true)
+    try {
+      const res = await fetch(`/api/admin/canvas-conversations/${encodeURIComponent(phone)}`)
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data: Thread = await res.json()
+      threadCache.current.set(phone, data)
+      setThread(data)
+    } catch (err) {
+      console.error('Failed to load conversation:', err)
+      setThread({ phone, name: null, messages: [] })
+    } finally {
+      setThreadLoading(false)
+    }
+  }, [])
+
+  // Newest message sits at the bottom — jump there whenever a thread renders.
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight
     }
-  }, [selected])
+  }, [thread])
 
   const filtered = conversations.filter(conv => {
     const q = searchQuery.toLowerCase()
-    return conv.name.toLowerCase().includes(q) || conv.phone.includes(searchQuery)
+    return (
+      (conv.member_name || '').toLowerCase().includes(q) ||
+      conv.phone_normalized.includes(searchQuery)
+    )
   })
+
+  const selectedSummary = conversations.find(c => c.phone_normalized === selectedPhone)
+  const headerName =
+    thread?.name || selectedSummary?.member_name || (selectedPhone ? formatPhone(selectedPhone) : '')
 
   return (
     <div className="admin-root">
@@ -115,26 +166,23 @@ export default function AdminPage() {
           {loading ? (
             <div className="empty">loading…</div>
           ) : loadError ? (
-            <div className="empty">couldn&apos;t load — refresh to retry</div>
+            <div className="empty">couldn&apos;t reach canvas — refresh to retry</div>
           ) : filtered.length === 0 ? (
             <div className="empty">no conversations</div>
           ) : (
             filtered.map(conv => (
               <button
-                key={conv.id}
-                onClick={() => setSelected(conv)}
-                className={`convo-item ${selected?.id === conv.id ? 'active' : ''}`}
+                key={conv.phone_normalized}
+                onClick={() => openConversation(conv.phone_normalized)}
+                className={`convo-item ${selectedPhone === conv.phone_normalized ? 'active' : ''}`}
               >
-                <span className="convo-name">{conv.name}</span>
-                <span className="convo-time">{relativeTime(conv.lastMessageAt)}</span>
-                <span className="convo-phone">{formatPhone(conv.phone)}</span>
-                <span className="convo-count">{conv.messageCount} msgs</span>
-                {(conv.lastMessage || conv.messages[conv.messages.length - 1]?.text) && (
-                  <p className="convo-preview">
-                    {conv.lastMessage || conv.messages[conv.messages.length - 1]?.text}
-                  </p>
-                )}
-                {conv.optedOut && <span className="convo-optout">opted out</span>}
+                <span className="convo-name">
+                  {conv.member_name || formatPhone(conv.phone_normalized)}
+                </span>
+                <span className="convo-time">{relativeTime(conv.last_message_at)}</span>
+                <span className="convo-phone">{formatPhone(conv.phone_normalized)}</span>
+                <span className="convo-count">{conv.total_count} msgs</span>
+                {conv.last_message && <p className="convo-preview">{conv.last_message}</p>}
               </button>
             ))
           )}
@@ -143,27 +191,29 @@ export default function AdminPage() {
 
       {/* Thread panel */}
       <main className="thread-panel">
-        {selected ? (
+        {selectedPhone ? (
           <>
             <div className="thread-header">
               <p className="eyebrow">thread</p>
-              <h2>{selected.name}</h2>
-              <span className="thread-phone">{formatPhone(selected.phone)}</span>
+              <h2>{headerName}</h2>
+              <span className="thread-phone">{formatPhone(selectedPhone)}</span>
             </div>
 
             <div ref={messagesRef} className="thread-messages">
-              {selected.messages.length === 0 ? (
+              {threadLoading ? (
+                <div className="empty">loading…</div>
+              ) : !thread || thread.messages.length === 0 ? (
                 <div className="empty">no messages</div>
               ) : (
                 <div className="thread-inner">
-                  {selected.messages.map(msg => (
+                  {thread.messages.map(msg => (
                     <div key={msg.id} className={`msg ${msg.direction === 'outbound' ? 'out' : 'in'}`}>
                       <div className="bubble">
                         <p>{msg.text}</p>
                       </div>
                       <span className="msg-meta">
-                        {formatTimestamp(msg.createdAt)}
-                        {msg.meta?.action && <span className="action"> · {msg.meta.action}</span>}
+                        {formatTimestamp(msg.created_at)}
+                        {metaAction(msg.meta) && <span className="action"> · {metaAction(msg.meta)}</span>}
                       </span>
                     </div>
                   ))}

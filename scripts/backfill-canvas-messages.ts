@@ -10,17 +10,21 @@
  * direction, and text within 10 minutes) are also skipped.
  *
  * Run with:  npx tsx scripts/backfill-canvas-messages.ts
- * Options:   CANVAS_STATS_URL=https://duttapad.com   (default)
+ * Options:   CANVAS_STATS_URL=https://canvas-eosin-eta.vercel.app   (default)
  *            DRY_RUN=1   report what would be imported without writing
+ *
+ * A DRY_RUN without DATABASE_URL set still works: it reports what canvas
+ * holds, just without deduping against the Jarvis DB.
  */
 
 import '../load-env'
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
-
-const BASE_URL = (process.env.CANVAS_STATS_URL || 'https://duttapad.com').replace(/\/$/, '')
+const BASE_URL = (process.env.CANVAS_STATS_URL || 'https://canvas-eosin-eta.vercel.app').replace(/\/$/, '')
 const DRY_RUN = process.env.DRY_RUN === '1'
+const HAS_DB = Boolean(process.env.DATABASE_URL)
+
+const prisma = HAS_DB ? new PrismaClient() : null
 
 // Duplicate window for messages logged by BOTH apps (e.g. announcements both
 // pipelines sent). Canvas and Jarvis clocks are both Postgres-side, so drift
@@ -61,10 +65,19 @@ async function fetchJson<T>(url: string): Promise<T> {
 async function main() {
   console.log(`Backfilling from ${BASE_URL}${DRY_RUN ? ' (DRY RUN)' : ''}\n`)
 
+  if (!prisma && !DRY_RUN) {
+    throw new Error('DATABASE_URL is required for a real import (only DRY_RUN=1 works without it)')
+  }
+  if (!prisma) {
+    console.log('No DATABASE_URL set — dry run without dedupe against the Jarvis DB\n')
+  }
+
   // 1. Everything already in Jarvis, for dedupe
-  const existing = await prisma.message.findMany({
-    select: { phoneNumber: true, direction: true, text: true, createdAt: true, meta: true }
-  })
+  const existing = prisma
+    ? await prisma.message.findMany({
+        select: { phoneNumber: true, direction: true, text: true, createdAt: true, meta: true }
+      })
+    : []
   console.log(`Jarvis DB currently has ${existing.length} messages`)
 
   const importedCanvasIds = new Set<string>()
@@ -143,7 +156,7 @@ async function main() {
       byContentKey.set(key, insertedTimes)
     }
 
-    if (!DRY_RUN && toInsert.length > 0) {
+    if (!DRY_RUN && toInsert.length > 0 && prisma) {
       await prisma.message.createMany({ data: toInsert })
     }
 
@@ -166,4 +179,4 @@ main()
     console.error('Backfill failed:', err)
     process.exit(1)
   })
-  .finally(() => prisma.$disconnect())
+  .finally(() => prisma?.$disconnect())

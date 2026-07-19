@@ -1,186 +1,209 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import './admin.css'
 
-interface Message {
+// SMS conversations, sourced live from the canvas (Duttapad) pipeline via the
+// cached /api/admin/canvas-conversations proxy. The list endpoint returns only
+// summaries; full threads load lazily per phone and are kept in a client-side
+// cache so switching between conversations never refetches.
+
+interface ConvoSummary {
+  phone_normalized: string
+  last_message: string | null
+  last_message_at: string
+  member_name: string | null
+  total_count: number
+}
+
+interface ThreadMessage {
   id: string
   direction: 'inbound' | 'outbound'
   text: string
   meta: any
-  createdAt: string
+  created_at: string
 }
 
-interface Conversation {
-  id: string
-  name: string
+interface Thread {
   phone: string
-  optedOut: boolean
-  messageCount: number
-  messages: Message[]
-  lastMessage?: string
-  lastMessageAt: string | null
+  name: string | null
+  messages: ThreadMessage[]
+}
+
+function formatPhone(phone: string): string {
+  if (/^\d{10}$/.test(phone)) {
+    return `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`
+  }
+  return phone
+}
+
+function relativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const diffMs = Date.now() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function formatTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
 }
 
 export default function AdminPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [conversations, setConversations] = useState<ConvoSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(null)
+  const [thread, setThread] = useState<Thread | null>(null)
+  const [threadLoading, setThreadLoading] = useState(false)
+  const threadCache = useRef<Map<string, Thread>>(new Map())
   const messagesRef = useRef<HTMLDivElement>(null)
 
-  // Newest messages sit at the bottom — jump there whenever a conversation opens
+  useEffect(() => {
+    fetch('/api/admin/canvas-conversations')
+      .then(res => {
+        if (!res.ok) throw new Error(`${res.status}`)
+        return res.json()
+      })
+      .then(data => setConversations(data.conversations || []))
+      .catch(err => {
+        console.error('Failed to load conversations:', err)
+        setLoadError(true)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const openConversation = useCallback(async (phone: string) => {
+    setSelectedPhone(phone)
+
+    const cached = threadCache.current.get(phone)
+    if (cached) {
+      setThread(cached)
+      return
+    }
+
+    setThread(null)
+    setThreadLoading(true)
+    try {
+      const res = await fetch(`/api/admin/canvas-conversations/${encodeURIComponent(phone)}`)
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data: Thread = await res.json()
+      threadCache.current.set(phone, data)
+      setThread(data)
+    } catch (err) {
+      console.error('Failed to load conversation:', err)
+      setThread({ phone, name: null, messages: [] })
+    } finally {
+      setThreadLoading(false)
+    }
+  }, [])
+
+  // Newest messages sit at the bottom — jump there whenever a thread renders
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight
     }
-  }, [selectedConversation])
+  }, [thread])
 
-  useEffect(() => {
-    fetch('/api/admin/conversations')
-      .then(res => res.json())
-      .then(data => {
-        setConversations(data.conversations || [])
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error('Failed to load conversations:', err)
-        setLoading(false)
-      })
-  }, [])
+  const filteredConversations = conversations.filter(conv => {
+    const q = searchQuery.toLowerCase()
+    return (
+      (conv.member_name || '').toLowerCase().includes(q) ||
+      conv.phone_normalized.includes(searchQuery)
+    )
+  })
 
-  const filteredConversations = conversations.filter(conv =>
-    conv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.phone.includes(searchQuery)
-  )
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 1) return 'just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays < 7) return `${diffDays}d ago`
-    
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  }
+  const selectedSummary = conversations.find(c => c.phone_normalized === selectedPhone)
+  const headerName =
+    thread?.name || selectedSummary?.member_name || (selectedPhone ? formatPhone(selectedPhone) : '')
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8] flex">
-      {/* Sidebar - List of conversations */}
-      <div className="w-80 border-r border-gray-300 bg-white flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-300">
-          <h1 className="text-xl font-bold text-gray-900 mb-3">
-            Admin<span className="text-red-500">_</span>
+    <div className="admin-root">
+      {/* Sidebar — conversation list */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <h1>
+            conversations<span className="accent">_</span>
           </h1>
+          <p className="subtle">live from duttapad sms</p>
           <input
             type="text"
-            placeholder="Search..."
+            placeholder="search name or number"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 text-sm"
+            onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
 
-        {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="convo-list">
           {loading ? (
-            <div className="p-4 text-center text-gray-500">Loading...</div>
+            <div className="empty">loading…</div>
+          ) : loadError ? (
+            <div className="empty">couldn&apos;t reach canvas — refresh to retry</div>
           ) : filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-gray-500">No conversations</div>
+            <div className="empty">no conversations</div>
           ) : (
             filteredConversations.map(conv => (
               <button
-                key={conv.id}
-                onClick={() => setSelectedConversation(conv)}
-                className={`w-full p-4 border-b border-gray-200 text-left transition-colors ${
-                  selectedConversation?.id === conv.id
-                    ? 'bg-red-50 border-l-4 border-l-red-500'
-                    : 'hover:bg-gray-50'
-                }`}
+                key={conv.phone_normalized}
+                onClick={() => openConversation(conv.phone_normalized)}
+                className={`convo-item ${selectedPhone === conv.phone_normalized ? 'active' : ''}`}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-gray-900">{conv.name}</span>
-                  {conv.lastMessageAt && (
-                    <span className="text-xs text-gray-500">
-                      {formatDate(conv.lastMessageAt)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">{conv.phone}</span>
-                  <span className="text-xs text-gray-500">
-                    {conv.messageCount} msgs
+                <div className="convo-row">
+                  <span className="convo-name">
+                    {conv.member_name || formatPhone(conv.phone_normalized)}
                   </span>
+                  <span className="convo-time">{relativeTime(conv.last_message_at)}</span>
                 </div>
-                {(conv.lastMessage || conv.messages[conv.messages.length - 1]?.text) && (
-                  <p className="mt-1 text-xs text-gray-500 truncate">
-                    {conv.lastMessage || conv.messages[conv.messages.length - 1]?.text}
-                  </p>
-                )}
-                {conv.optedOut && (
-                  <span className="inline-block mt-1 text-xs text-red-600 font-mono">
-                    opted out
-                  </span>
-                )}
+                <div className="convo-row">
+                  <span className="convo-phone">{formatPhone(conv.phone_normalized)}</span>
+                  <span className="convo-count">{conv.total_count}</span>
+                </div>
+                {conv.last_message && <p className="convo-preview">{conv.last_message}</p>}
               </button>
             ))
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* Main Content - Selected conversation */}
-      <div className="flex-1 flex flex-col bg-[#f5f1e8]">
-        {selectedConversation ? (
+      {/* Thread panel */}
+      <main className="thread-panel">
+        {selectedPhone ? (
           <>
-            {/* Header */}
-            <div className="p-4 bg-white border-b border-gray-300">
-              <h2 className="text-lg font-bold text-gray-900">
-                {selectedConversation.name}
-              </h2>
-              <p className="text-sm text-gray-600">{selectedConversation.phone}</p>
+            <div className="thread-header">
+              <h2>{headerName}</h2>
+              <p className="subtle">{formatPhone(selectedPhone)}</p>
             </div>
 
-            {/* Messages */}
-            <div ref={messagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-              {selectedConversation.messages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-8">
-                  No messages yet
-                </div>
+            <div ref={messagesRef} className="thread-messages">
+              {threadLoading ? (
+                <div className="empty">loading…</div>
+              ) : !thread || thread.messages.length === 0 ? (
+                <div className="empty">no messages</div>
               ) : (
-                selectedConversation.messages.map((msg) => (
+                thread.messages.map(msg => (
                   <div
                     key={msg.id}
-                    className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                    className={`bubble-row ${msg.direction === 'outbound' ? 'out' : 'in'}`}
                   >
-                    <div className="max-w-xl">
-                      <div
-                        className={`rounded-2xl px-4 py-2 ${
-                          msg.direction === 'outbound'
-                            ? 'bg-red-500 text-white rounded-br-none'
-                            : 'bg-white text-gray-900 border border-gray-300 rounded-bl-none'
-                        }`}
-                      >
-                        <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                        {msg.meta?.action && (
-                          <p className="text-xs mt-1 opacity-70 font-mono">
-                            [{msg.meta.action}]
-                          </p>
-                        )}
+                    <div className="bubble-col">
+                      <div className="bubble">
+                        <p>{msg.text}</p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1 px-2">
-                        {formatTime(msg.createdAt)}
-                      </p>
+                      <span className="bubble-time">{formatTime(msg.created_at)}</span>
                     </div>
                   </div>
                 ))
@@ -188,13 +211,9 @@ export default function AdminPage() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Select a conversation to view messages
-          </div>
+          <div className="empty full">select a conversation</div>
         )}
-      </div>
+      </main>
     </div>
   )
 }
-
-
